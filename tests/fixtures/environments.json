@@ -1,0 +1,16 @@
+{
+  "activeEnvironmentId": "test-env-il41",
+  "environments": [
+    {
+      "id": "test-env-il41",
+      "display_name": "IL41 Rel285 (test fixture)",
+      "label": "amo-il41-rel285-authoring",
+      "apigw_url": "https://amd-apigw-amo-il41-rel285-authoring.apps.ildelocpamo441.ocpd.corp.amdocs.com",
+      "keycloak_url": "https://keycloak-amo-il41-rel285-runtime.apps.ildelocpamo441.ocpd.corp.amdocs.com",
+      "keycloak_realm": "amo-il41-rel285-authoring",
+      "username": "k8k_runtimeapp",
+      "password": "",
+      "last_used_at": 0
+    }
+  ]
+}

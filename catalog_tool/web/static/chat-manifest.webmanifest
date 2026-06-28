@@ -1,0 +1,25 @@
+{
+  "name": "Catalog Tool",
+  "short_name": "Catalog Tool",
+  "description": "Catalog assistant for CatalogOne",
+  "start_url": "/chat",
+  "scope": "/",
+  "display": "standalone",
+  "display_override": ["window-controls-overlay", "standalone"],
+  "background_color": "#18181b",
+  "theme_color": "#2563eb",
+  "icons": [
+    {
+      "src": "/static/logo.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/static/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ]
+}

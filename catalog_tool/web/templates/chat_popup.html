@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en" class="chat-popup-root">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="application-name" content="Catalog Tool">
+  <meta name="apple-mobile-web-app-title" content="Catalog Tool">
+  <link rel="manifest" href="/chat-manifest.webmanifest">
+  <meta name="theme-color" content="#2563eb">
+  <title>Catalog Tool · Chat</title>
+  <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="/static/logo.svg">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/styles.css">
+  <script>
+    (function () {
+      try {
+        var raw = sessionStorage.getItem("catalogTool.detachedLayout");
+        if (raw) {
+          var layout = JSON.parse(raw);
+          if (layout.width) {
+            document.documentElement.style.setProperty("--chat-panel-width", layout.width + "px");
+          }
+        }
+      } catch (e) {}
+      var theme = localStorage.getItem("catalogTool.theme");
+      if (theme === "light" || theme === "dark") {
+        document.documentElement.setAttribute("data-theme", theme);
+      }
+    })();
+  </script>
+</head>
+<body class="chat-popup-body">
+  <div id="chatRoot" data-chat-mode="popup"></div>
+  <script type="module" src="/static/chat.bundle.js"></script>
+</body>
+</html>

@@ -1,0 +1,26 @@
+{
+  "name": "catalog-tool",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build:chat": "esbuild catalog_tool/web/src/chat-client.jsx --bundle --outfile=catalog_tool/web/static/chat.bundle.js --format=esm --jsx=automatic --loader:.jsx=jsx",
+    "chat-server": "node server/index.js",
+    "build": "npm run build:chat"
+  },
+  "dependencies": {
+    "@ai-sdk/openai": "^2.0.0",
+    "@ai-sdk/react": "^2.0.0",
+    "@cursor/sdk": "^1.0.18",
+    "ai": "^5.0.0",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "react-markdown": "^10.1.0",
+    "remark-gfm": "^4.0.1",
+    "zod": "^3.24.2"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.0"
+  }
+}

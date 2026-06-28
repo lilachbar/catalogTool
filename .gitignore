@@ -1,0 +1,10 @@
+.venv/
+__pycache__/
+*.py[cod]
+.DS_Store
+*.egg-info/
+.pytest_cache/
+node_modules/
+.env
+catalog_tool/web/static/chat.bundle.js
+data/environments.json
