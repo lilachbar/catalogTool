@@ -2144,8 +2144,8 @@ async function restoreSession() {
   }
 }
 
-els.businessRequestId.addEventListener("change", syncBusinessRequestFields);
-els.businessRequestId.addEventListener("input", () => {
+els.businessRequestId?.addEventListener("change", syncBusinessRequestFields);
+els.businessRequestId?.addEventListener("input", () => {
   syncPublishBrIdFromStep2();
   syncBusinessRequestFields();
   setActionButtonsEnabled();
@@ -2154,7 +2154,7 @@ els.publishBusinessRequestId?.addEventListener("input", () => {
   syncStep2BrIdFromPublish();
   setActionButtonsEnabled();
 });
-els.businessRequestName.addEventListener("input", () => {
+els.businessRequestName?.addEventListener("input", () => {
   syncBusinessRequestFields();
   setActionButtonsEnabled();
 });
