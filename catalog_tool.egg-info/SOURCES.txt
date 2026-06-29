@@ -1,6 +1,7 @@
 README.md
 pyproject.toml
 catalog_tool/__init__.py
+catalog_tool/br_compare.py
 catalog_tool/settings.py
 catalog_tool/tables.py
 catalog_tool.egg-info/PKG-INFO
@@ -19,6 +20,7 @@ catalog_tool/cli/__init__.py
 catalog_tool/cli/generate_modify_reason_entry.py
 catalog_tool/client/__init__.py
 catalog_tool/client/catalog_one_client.py
+catalog_tool/client/entity_api.py
 catalog_tool/excel_dg/__init__.py
 catalog_tool/excel_dg/parser.py
 catalog_tool/excel_dg/planner.py
@@ -31,6 +33,8 @@ catalog_tool/web/chat_window.py
 catalog_tool/web/constants.py
 catalog_tool/web/environment_store.py
 catalog_tool/web/helpers.py
+catalog_tool/web/import_context.py
+catalog_tool/web/mcp_client.py
 catalog_tool/web/mcp_config.py
 catalog_tool/web/push_service.py
 catalog_tool/web/user_session.py
@@ -49,11 +53,16 @@ catalog_tool/zip_catalog/parser.py
 catalog_tool/zip_catalog/pr_package.py
 catalog_tool/zip_catalog/service.py
 catalog_tool/zip_catalog/validate.py
+tests/test_br_compare.py
 tests/test_catalog_one_client.py
+tests/test_entity_api.py
 tests/test_environment_store.py
 tests/test_excel_dg.py
+tests/test_import_context.py
 tests/test_ldap_auth.py
+tests/test_mcp_client.py
 tests/test_mcp_config.py
 tests/test_mcp_session_env.py
+tests/test_session_validation.py
 tests/test_user_environments.py
 tests/test_zip_catalog.py

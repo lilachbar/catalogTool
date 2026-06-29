@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request, session
 
 from catalog_tool.excel_dg.service import analyze_excel_dg
+from catalog_tool.web.import_context import store_import_file
 
 
 def register(app: Flask) -> None:
@@ -20,6 +21,12 @@ def register(app: Flask) -> None:
             return jsonify({"error": "Uploaded Excel file is empty"}), 400
 
         try:
+            import_ctx = store_import_file(
+                session,
+                import_type="excel",
+                filename=upload.filename,
+                data=file_bytes,
+            )
             result = analyze_excel_dg(file_bytes, workbook_name=upload.filename)
         except ValueError as exc:
             return jsonify({"error": str(exc)}), 400
@@ -28,4 +35,6 @@ def register(app: Flask) -> None:
         except Exception as exc:
             return jsonify({"error": str(exc)}), 500
 
+        result["import_type"] = "excel"
+        result["import_filename"] = import_ctx["filename"]
         return jsonify(result)

@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/static/styles.css?v=20260702b">
+  <link rel="stylesheet" href="/static/styles.css?v=20260702c">
   <script>
     (function () {
       var theme = localStorage.getItem("catalogTool.theme");
@@ -162,88 +162,115 @@
             </ol>
 
             <div class="merge-cards">
-              <article class="merge-card" aria-labelledby="mergeCardZipTitle">
-                <header class="merge-card-head">
+              <article class="merge-card merge-card-compact" aria-labelledby="mergeCardZipTitle">
+                <header class="merge-card-head merge-card-head-compact">
                   <span class="merge-card-step">Step 1</span>
-                  <h3 id="mergeCardZipTitle" class="merge-card-title">Upload your export</h3>
-                  <p class="merge-card-desc">Drop a CatalogOne zip file here. We compare it to your baseline and package only what changed.</p>
+                  <h3 id="mergeCardZipTitle" class="merge-card-title">Upload &amp; validate</h3>
                 </header>
 
-                <div class="zip-dropzone" id="zipDropzone">
-                  <input type="file" id="catalogZipInput" class="zip-dropzone-input" accept=".zip,application/zip">
-                  <div class="zip-dropzone-body">
-                    <span class="zip-dropzone-icon zip-dropzone-icon-empty" aria-hidden="true">
-                      <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-                        <polyline points="14 2 14 8 20 8"/>
-                        <line x1="12" x2="12" y1="18" y2="12"/>
-                        <line x1="9" x2="15" y1="15" y2="15"/>
-                      </svg>
-                    </span>
-                    <span class="zip-dropzone-icon zip-dropzone-icon-selected" aria-hidden="true" hidden>
-                      <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-                        <polyline points="14 2 14 8 20 8"/>
-                        <path d="m9 15 2 2 4-4"/>
-                      </svg>
-                    </span>
-                    <p class="zip-dropzone-title" id="zipDropzoneTitle">Drag &amp; drop your zip here</p>
-                    <p class="zip-dropzone-hint" id="zipDropzoneHint">or <span class="zip-dropzone-link">browse files</span> · expects <code>promotion/&lt;uuid&gt;.json</code></p>
+                <div class="zip-upload-row">
+                  <div class="zip-dropzone zip-dropzone-inline" id="zipDropzone">
+                    <input type="file" id="catalogZipInput" class="zip-dropzone-input" accept=".zip,application/zip">
+                    <div class="zip-dropzone-body">
+                      <span class="zip-dropzone-icon zip-dropzone-icon-empty" aria-hidden="true">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                          <polyline points="14 2 14 8 20 8"/>
+                        </svg>
+                      </span>
+                      <span class="zip-dropzone-icon zip-dropzone-icon-selected" aria-hidden="true" hidden>
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+                          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                          <polyline points="14 2 14 8 20 8"/>
+                          <path d="m9 15 2 2 4-4"/>
+                        </svg>
+                      </span>
+                      <div class="zip-dropzone-text">
+                        <p class="zip-dropzone-title" id="zipDropzoneTitle">Choose or drop a zip file</p>
+                        <p class="zip-dropzone-hint" id="zipDropzoneHint"><span class="zip-dropzone-link">Browse</span></p>
+                      </div>
+                    </div>
                   </div>
-                </div>
-
-                <div class="merge-card-actions merge-card-actions-row">
-                  <button type="button" id="analyzeZipBtn" class="btn btn-primary btn-analyze">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+                  <button type="button" id="analyzeZipBtn" class="btn btn-primary btn-sm btn-analyze" disabled title="Choose a zip file first">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
                       <circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>
                     </svg>
-                    <span>Analyze &amp; preview</span>
+                    <span>Validate</span>
                   </button>
                 </div>
-                <div id="zipAnalyzeReport" class="analyze-report" hidden>
+                <div id="zipAnalyzeReport" class="analyze-report analyze-report-validation is-collapsible" hidden>
                   <div class="analyze-report-toolbar">
-                    <h4 class="analyze-report-heading">Analysis results</h4>
-                    <label class="checkbox analyze-json-toggle">
-                      <input type="checkbox" id="zipAnalyzeShowJson">
-                      <span>Show raw JSON</span>
-                    </label>
+                    <button type="button" id="zipAnalyzeToggleBtn" class="analyze-report-toggle" aria-expanded="false">
+                      <svg class="analyze-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+                      <span class="analyze-report-heading">Validation</span>
+                      <span id="zipAnalyzeStatusBadge" class="analyze-badge is-muted"></span>
+                    </button>
                   </div>
-                  <div id="zipAnalyzePanel" class="analyze-report-panel"></div>
-                  <pre id="zipAnalyzeJson" class="result analyze-report-json" hidden></pre>
+                  <div id="zipAnalyzeSummary" class="analyze-report-summary"></div>
+                  <div id="zipAnalyzePanel" class="analyze-report-details"></div>
                 </div>
               </article>
 
               <article class="merge-card" aria-labelledby="mergeCardBrTitle">
-                <header class="merge-card-head">
+                <header class="merge-card-head merge-card-head-compact">
                   <span class="merge-card-step">Step 2</span>
                   <h3 id="mergeCardBrTitle" class="merge-card-title">Business request</h3>
-                  <p class="merge-card-desc">Create a new business request in CatalogOne, or paste an existing one.</p>
                 </header>
 
-                <div id="mergeBrConnectHint" class="merge-br-connect-hint" role="status">
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
-                    <circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/>
-                  </svg>
-                  <p id="mergeBrConnectHintText">Connect to an environment in the sidebar (click <strong>Connect</strong> on a card), then create your business request below.</p>
+                <div id="mergeBrFormSection" class="merge-section-body">
+                  <div class="form-row merge-br-fields">
+                    <label class="field field-grow">
+                      <span class="field-label">Name</span>
+                      <input type="text" id="businessRequestName" placeholder="e.g. IL12 promo update" autocomplete="off">
+                    </label>
+                    <label class="field merge-br-id-field">
+                      <span class="field-label">Business request ID</span>
+                      <div class="input-with-action">
+                        <input type="text" id="businessRequestId" placeholder="Auto-filled after create" autocomplete="off" readonly>
+                        <button type="button" id="clearBrBtn" class="btn btn-ghost btn-sm" hidden title="Clear to create another">Clear</button>
+                      </div>
+                    </label>
+                  </div>
+
+                  <div class="merge-card-actions merge-br-actions">
+                    <button type="button" id="createBrBtn" class="btn btn-primary">Create &amp; import</button>
+                  </div>
                 </div>
 
-                <div class="form-row merge-br-fields">
-                  <label class="field field-grow">
-                    <span class="field-label">Name for new business request</span>
-                    <input type="text" id="businessRequestName" placeholder="e.g. IL12 promo update — Natalia" autocomplete="off">
-                    <span class="field-hint" id="businessRequestNameHint">Enter a name and click <strong>Create business request</strong>.</span>
-                  </label>
-                  <label class="field">
-                    <span class="field-label">Business request ID</span>
-                    <input type="text" id="businessRequestId" placeholder="Auto-filled after create">
-                  </label>
+                <div id="brCreateResult" class="analyze-report is-collapsible" hidden>
+                  <div class="analyze-report-toolbar">
+                    <button type="button" id="brCreateToggleBtn" class="analyze-report-toggle" aria-expanded="true">
+                      <svg class="analyze-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+                      <span class="analyze-report-heading">Import result</span>
+                      <span id="brCreateStatusBadge" class="analyze-badge"></span>
+                    </button>
+                  </div>
+                  <div id="brCreatePanel" class="analyze-report-panel analyze-report-body"></div>
                 </div>
 
-                <div class="merge-card-actions merge-br-actions">
-                  <button type="button" id="createBrBtn" class="btn btn-primary btn-lg">Create business request</button>
-                  <p id="createBrBtnHint" class="merge-br-btn-hint" aria-live="polite"></p>
+                <div id="brCompareSection" class="merge-compare-section" hidden>
+                  <div id="brCompareActions" class="br-compare-actions-bar">
+                    <div class="br-compare-actions-copy">
+                      <span class="br-compare-actions-label">Compare with production</span>
+                      <p id="brCompareHint" class="br-compare-hint" hidden></p>
+                    </div>
+                    <button type="button" id="brCompareProductionBtn" class="btn btn-secondary btn-sm" disabled title="Import must complete successfully before comparing">Run compare</button>
+                  </div>
+                  <div id="brComparePanel" class="analyze-report is-collapsible" hidden>
+                    <div class="analyze-report-toolbar">
+                      <button type="button" id="brCompareToggleBtn" class="analyze-report-toggle" aria-expanded="true">
+                        <svg class="analyze-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+                        <span id="brCompareTitle" class="analyze-report-heading">Compare results</span>
+                      </button>
+                      <label class="checkbox analyze-json-toggle">
+                        <input type="checkbox" id="brCompareShowJson">
+                        <span>Raw JSON</span>
+                      </label>
+                    </div>
+                    <div id="brCompareReport" class="analyze-report-panel analyze-report-body"></div>
+                    <pre id="brCompareJson" class="analyze-json" hidden></pre>
+                  </div>
                 </div>
-                <pre id="brCreateResult" class="result" hidden></pre>
               </article>
 
               <article class="merge-card merge-card-publish" aria-labelledby="mergeCardPublishTitle">
@@ -645,7 +672,7 @@
 
   <script id="tablesConfig" type="application/json">{{ defaults.tables | tojson }}</script>
   <script id="defaultsConfig" type="application/json">{{ defaults | tojson }}</script>
-  <script src="/static/app.js?v=20260702b"></script>
+  <script src="/static/app.js?v=20260702l"></script>
   <script src="/static/mcp-tools.js?v=20260701b"></script>
   <script type="module" src="/static/chat.bundle.js"></script>
 </body>

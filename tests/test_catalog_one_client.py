@@ -46,6 +46,23 @@ def test_format_http_error_uses_environment_keycloak_host():
     assert "stack-service-prt-in10-env25-authoring" in message
 
 
+def test_multipart_body_includes_form_fields():
+    body = CatalogOneClient._multipart_body(
+        "test-boundary",
+        [
+            ("businessRequestId", "br-123", None),
+            ("stage", "UPLOAD", None),
+            ("file", "", "blob"),
+        ],
+        file_bytes=b"zip-bytes",
+    )
+    text = body.decode("utf-8", errors="replace")
+    assert 'name="businessRequestId"' in text
+    assert "br-123" in text
+    assert 'filename="blob"' in text
+    assert b"zip-bytes" in body
+
+
 def test_connection_uses_stored_keycloak_url():
     config = CatalogOneConnectionConfig(
         apigw_url=(

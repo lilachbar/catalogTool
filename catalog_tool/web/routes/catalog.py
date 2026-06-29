@@ -16,6 +16,7 @@ from catalog_tool.settings import CATALOG_GATEWAY_URL
 from catalog_tool.web.helpers import (
     catalog_ui_launch_path,
     catalog_ui_url_for_request,
+    catalogone_mcp_env_from_session,
     client_from_session,
     derive_urls_payload,
     table_from_request,
@@ -23,6 +24,9 @@ from catalog_tool.web.helpers import (
     tables_payload,
 )
 from catalog_tool.web.push_service import publish_business_request, push_to_catalog
+from catalog_tool.web.import_context import get_import_context
+from catalog_tool.web.mcp_client import McpToolError, import_catalog_data_via_mcp
+from catalog_tool.br_compare import compare_business_request
 
 
 def register(app: Flask) -> None:
@@ -129,13 +133,73 @@ def register(app: Flask) -> None:
         if not name:
             return jsonify({"error": "Business request name is required"}), 400
 
+        import_type = (data.get("import_type") or "").strip().lower()
+        if import_type and import_type not in {"zip", "excel"}:
+            return jsonify({"error": "import_type must be zip or excel"}), 400
+
+        business_request_id: str | None = None
         try:
             client = client_from_session()
             business_request_id = client.create_business_request(name=name)
+            payload: dict = {
+                "status": "ok",
+                "business_request_id": business_request_id,
+                "name": name,
+            }
+
+            if import_type == "zip":
+                import_ctx = get_import_context(session)
+                if not import_ctx or import_ctx.get("import_type") != "zip":
+                    raise ValueError(
+                        "No analyzed zip file found — upload and analyze again in Step 1"
+                    )
+
+                catalogone_env = catalogone_mcp_env_from_session()
+                if not catalogone_env:
+                    raise RuntimeError(
+                        "CatalogOne connection required for MCP zip import"
+                    )
+
+                file_name = import_ctx["filename"]
+                import_result = import_catalog_data_via_mcp(
+                    business_request_id=business_request_id,
+                    zip_path=import_ctx["path"],
+                    file_name=file_name,
+                    catalogone_env=catalogone_env,
+                )
+                payload["import_type"] = "zip"
+                payload["import_source"] = "mcp"
+                payload["zip_name"] = file_name
+                payload["import"] = import_result
+                payload["message"] = (
+                    "Business request created and zip imported via MCP."
+                )
+            elif import_type == "excel":
+                payload["import_type"] = "excel"
+                payload["message"] = (
+                    "Business request created. Import DG entries using Import entries to catalog."
+                )
+        except McpToolError as exc:
+            err_payload: dict = {"error": str(exc), "mcp": exc.payload}
+            if business_request_id:
+                err_payload["business_request_id"] = business_request_id
+                err_payload["import_failed"] = True
+            return jsonify(err_payload), 502
         except (RuntimeError, ValueError) as exc:
-            return jsonify({"error": str(exc)}), 400
+            err_payload: dict = {"error": str(exc)}
+            if business_request_id:
+                err_payload["business_request_id"] = business_request_id
+                err_payload["import_failed"] = True
+            return jsonify(err_payload), 400
         except Exception as exc:
-            return jsonify({"error": str(exc)}), 500
+            err_payload: dict = {"error": str(exc)}
+            if business_request_id:
+                err_payload["business_request_id"] = business_request_id
+                err_payload["import_failed"] = True
+            return jsonify(err_payload), 500
+
+        if import_type:
+            return jsonify(payload)
 
         return jsonify(
             {
@@ -163,6 +227,48 @@ def register(app: Flask) -> None:
             return jsonify({"error": str(exc)}), 500
 
         return jsonify({"status": "ok", "business_request": business_request})
+
+    @app.post("/api/business-request/<business_request_id>/compare")
+    def api_compare_business_request(business_request_id: str):
+        if not session.get("logged_in"):
+            return jsonify({"error": "Log in first"}), 401
+
+        br_id = (business_request_id or "").strip()
+        if not br_id:
+            return jsonify({"error": "Business request ID is required"}), 400
+
+        data = request.get_json(force=True)
+        compare_type = (data.get("compare_type") or "").strip().lower()
+        if compare_type not in {"production", "audit"}:
+            return jsonify({"error": "compare_type must be production or audit"}), 400
+
+        entities = data.get("entities")
+        if not isinstance(entities, list) or not entities:
+            import_ctx = get_import_context(session)
+            zip_analyze = session.get("zip_analyze_entities")
+            if isinstance(zip_analyze, list) and zip_analyze:
+                entities = zip_analyze
+            else:
+                return jsonify(
+                    {
+                        "error": "No entities to compare — analyze a zip in Step 1 first",
+                    }
+                ), 400
+
+        try:
+            client = client_from_session()
+            report = compare_business_request(
+                client,
+                business_request_id=br_id,
+                compare_type=compare_type,
+                entities=entities,
+            )
+        except (RuntimeError, ValueError) as exc:
+            return jsonify({"error": str(exc)}), 400
+        except Exception as exc:
+            return jsonify({"error": str(exc)}), 500
+
+        return jsonify({"status": "ok", **report.to_dict()})
 
     @app.post("/api/publish")
     def api_publish():

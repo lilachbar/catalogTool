@@ -19,6 +19,7 @@ from catalog_tool.client.catalog_one_client import (
 )
 from catalog_tool.settings import CATALOG_GATEWAY_URL, CATALOG_UI_URL, KEYCLOAK_REALM, KEYCLOAK_URL
 from catalog_tool.tables import CATALOG_TABLES, DEFAULT_TABLE_KEY, GenericElementTable, get_catalog_table
+from catalog_tool.web.import_context import clear_import_context
 
 
 def table_from_request(*, json_body: dict | None = None) -> GenericElementTable:
@@ -69,6 +70,58 @@ def client_from_session() -> CatalogOneClient:
         raise RuntimeError("Session expired — log in again")
     client.restore_access_token(token)
     return client
+
+
+def clear_catalogone_login() -> None:
+    """Clear CatalogOne connection state while preserving LDAP app login."""
+    clear_import_context(session)
+    session.pop("logged_in", None)
+    session.pop("access_token", None)
+    session.pop("connection", None)
+
+
+def validate_catalogone_session(*, refresh: bool = True) -> bool:
+    """Return True only when the session has a working CatalogOne token."""
+    if not session.get("logged_in"):
+        return False
+
+    payload = session.get("connection")
+    if not payload or not payload.get("username"):
+        clear_catalogone_login()
+        return False
+
+    client = CatalogOneClient(CatalogOneConnectionConfig(**payload))
+    token = session.get("access_token")
+    if token:
+        client.restore_access_token(token)
+
+    def token_is_valid() -> bool:
+        if not client._access_token:
+            return False
+        status, _ = client._api_request(
+            "POST",
+            "/entitySearchServices/v1/search/ids",
+            body={
+                "entityType": "promotion",
+                "ids": ["00000000-0000-0000-0000-000000000000"],
+            },
+            timeout=20,
+        )
+        return status != 401
+
+    if token and token_is_valid():
+        return True
+
+    if refresh and payload.get("password"):
+        try:
+            session["access_token"] = client.login()
+            session["logged_in"] = True
+            return True
+        except Exception:
+            pass
+
+    clear_catalogone_login()
+    return False
 
 
 def catalogone_mcp_env_from_session() -> dict[str, str] | None:

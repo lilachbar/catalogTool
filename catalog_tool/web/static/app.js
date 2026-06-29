@@ -63,6 +63,12 @@ const state = {
   mcpToolsStatusMessage: "",
   dgAnalyzeResult: null,
   dgImportCompleted: false,
+  zipAnalyzeResult: null,
+  zipImportCompleted: false,
+  zipImportBusinessRequestId: null,
+  zipImportError: null,
+  importType: null,
+  importFilename: null,
 };
 
 const els = {
@@ -88,9 +94,10 @@ const els = {
   catalogZipInput: document.getElementById("catalogZipInput"),
   analyzeZipBtn: document.getElementById("analyzeZipBtn"),
   zipAnalyzeReport: document.getElementById("zipAnalyzeReport"),
+  zipAnalyzeSummary: document.getElementById("zipAnalyzeSummary"),
   zipAnalyzePanel: document.getElementById("zipAnalyzePanel"),
-  zipAnalyzeJson: document.getElementById("zipAnalyzeJson"),
-  zipAnalyzeShowJson: document.getElementById("zipAnalyzeShowJson"),
+  zipAnalyzeToggleBtn: document.getElementById("zipAnalyzeToggleBtn"),
+  zipAnalyzeStatusBadge: document.getElementById("zipAnalyzeStatusBadge"),
   zipDropzone: document.getElementById("zipDropzone"),
   zipDropzoneTitle: document.getElementById("zipDropzoneTitle"),
   zipDropzoneHint: document.getElementById("zipDropzoneHint"),
@@ -131,14 +138,25 @@ const els = {
   tableDraftSummary: document.getElementById("tableDraftSummary"),
   businessRequestId: document.getElementById("businessRequestId"),
   businessRequestName: document.getElementById("businessRequestName"),
-  businessRequestNameHint: document.getElementById("businessRequestNameHint"),
+  clearBrBtn: document.getElementById("clearBrBtn"),
+  mergeBrFormSection: document.getElementById("mergeBrFormSection"),
   publishBusinessRequestId: document.getElementById("publishBusinessRequestId"),
   publishBusinessRequestIdHint: document.getElementById("publishBusinessRequestIdHint"),
   createBrBtn: document.getElementById("createBrBtn"),
-  createBrBtnHint: document.getElementById("createBrBtnHint"),
-  mergeBrConnectHint: document.getElementById("mergeBrConnectHint"),
-  mergeBrConnectHintText: document.getElementById("mergeBrConnectHintText"),
   brCreateResult: document.getElementById("brCreateResult"),
+  brCreatePanel: document.getElementById("brCreatePanel"),
+  brCreateToggleBtn: document.getElementById("brCreateToggleBtn"),
+  brCreateStatusBadge: document.getElementById("brCreateStatusBadge"),
+  brCompareSection: document.getElementById("brCompareSection"),
+  brCompareActions: document.getElementById("brCompareActions"),
+  brCompareHint: document.getElementById("brCompareHint"),
+  brCompareProductionBtn: document.getElementById("brCompareProductionBtn"),
+  brComparePanel: document.getElementById("brComparePanel"),
+  brCompareToggleBtn: document.getElementById("brCompareToggleBtn"),
+  brCompareTitle: document.getElementById("brCompareTitle"),
+  brCompareReport: document.getElementById("brCompareReport"),
+  brCompareJson: document.getElementById("brCompareJson"),
+  brCompareShowJson: document.getElementById("brCompareShowJson"),
   keycloakUrlInput: document.getElementById("keycloakUrlInput"),
   keycloakRealmInput: document.getElementById("keycloakRealmInput"),
   usernameInput: document.getElementById("usernameInput"),
@@ -651,7 +669,27 @@ function analyzeStatCard(label, value, tone = "") {
   return `<div class="analyze-stat${toneClass}"><span class="analyze-stat-value">${escapeHtml(value)}</span><span class="analyze-stat-label">${escapeHtml(label)}</span></div>`;
 }
 
-function wireAnalyzeReport({ reportEl, panelEl, jsonEl, toggleEl, panelHtml, rawData, isError }) {
+function wireCollapsibleReport(container, toggleBtn, { defaultCollapsed = false } = {}) {
+  if (!container || !toggleBtn) {
+    return;
+  }
+  if (!toggleBtn.dataset.wired) {
+    toggleBtn.addEventListener("click", () => {
+      const collapsed = container.classList.toggle("is-collapsed");
+      toggleBtn.setAttribute("aria-expanded", String(!collapsed));
+    });
+    toggleBtn.dataset.wired = "1";
+  }
+  if (defaultCollapsed) {
+    container.classList.add("is-collapsed");
+    toggleBtn.setAttribute("aria-expanded", "false");
+  } else {
+    container.classList.remove("is-collapsed");
+    toggleBtn.setAttribute("aria-expanded", "true");
+  }
+}
+
+function wireAnalyzeReport({ reportEl, panelEl, jsonEl, toggleEl, toggleBtn, statusBadgeEl, statusText, panelHtml, rawData, isError, defaultCollapsed = false }) {
   if (!reportEl || !panelEl || !jsonEl) {
     return;
   }
@@ -659,6 +697,13 @@ function wireAnalyzeReport({ reportEl, panelEl, jsonEl, toggleEl, panelHtml, raw
   reportEl.classList.toggle("is-error", Boolean(isError));
   panelEl.innerHTML = panelHtml;
   jsonEl.textContent = typeof rawData === "string" ? rawData : JSON.stringify(rawData, null, 2);
+  if (statusBadgeEl && statusText) {
+    statusBadgeEl.textContent = statusText;
+    statusBadgeEl.className = `analyze-badge${isError ? " is-warn" : " is-ok"}`;
+  }
+  if (toggleBtn) {
+    wireCollapsibleReport(reportEl, toggleBtn, { defaultCollapsed });
+  }
   if (toggleEl) {
     if (!toggleEl.dataset.wired) {
       toggleEl.addEventListener("change", () => {
@@ -673,99 +718,450 @@ function wireAnalyzeReport({ reportEl, panelEl, jsonEl, toggleEl, panelHtml, raw
   }
 }
 
-function showAnalyzeError({ reportEl, panelEl, jsonEl, toggleEl, message, rawData }) {
+function showAnalyzeError({ reportEl, panelEl, jsonEl, toggleEl, toggleBtn, statusBadgeEl, message, rawData }) {
   wireAnalyzeReport({
     reportEl,
     panelEl,
     jsonEl,
     toggleEl,
+    toggleBtn,
+    statusBadgeEl,
+    statusText: "Failed",
     panelHtml: `<p class="analyze-error-msg">${escapeHtml(message)}</p>`,
     rawData: rawData ?? message,
     isError: true,
   });
 }
 
-function buildZipAnalyzePanel(body) {
+function buildZipAnalyzeSummary(body) {
   const counts = body.counts || {};
-  const prFiles = body.pr_files || [];
+  const changedCount = (counts.new ?? 0) + (counts.changed ?? 0);
+  return `<div class="analyze-stat-grid analyze-stat-grid-compact">
+    ${analyzeStatCard("Changed", changedCount, changedCount ? "warn" : "")}
+    ${analyzeStatCard("Unchanged", counts.unchanged ?? 0)}
+    ${analyzeStatCard("PR files", counts.pr_files ?? (body.pr_files || []).length, "accent")}
+  </div>`;
+}
+
+function buildZipAnalyzeDetails(body) {
   const findings = body.findings || [];
   const blocking = body.has_blocking_issues;
+  let html = `<p class="analyze-step-note">${escapeHtml(body.zip_name || body.import_filename || "Zip")}${body.entity_count != null ? ` · ${body.entity_count} entities` : ""}</p>`;
 
-  let html = `<div class="analyze-stat-grid">
-    ${analyzeStatCard("New", counts.new ?? 0, counts.new ? "accent" : "")}
-    ${analyzeStatCard("Changed", counts.changed ?? 0, counts.changed ? "warn" : "")}
-    ${analyzeStatCard("Unchanged", counts.unchanged ?? 0)}
-    ${analyzeStatCard("PR files", counts.pr_files ?? prFiles.length, "accent")}
-  </div>`;
-
-  html += `<div class="analyze-badge-row">
-    <span class="analyze-badge${blocking ? " is-muted" : ""}">${blocking ? "Review required" : "Ready for review"}</span>
-    <span class="analyze-badge is-muted">Publish blocked</span>
-  </div>`;
-
-  html += `<section>
-    <h5 class="analyze-section-title">Package</h5>
-    <ul class="analyze-meta-list">
-      <li><strong>Zip:</strong> ${escapeHtml(body.zip_name)}</li>
-      <li><strong>Branch:</strong> ${escapeHtml(body.branch_name || "—")}</li>
-      <li><strong>Output:</strong> ${escapeHtml(body.package_dir || "—")}</li>
-      ${body.entity_count != null ? `<li><strong>Entities:</strong> ${escapeHtml(body.entity_count)}</li>` : ""}
-    </ul>
-  </section>`;
-
-  if (findings.length) {
-    html += `<section>
-      <h5 class="analyze-section-title">Findings (${findings.length})</h5>
-      <ul class="analyze-findings">
-        ${findings.slice(0, 8).map((finding) => `
-          <li class="analyze-finding is-warn">
-            ${escapeHtml(finding.message || finding.kind)}
-            ${finding.entity_path ? `<br><span class="analyze-step-note">${escapeHtml(finding.entity_path)}</span>` : ""}
-          </li>`).join("")}
-        ${findings.length > 8 ? `<li class="analyze-finding">…and ${findings.length - 8} more (see raw JSON)</li>` : ""}
-      </ul>
-    </section>`;
-  }
-
-  if (prFiles.length) {
-    html += `<section>
-      <h5 class="analyze-section-title">Files in PR</h5>
-      <div class="analyze-chip-list">
-        ${prFiles.map((file) => `<span class="analyze-chip">${escapeHtml(file)}</span>`).join("")}
-      </div>
-    </section>`;
-  }
-
-  const entities = (body.entities || [])
-    .filter((entity) => entity.status === "new" || entity.status === "changed")
-    .slice(0, 12);
-  if (entities.length) {
-    html += `<section>
-      <h5 class="analyze-section-title">Changed entities (sample)</h5>
-      <div class="analyze-table-wrap">
-        <table class="analyze-table">
-          <thead><tr><th>Status</th><th>Type</th><th>Title</th><th>Path</th></tr></thead>
-          <tbody>
-            ${entities.map((entity) => `<tr>
-              <td>${escapeHtml(entity.status)}</td>
-              <td>${escapeHtml(entity.entity_type)}</td>
-              <td>${escapeHtml(entity.title || entity.entity_id)}</td>
-              <td>${escapeHtml(entity.path)}</td>
-            </tr>`).join("")}
-          </tbody>
-        </table>
-      </div>
-    </section>`;
-  }
-
-  if (body.summary_markdown) {
-    html += `<section>
-      <h5 class="analyze-section-title">Summary</h5>
-      <div class="analyze-prose">${escapeHtml(body.summary_markdown)}</div>
-    </section>`;
+  const blockingFindings = findings.filter((f) => f.blocking !== false).slice(0, 4);
+  if (blockingFindings.length) {
+    html += `<ul class="analyze-findings analyze-findings-compact">
+      ${blockingFindings.map((finding) => `
+        <li class="analyze-finding is-warn">${escapeHtml(finding.message || finding.kind)}</li>`).join("")}
+      ${findings.length > 4 ? `<li class="analyze-finding">…and ${findings.length - 4} more</li>` : ""}
+    </ul>`;
+  } else if (!blocking) {
+    html += `<p class="analyze-step-note">Ready to import into a business request.</p>`;
   }
 
   return html;
+}
+
+function wireZipValidateReport({ body, isError = false, errorMessage = "", defaultCollapsed = true }) {
+  if (!els.zipAnalyzeReport || !els.zipAnalyzeSummary || !els.zipAnalyzePanel) {
+    return;
+  }
+
+  els.zipAnalyzeReport.hidden = false;
+  els.zipAnalyzeReport.classList.toggle("is-error", Boolean(isError));
+
+  if (isError) {
+    els.zipAnalyzeSummary.innerHTML = "";
+    els.zipAnalyzePanel.innerHTML = `<p class="analyze-error-msg">${escapeHtml(errorMessage)}</p>`;
+    if (els.zipAnalyzeStatusBadge) {
+      els.zipAnalyzeStatusBadge.textContent = "Failed";
+      els.zipAnalyzeStatusBadge.className = "analyze-badge is-warn";
+    }
+    wireCollapsibleReport(els.zipAnalyzeReport, els.zipAnalyzeToggleBtn, { defaultCollapsed: false });
+    return;
+  }
+
+  els.zipAnalyzeSummary.innerHTML = buildZipAnalyzeSummary(body);
+  els.zipAnalyzePanel.innerHTML = buildZipAnalyzeDetails(body);
+  const blocking = body.has_blocking_issues;
+  if (els.zipAnalyzeStatusBadge) {
+    els.zipAnalyzeStatusBadge.textContent = blocking ? "Review required" : "Ready";
+    els.zipAnalyzeStatusBadge.className = `analyze-badge${blocking ? " is-warn" : " is-ok"}`;
+  }
+  wireCollapsibleReport(els.zipAnalyzeReport, els.zipAnalyzeToggleBtn, { defaultCollapsed });
+}
+
+function showZipValidateError(message) {
+  wireZipValidateReport({ body: null, isError: true, errorMessage: message, defaultCollapsed: false });
+}
+
+function buildBrCreatePanel(result) {
+  const brId = result.business_request_id || "";
+  const zipName = result.zip_name || state.importFilename || "";
+  return `<ul class="analyze-meta-list analyze-meta-list-compact">
+    <li><strong>BR:</strong> <code>${escapeHtml(brId)}</code></li>
+    <li><strong>Zip:</strong> ${escapeHtml(zipName)}</li>
+    <li><strong>Status:</strong> ${escapeHtml(result.message || "Imported")}</li>
+  </ul>`;
+}
+
+function formatImportFailureMessage(error) {
+  const body = error?.body && typeof error.body === "object" ? error.body : null;
+  let message = body?.error || error?.message || (typeof error === "string" ? error : "Import failed.");
+
+  const mcpPayload = body?.mcp;
+  const nestedError = mcpPayload?.error
+    || mcpPayload?.result?.error
+    || mcpPayload?.message
+    || (typeof mcpPayload?.result === "string" ? mcpPayload.result : null);
+  if (nestedError && !message.includes(String(nestedError))) {
+    message = `${message} — ${nestedError}`;
+  }
+
+  return message;
+}
+
+function isZipImportSuccessful(result) {
+  if (!result || result.status !== "ok" || result.import_type !== "zip") {
+    return false;
+  }
+  const imported = result.import;
+  if (!imported) {
+    return false;
+  }
+  if (imported.error) {
+    return false;
+  }
+  if (["error", "failed", "failure"].includes(String(imported.status || "").toLowerCase())) {
+    return false;
+  }
+  return true;
+}
+
+function applyBusinessRequestIdFromResult(result) {
+  const brId = result?.business_request_id;
+  if (!brId || !els.businessRequestId) {
+    return;
+  }
+  els.businessRequestId.value = brId;
+  els.businessRequestId.readOnly = true;
+  if (els.clearBrBtn) {
+    els.clearBrBtn.hidden = false;
+  }
+  syncBusinessRequestFields();
+}
+
+function showBrCreateResult(result, { isError = false } = {}) {
+  if (!els.brCreateResult || !els.brCreatePanel) {
+    return;
+  }
+  if (isError) {
+    const message = formatImportFailureMessage(result);
+    state.zipImportError = message;
+    els.brCreateResult.hidden = false;
+    els.brCreateResult.classList.add("is-error");
+    els.brCreatePanel.innerHTML = `<p class="analyze-error-msg">${escapeHtml(message)}</p>`;
+    if (els.brCreateStatusBadge) {
+      els.brCreateStatusBadge.textContent = "Import failed";
+      els.brCreateStatusBadge.className = "analyze-badge is-warn";
+    }
+    wireCollapsibleReport(els.brCreateResult, els.brCreateToggleBtn, { defaultCollapsed: false });
+    updateCompareUi();
+    return;
+  }
+
+  state.zipImportError = null;
+  els.brCreateResult.hidden = false;
+  els.brCreateResult.classList.remove("is-error");
+  els.brCreatePanel.innerHTML = buildBrCreatePanel(result);
+  if (els.brCreateStatusBadge) {
+    els.brCreateStatusBadge.textContent = "Imported";
+    els.brCreateStatusBadge.className = "analyze-badge is-ok";
+  }
+  wireCollapsibleReport(els.brCreateResult, els.brCreateToggleBtn, { defaultCollapsed: true });
+  updateCompareUi();
+}
+
+function updateCompareUi() {
+  if (!els.brCompareSection || !els.brCompareProductionBtn) {
+    return;
+  }
+
+  const hasBr = !!els.businessRequestId?.value.trim();
+  const canCompare = state.zipImportCompleted && hasBr;
+
+  els.brCompareSection.hidden = !hasBr;
+  els.brCompareProductionBtn.disabled = !canCompare;
+  els.brCompareProductionBtn.title = canCompare
+    ? "Compare imported entities with production"
+    : state.zipImportError || "Import must complete successfully before comparing";
+
+  if (els.brCompareHint) {
+    if (!hasBr || canCompare) {
+      els.brCompareHint.hidden = true;
+      els.brCompareHint.textContent = "";
+    } else {
+      els.brCompareHint.hidden = false;
+      els.brCompareHint.textContent = state.zipImportError
+        || "Zip import did not complete successfully. Compare is unavailable until import succeeds.";
+    }
+  }
+}
+
+function resetMergeCompareUi() {
+  state.zipImportCompleted = false;
+  state.zipImportBusinessRequestId = null;
+  state.zipImportError = null;
+  if (els.brComparePanel) {
+    els.brComparePanel.hidden = true;
+  }
+  if (els.brCompareReport) {
+    els.brCompareReport.innerHTML = "";
+  }
+  updateCompareUi();
+}
+
+function getCompareBusinessRequestId() {
+  return (
+    state.zipImportBusinessRequestId
+    || els.businessRequestId?.value.trim()
+    || ""
+  );
+}
+
+function showCompareSectionAfterImport(businessRequestId) {
+  if (!state.zipImportCompleted || !businessRequestId) {
+    updateCompareUi();
+    return;
+  }
+  state.zipImportBusinessRequestId = businessRequestId;
+  if (els.brComparePanel) {
+    els.brComparePanel.hidden = true;
+  }
+  updateCompareUi();
+}
+
+function resetMergeBelowStep1() {
+  resetMergeCompareUi();
+
+  if (els.businessRequestId) {
+    els.businessRequestId.value = "";
+    els.businessRequestId.readOnly = false;
+  }
+  if (els.businessRequestName) {
+    els.businessRequestName.value = "";
+  }
+  if (els.publishBusinessRequestId) {
+    els.publishBusinessRequestId.value = "";
+  }
+  if (els.clearBrBtn) {
+    els.clearBrBtn.hidden = true;
+  }
+  if (els.brCreateResult) {
+    els.brCreateResult.hidden = true;
+  }
+  if (els.brCreatePanel) {
+    els.brCreatePanel.innerHTML = "";
+  }
+  if (els.pushResult) {
+    els.pushResult.hidden = true;
+  }
+  if (els.zipAnalyzeReport) {
+    els.zipAnalyzeReport.hidden = true;
+  }
+  if (els.zipAnalyzeSummary) {
+    els.zipAnalyzeSummary.innerHTML = "";
+  }
+  if (els.zipAnalyzePanel) {
+    els.zipAnalyzePanel.innerHTML = "";
+  }
+
+  state.zipAnalyzeResult = null;
+  state.importType = null;
+  state.importFilename = null;
+  syncBusinessRequestFields();
+}
+
+function compareStatusTone(status) {
+  if (status === "identical") {
+    return "ok";
+  }
+  if (status === "changed") {
+    return "warn";
+  }
+  if (status === "new_in_br") {
+    return "accent";
+  }
+  return "muted";
+}
+
+function compareStatusLabel(status) {
+  const labels = {
+    identical: "Identical",
+    changed: "Changed",
+    new_in_br: "New in BR",
+    missing_in_br: "Missing in BR",
+    errors: "Error",
+  };
+  return labels[status] || status;
+}
+
+function buildBrComparePanel(body) {
+  const summary = body.summary || {};
+  const entities = body.entities || [];
+  const compareLabel = body.compare_type === "audit" ? "Audit" : "Production";
+
+  let html = `<div class="analyze-stat-grid">
+    ${analyzeStatCard("Identical", summary.identical ?? 0, summary.identical ? "ok" : "")}
+    ${analyzeStatCard("Changed", summary.changed ?? 0, summary.changed ? "warn" : "")}
+    ${analyzeStatCard("New in BR", summary.new_in_br ?? 0, summary.new_in_br ? "accent" : "")}
+    ${analyzeStatCard("Errors", summary.errors ?? 0, summary.errors ? "warn" : "")}
+  </div>`;
+
+  html += `<div class="analyze-badge-row">
+    <span class="analyze-badge is-accent">${body.compare_type === "audit" ? "Compared with audit history" : "BR (local import) vs production (environment)"}</span>
+    <span class="analyze-badge is-muted">BR ${escapeHtml(body.business_request_id || "")}</span>
+  </div>`;
+
+  if (body.compare_type !== "audit") {
+    html += `<p class="analyze-step-note">Production is what is live in the environment today. Local is what you imported into this business request.</p>`;
+  }
+
+  if (!entities.length) {
+    html += `<p class="analyze-error-msg">No entities were compared.</p>`;
+    return html;
+  }
+
+  html += `<section>
+    <h5 class="analyze-section-title">Entities (${entities.length})</h5>
+    <div class="analyze-table-wrap">
+      <table class="analyze-table">
+        <thead><tr><th>Status</th><th>Type</th><th>Entity</th><th>Summary</th></tr></thead>
+        <tbody>
+          ${entities.map((entity) => `<tr>
+            <td><span class="analyze-badge is-${compareStatusTone(entity.status)}">${escapeHtml(compareStatusLabel(entity.status))}</span></td>
+            <td>${escapeHtml(entity.entity_type)}</td>
+            <td>${escapeHtml(entity.title || entity.entity_id)}</td>
+            <td>${escapeHtml(entity.summary || "")}${entity.error ? `<br><span class="analyze-step-note">${escapeHtml(entity.error)}</span>` : ""}</td>
+          </tr>`).join("")}
+        </tbody>
+      </table>
+    </div>
+  </section>`;
+
+  const changedEntities = entities.filter(
+    (entity) => entity.field_changes?.length || entity.audit_versions?.length > 1,
+  );
+  for (const entity of changedEntities.slice(0, 6)) {
+    html += `<section>
+      <h5 class="analyze-section-title">${escapeHtml(entity.title || entity.entity_id)}</h5>`;
+    if (entity.audit_versions?.length) {
+      html += `<ul class="analyze-meta-list">
+        ${entity.audit_versions.slice(0, 4).map((version) => `
+          <li><strong>${escapeHtml(version.published_at || "—")}</strong> · ${escapeHtml(version.operation || "")} · ${escapeHtml(version.business_request_name || version.id || "")}</li>
+        `).join("")}
+      </ul>`;
+    }
+    if (entity.field_changes?.length) {
+      html += `<div class="analyze-table-wrap">
+        <table class="analyze-table">
+          <thead><tr><th>Change</th><th>Field</th><th>Production</th><th>BR (local)</th></tr></thead>
+          <tbody>
+            ${entity.field_changes.slice(0, 12).map((change) => `<tr>
+              <td>${escapeHtml(change.change)}</td>
+              <td>${escapeHtml(change.path)}</td>
+              <td>${escapeHtml(change.baseline ?? "—")}</td>
+              <td>${escapeHtml(change.current ?? "—")}</td>
+            </tr>`).join("")}
+          </tbody>
+        </table>
+      </div>`;
+      if (entity.field_changes.length > 12) {
+        html += `<p class="analyze-step-note">…and ${entity.field_changes.length - 12} more field changes (see raw JSON).</p>`;
+      }
+    }
+    html += `</section>`;
+  }
+
+  return html;
+}
+
+function showBrCompareReport(body, { isError = false } = {}) {
+  if (!els.brComparePanel || !els.brCompareReport || !els.brCompareJson) {
+    return;
+  }
+  const compareLabel = body?.compare_type === "audit" ? "Audit" : "Production";
+  if (els.brCompareTitle) {
+    els.brCompareTitle.textContent = isError
+      ? "Compare failed"
+      : `Compare with ${compareLabel}`;
+  }
+  wireAnalyzeReport({
+    reportEl: els.brComparePanel,
+    panelEl: els.brCompareReport,
+    jsonEl: els.brCompareJson,
+    toggleEl: els.brCompareShowJson,
+    toggleBtn: els.brCompareToggleBtn,
+    panelHtml: isError
+      ? `<p class="analyze-error-msg">${escapeHtml(typeof body === "string" ? body : body?.error || "Compare failed.")}</p>`
+      : buildBrComparePanel(body),
+    rawData: body,
+    isError,
+    defaultCollapsed: false,
+  });
+  if (els.brCompareSection) {
+    els.brCompareSection.hidden = false;
+  }
+  els.brComparePanel.hidden = false;
+}
+
+async function runBrCompare(compareType, businessRequestId) {
+  const brId = businessRequestId || getCompareBusinessRequestId();
+  if (!brId) {
+    showBrCompareReport("No business request ID available for compare.", { isError: true });
+    return;
+  }
+
+  const entities = (state.zipAnalyzeResult?.entities || [])
+    .filter((entity) => entity.entity_id && entity.entity_type)
+    .map((entity) => ({
+      entity_id: entity.entity_id,
+      entity_type: entity.entity_type,
+      title: entity.title,
+    }));
+
+  if (!entities.length) {
+    showBrCompareReport("No analyzed entities available for compare.", { isError: true });
+    return;
+  }
+
+  if (els.brCompareSection) {
+    els.brCompareSection.hidden = false;
+  }
+  if (els.brComparePanel) {
+    els.brComparePanel.hidden = false;
+    els.brComparePanel.classList.remove("is-collapsed");
+  }
+  if (els.brCompareToggleBtn) {
+    els.brCompareToggleBtn.setAttribute("aria-expanded", "true");
+  }
+  if (els.brCompareReport) {
+    els.brCompareReport.innerHTML = `<p class="analyze-step-note">Running ${compareType} compare…</p>`;
+  }
+
+  try {
+    const result = await api(`/api/business-request/${encodeURIComponent(brId)}/compare`, {
+      method: "POST",
+      body: JSON.stringify({ compare_type: compareType, entities }),
+    });
+    showBrCompareReport(result);
+  } catch (error) {
+    showBrCompareReport(error.message, { isError: true });
+  }
+}
+
+async function promptCompareAfterImport(businessRequestId) {
+  showCompareSectionAfterImport(businessRequestId);
 }
 
 function buildExcelAnalyzePanel(body) {
@@ -1053,6 +1449,9 @@ async function connectEnvironment(environmentId) {
   applyConnectionFields(environment);
   state.activeEnvironmentId = environmentId;
 
+  await api("/api/logout", { method: "POST", body: "{}" }).catch(() => null);
+  setLoggedIn(false);
+
   const result = await api("/api/login", {
     method: "POST",
     body: JSON.stringify(getConnectionFields()),
@@ -1189,19 +1588,17 @@ function renderEnvironmentSidebar() {
       try {
         await connectEnvironment(environment.id);
       } catch (error) {
+        setLoggedIn(false);
         if (error.message.includes("Password")) {
           openConnectionModal("edit", environment.id);
           showResult(els.loginResult, error.message, true);
           return;
         }
-        updateMainConnectionHint();
         if (els.mainConnectionHint) {
+          els.mainConnectionHint.hidden = false;
           els.mainConnectionHint.className = "main-connection-hint";
-          els.mainConnectionHint.replaceChildren();
-          const errorSpan = document.createElement("span");
-          errorSpan.className = "connection-error-text";
-          errorSpan.textContent = error.message;
-          els.mainConnectionHint.appendChild(errorSpan);
+          els.mainConnectionHint.innerHTML =
+            `<span class="connection-error-text">${escapeHtml(error.message)}</span>`;
         }
       }
     });
@@ -1276,38 +1673,44 @@ function updatePublishBrUi() {
   }
 }
 
+function isZipFile(file) {
+  return Boolean(file?.name?.toLowerCase().endsWith(".zip"));
+}
+
+function isExcelFile(file) {
+  return Boolean(file?.name?.toLowerCase().match(/\.(xlsx|xlsm)$/));
+}
+
 function updateMergeBrUi() {
   const hasBr = !!els.businessRequestId?.value.trim();
   const hasName = !!els.businessRequestName?.value.trim();
-  const connected = state.loggedIn;
+  const hasZip = isZipFile(els.catalogZipInput?.files?.[0]);
+  const hasAnalyzedZip = state.importType === "zip" && Boolean(state.zipAnalyzeResult);
+  const connected = isCatalogOneConnected();
+  const blocking = state.zipAnalyzeResult?.has_blocking_issues;
 
-  if (els.mergeBrConnectHint) {
-    els.mergeBrConnectHint.classList.toggle("is-connected", connected);
+  if (els.clearBrBtn) {
+    els.clearBrBtn.hidden = !hasBr;
   }
-  if (els.mergeBrConnectHintText) {
-    els.mergeBrConnectHintText.innerHTML = connected
-      ? "Connected to CatalogOne. Enter a name and click <strong>Create business request</strong>."
-      : 'Connect to an environment in the sidebar (click <strong>Connect</strong> on a card), then create your business request below.';
-  }
-  if (els.createBrBtnHint) {
-    if (hasBr) {
-      els.createBrBtnHint.textContent = "Business request ID is set. Clear it to create another.";
-    } else if (!connected) {
-      els.createBrBtnHint.textContent = "CatalogOne connection required — use Connect in the sidebar.";
-    } else if (!hasName) {
-      els.createBrBtnHint.textContent = "Enter a business request name above.";
-    } else {
-      els.createBrBtnHint.textContent = "Ready to create.";
-    }
+  if (els.businessRequestId) {
+    els.businessRequestId.readOnly = hasBr;
   }
   if (els.createBrBtn) {
-    els.createBrBtn.disabled = hasBr;
+    els.createBrBtn.disabled = hasBr || !connected || !hasAnalyzedZip || !hasName || blocking;
+    const reasons = [];
+    if (hasBr) reasons.push("Clear the business request ID to create another");
+    else if (!connected) reasons.push("Connect to CatalogOne first");
+    else if (!hasZip || !hasAnalyzedZip) reasons.push("Validate a zip in Step 1 first");
+    else if (!hasName) reasons.push("Enter a business request name");
+    else if (blocking) reasons.push("Resolve blocking validation issues");
+    els.createBrBtn.title = reasons.join(" · ") || "Create business request and import zip";
   }
+  updateCompareUi();
 }
 
 function setActionButtonsEnabled() {
   const hasBr = !!getPublishBusinessRequestId();
-  els.publishBtn.disabled = !state.loggedIn || !hasBr;
+  els.publishBtn.disabled = !isCatalogOneConnected() || !hasBr;
   updateMergeBrUi();
   updatePublishBrUi();
   setDgActionButtonsEnabled();
@@ -1453,18 +1856,25 @@ function buildDgTablePayloads(analyzeResult) {
 
 function syncBusinessRequestFields() {
   syncPublishBrIdFromStep2();
-  const hasId = Boolean(els.businessRequestId.value.trim());
-
-  if (els.businessRequestNameHint) {
-    if (hasId) {
-      els.businessRequestNameHint.innerHTML =
-        "Business request created. Clear the ID field to create another, or publish in Step 3.";
-    } else {
-      els.businessRequestNameHint.innerHTML =
-        "Enter a name and click <strong>Create business request</strong>, or paste an existing BR ID.";
-    }
-  }
   setActionButtonsEnabled();
+}
+
+function clearBusinessRequest() {
+  if (els.businessRequestId) {
+    els.businessRequestId.value = "";
+    els.businessRequestId.readOnly = false;
+  }
+  if (els.publishBusinessRequestId) {
+    els.publishBusinessRequestId.value = "";
+  }
+  if (els.clearBrBtn) {
+    els.clearBrBtn.hidden = true;
+  }
+  if (els.brCreateResult) {
+    els.brCreateResult.hidden = true;
+  }
+  resetMergeCompareUi();
+  syncBusinessRequestFields();
 }
 
 function setLoggedIn(loggedIn, username = "", environmentLabel = "") {
@@ -1543,6 +1953,23 @@ function validateTablesForPush() {
   return null;
 }
 
+function isCatalogOneConnected() {
+  return state.loggedIn;
+}
+
+async function handleSessionExpired(message) {
+  if (!state.loggedIn) {
+    return;
+  }
+  setLoggedIn(false);
+  if (els.mainConnectionHint) {
+    els.mainConnectionHint.hidden = false;
+    els.mainConnectionHint.className = "main-connection-hint";
+    els.mainConnectionHint.innerHTML =
+      `<span class="connection-error-text">${escapeHtml(message || "CatalogOne session expired — connect again.")}</span>`;
+  }
+}
+
 async function api(path, options = {}) {
   const response = await fetch(path, {
     headers: { "Content-Type": "application/json" },
@@ -1550,7 +1977,16 @@ async function api(path, options = {}) {
   });
   const body = await response.json();
   if (!response.ok) {
-    throw new Error(body.error || `Request failed (${response.status})`);
+    const message = body.error || `Request failed (${response.status})`;
+    if (
+      response.status === 401
+      && !String(path).includes("/api/login")
+      && !String(path).includes("/api/logout")
+      && /log in first|session expired|not logged in/i.test(message)
+    ) {
+      void handleSessionExpired(message);
+    }
+    throw Object.assign(new Error(message), { status: response.status, body });
   }
   return body;
 }
@@ -1578,6 +2014,8 @@ els.connectionForm?.addEventListener("submit", async (event) => {
     if (action === "connect") {
       const saved = saveEnvironmentFromForm();
       applyConnectionFields(saved);
+      await api("/api/logout", { method: "POST", body: "{}" }).catch(() => null);
+      setLoggedIn(false);
       const result = await api("/api/login", {
         method: "POST",
         body: JSON.stringify(getConnectionFields()),
@@ -1595,6 +2033,7 @@ els.connectionForm?.addEventListener("submit", async (event) => {
     saveEnvironmentFromForm();
     closeConnectionModal();
   } catch (error) {
+    setLoggedIn(false);
     showResult(els.loginResult, error.message, true);
   }
 });
@@ -1677,11 +2116,22 @@ function updateDropzoneSelection({
   if (hintEl) {
     if (hasFile) {
       const size = formatFileSize(file.size);
-      hintEl.innerHTML = `${selectedLabel}${size ? ` · ${size}` : ""} — <span class="zip-dropzone-link">click to replace</span>`;
+      hintEl.innerHTML = size
+        ? `${size} · <span class="zip-dropzone-link">Replace</span>`
+        : '<span class="zip-dropzone-link">Replace</span>';
     } else {
       hintEl.innerHTML = emptyHintHtml;
     }
   }
+}
+
+function updateZipValidateButton() {
+  if (!els.analyzeZipBtn) {
+    return;
+  }
+  const hasZip = isZipFile(els.catalogZipInput?.files?.[0]);
+  els.analyzeZipBtn.disabled = !hasZip;
+  els.analyzeZipBtn.title = hasZip ? "Validate the selected zip file" : "Choose a zip file first";
 }
 
 function updateZipDropzoneLabel() {
@@ -1690,13 +2140,13 @@ function updateZipDropzoneLabel() {
     titleEl: els.zipDropzoneTitle,
     hintEl: els.zipDropzoneHint,
     file: els.catalogZipInput?.files?.[0],
-    emptyTitle: "Drag & drop your zip here",
-    emptyHintHtml: 'or <span class="zip-dropzone-link">browse files</span> · expects <code>promotion/&lt;uuid&gt;.json</code>',
-    selectedLabel: "Zip ready",
+    emptyTitle: "Choose or drop a zip file",
+    emptyHintHtml: '<span class="zip-dropzone-link">Browse</span>',
+    selectedLabel: "",
   });
-  if (els.zipAnalyzeReport) {
-    els.zipAnalyzeReport.hidden = true;
-  }
+  resetMergeBelowStep1();
+  updateZipValidateButton();
+  updateMergeBrUi();
 }
 
 function initZipDropzone() {
@@ -1706,7 +2156,16 @@ function initZipDropzone() {
     return;
   }
 
-  input.addEventListener("change", updateZipDropzoneLabel);
+  input.addEventListener("change", () => {
+    const file = input.files?.[0];
+    if (file && !isZipFile(file)) {
+      input.value = "";
+      showZipValidateError("Please choose a CatalogOne export .zip file.");
+      updateZipValidateButton();
+      return;
+    }
+    updateZipDropzoneLabel();
+  });
 
   ["dragenter", "dragover"].forEach((eventName) => {
     dropzone.addEventListener(eventName, (event) => {
@@ -1724,14 +2183,8 @@ function initZipDropzone() {
 
   dropzone.addEventListener("drop", (event) => {
     const file = event.dataTransfer?.files?.[0];
-    if (!file || !file.name.toLowerCase().endsWith(".zip")) {
-      showAnalyzeError({
-        reportEl: els.zipAnalyzeReport,
-        panelEl: els.zipAnalyzePanel,
-        jsonEl: els.zipAnalyzeJson,
-        toggleEl: els.zipAnalyzeShowJson,
-        message: "Please drop a .zip file.",
-      });
+    if (!file || !isZipFile(file)) {
+      showZipValidateError("Please drop a CatalogOne export .zip file.");
       return;
     }
     const transfer = new DataTransfer();
@@ -1753,6 +2206,10 @@ function updateExcelDropzoneLabel() {
   });
   state.dgAnalyzeResult = null;
   state.dgImportCompleted = false;
+  if (state.importType === "excel") {
+    state.importType = null;
+    state.importFilename = null;
+  }
   if (els.excelAnalyzeReport) {
     els.excelAnalyzeReport.hidden = true;
   }
@@ -1766,7 +2223,20 @@ function initExcelDropzone() {
     return;
   }
 
-  input.addEventListener("change", updateExcelDropzoneLabel);
+  input.addEventListener("change", () => {
+    const file = input.files?.[0];
+    if (file && !isExcelFile(file)) {
+      input.value = "";
+      showAnalyzeError({
+        reportEl: els.excelAnalyzeReport,
+        panelEl: els.excelAnalyzePanel,
+        jsonEl: els.excelAnalyzeJson,
+        toggleEl: els.excelAnalyzeShowJson,
+        message: "DG Import requires an .xlsx or .xlsm workbook.",
+      });
+    }
+    updateExcelDropzoneLabel();
+  });
 
   ["dragenter", "dragover"].forEach((eventName) => {
     dropzone.addEventListener(eventName, (event) => {
@@ -1784,7 +2254,7 @@ function initExcelDropzone() {
 
   dropzone.addEventListener("drop", (event) => {
     const file = event.dataTransfer?.files?.[0];
-    if (!file) {
+    if (!file || !isExcelFile(file)) {
       return;
     }
     const transfer = new DataTransfer();
@@ -1803,6 +2273,16 @@ els.analyzeExcelBtn?.addEventListener("click", async () => {
       jsonEl: els.excelAnalyzeJson,
       toggleEl: els.excelAnalyzeShowJson,
       message: "Choose a DG Excel workbook first.",
+    });
+    return;
+  }
+  if (!isExcelFile(file)) {
+    showAnalyzeError({
+      reportEl: els.excelAnalyzeReport,
+      panelEl: els.excelAnalyzePanel,
+      jsonEl: els.excelAnalyzeJson,
+      toggleEl: els.excelAnalyzeShowJson,
+      message: "DG import requires an .xlsx or .xlsm workbook.",
     });
     return;
   }
@@ -1834,6 +2314,9 @@ els.analyzeExcelBtn?.addEventListener("click", async () => {
     });
     state.dgAnalyzeResult = body;
     state.dgImportCompleted = false;
+    state.importType = body.import_type || "excel";
+    state.importFilename = body.import_filename || file.name;
+    state.zipAnalyzeResult = null;
     suggestDgBusinessRequestName(body.workbook_name);
     syncDgBusinessRequestFields();
   } catch (error) {
@@ -1852,13 +2335,11 @@ els.analyzeExcelBtn?.addEventListener("click", async () => {
 els.analyzeZipBtn?.addEventListener("click", async () => {
   const file = els.catalogZipInput?.files?.[0];
   if (!file) {
-    showAnalyzeError({
-      reportEl: els.zipAnalyzeReport,
-      panelEl: els.zipAnalyzePanel,
-      jsonEl: els.zipAnalyzeJson,
-      toggleEl: els.zipAnalyzeShowJson,
-      message: "Choose a CatalogOne export .zip file first.",
-    });
+    showZipValidateError("Choose a zip file first.");
+    return;
+  }
+  if (!isZipFile(file)) {
+    showZipValidateError("Please choose a CatalogOne export .zip file.");
     return;
   }
 
@@ -1878,70 +2359,81 @@ els.analyzeZipBtn?.addEventListener("click", async () => {
       throw new Error(body.error || `Request failed (${response.status})`);
     }
 
-    wireAnalyzeReport({
-      reportEl: els.zipAnalyzeReport,
-      panelEl: els.zipAnalyzePanel,
-      jsonEl: els.zipAnalyzeJson,
-      toggleEl: els.zipAnalyzeShowJson,
-      panelHtml: buildZipAnalyzePanel(body),
-      rawData: body,
-      isError: body.has_blocking_issues,
+    wireZipValidateReport({
+      body,
+      defaultCollapsed: !body.has_blocking_issues,
     });
+    state.zipAnalyzeResult = body;
+    state.importType = body.import_type || "zip";
+    state.importFilename = body.import_filename || file.name;
+    state.dgAnalyzeResult = null;
+    updateMergeBrUi();
   } catch (error) {
-    showAnalyzeError({
-      reportEl: els.zipAnalyzeReport,
-      panelEl: els.zipAnalyzePanel,
-      jsonEl: els.zipAnalyzeJson,
-      toggleEl: els.zipAnalyzeShowJson,
-      message: error.message || "Zip analysis failed.",
-    });
+    showZipValidateError(error.message || "Zip validation failed.");
   } finally {
     els.analyzeZipBtn.disabled = false;
+    updateZipValidateButton();
   }
 });
 
 els.createBrBtn?.addEventListener("click", async () => {
   const name = els.businessRequestName.value.trim();
   if (!state.loggedIn) {
-    showResult(
-      els.brCreateResult,
-      "Connect to a CatalogOne environment first — select one in the sidebar and click Connect.",
-      true,
-    );
+    showBrCreateResult("Connect to CatalogOne first.", { isError: true });
+    return;
+  }
+  if (!state.zipAnalyzeResult || state.importType !== "zip") {
+    showBrCreateResult("Validate a zip in Step 1 first.", { isError: true });
+    return;
+  }
+  if (state.zipAnalyzeResult?.has_blocking_issues) {
+    showBrCreateResult("Resolve blocking validation issues first.", { isError: true });
     return;
   }
   if (!name) {
-    showResult(els.brCreateResult, "Enter a business request name first.", true);
+    showBrCreateResult("Enter a business request name first.", { isError: true });
     els.businessRequestName?.focus();
     return;
   }
   if (els.businessRequestId.value.trim()) {
-    showResult(els.brCreateResult, "Clear the business request ID to create a new one.", true);
+    showBrCreateResult("Clear the business request ID to create another.", { isError: true });
     return;
   }
 
   els.createBrBtn.disabled = true;
-  els.brCreateResult.hidden = true;
+  resetMergeCompareUi();
+  if (els.brCreateResult) {
+    els.brCreateResult.hidden = true;
+  }
 
   try {
     const result = await api("/api/business-request", {
       method: "POST",
-      body: JSON.stringify({ name }),
+      body: JSON.stringify({ name, import_type: "zip" }),
     });
-    els.businessRequestId.value = result.business_request_id;
-    syncBusinessRequestFields();
-    showResult(els.brCreateResult, {
-      status: "ok",
-      message: `Business request created.`,
-      business_request_id: result.business_request_id,
-      name: result.name,
-    });
+
+    applyBusinessRequestIdFromResult(result);
+    state.zipImportCompleted = isZipImportSuccessful(result);
+    if (!state.zipImportCompleted) {
+      const importError = result.import?.error || result.message || "Zip import did not complete successfully.";
+      showBrCreateResult(importError, { isError: true });
+      return;
+    }
+
+    showBrCreateResult(result, { isError: false });
+    await promptCompareAfterImport(result.business_request_id);
   } catch (error) {
-    showResult(els.brCreateResult, error.message, true);
+    state.zipImportCompleted = false;
+    if (error?.body?.business_request_id) {
+      applyBusinessRequestIdFromResult(error.body);
+    }
+    showBrCreateResult(error, { isError: true });
   } finally {
     setActionButtonsEnabled();
   }
 });
+
+els.clearBrBtn?.addEventListener("click", clearBusinessRequest);
 
 els.publishBtn.addEventListener("click", async () => {
   const businessRequestId = getPublishBusinessRequestId();
@@ -2104,48 +2596,18 @@ els.dgPublishBtn?.addEventListener("click", async () => {
   }
 });
 
-async function restoreSession() {
+async function resetCatalogOneConnectionOnLoad() {
   try {
-    const session = await api("/api/session");
-    if (session.logged_in) {
-      const label = deriveEnvironmentLabel(session.apigw_url || "");
-      state.currentEnvironmentLabel = label;
-
-      if (session.apigw_url) {
-        els.apigwUrlInput.value = session.apigw_url;
-      }
-      if (session.keycloak_url) {
-        els.keycloakUrlInput.value = session.keycloak_url;
-      }
-      if (session.realm) {
-        els.keycloakRealmInput.value = session.realm;
-      }
-      if (session.username) {
-        els.usernameInput.value = session.username;
-      }
-
-      const store = loadEnvironmentStore();
-      const matched = store.environments.find(
-        (item) => environmentKey(item) === environmentKey(getConnectionFields())
-      );
-      if (matched) {
-        state.activeEnvironmentId = matched.id;
-        state.connectedEnvironmentId = matched.id;
-        store.activeEnvironmentId = matched.id;
-        saveEnvironmentStore(store);
-        els.passwordInput.value = matched.password || "";
-        state.currentEnvironmentLabel = getEnvironmentDisplayName(matched);
-        applyConnectionFields(matched);
-        renderEnvironmentSidebar();
-      } else {
-        state.currentEnvironmentLabel = deriveEnvironmentLabel(session.apigw_url || "");
-      }
-
-      setLoggedIn(true, session.username, state.currentEnvironmentLabel);
-    }
+    await fetch("/api/logout", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: "{}",
+    });
   } catch {
-    setLoggedIn(false);
+    // still show disconnected if logout fails
   }
+  state.connectedEnvironmentId = null;
+  setLoggedIn(false);
 }
 
 els.businessRequestId?.addEventListener("change", syncBusinessRequestFields);
@@ -2194,9 +2656,17 @@ initTableDrafts();
 syncBusinessRequestFields();
 syncDgBusinessRequestFields();
 
+els.brCompareProductionBtn?.addEventListener("click", () => {
+  if (!state.zipImportCompleted) {
+    return;
+  }
+  void runBrCompare("production");
+});
+
 async function initApp() {
   initSidebarResize();
   initZipDropzone();
+  updateZipValidateButton();
   initExcelDropzone();
   setLoggedIn(false);
 
@@ -2213,7 +2683,7 @@ async function initApp() {
   });
   startMcpStatusPolling();
 
-  await restoreSession();
+  await resetCatalogOneConnectionOnLoad();
   updateMainConnectionHint();
 }
 

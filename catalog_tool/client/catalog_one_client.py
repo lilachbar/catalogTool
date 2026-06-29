@@ -5,14 +5,19 @@ from __future__ import annotations
 import json
 import re
 import ssl
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
+import uuid
 import http.cookiejar
 import html as html_lib
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 from typing import Any
+
+from catalog_tool.client.entity_api import resolve_entity_get_spec
 
 
 @dataclass
@@ -254,6 +259,138 @@ class CatalogOneClient:
             raise RuntimeError(f"Get business request failed ({status}): {body}")
         return json.loads(body)
 
+    def _get_entity_snapshot(
+        self,
+        entity_type: str,
+        entity_id: str,
+        *,
+        business_request_id: str | None = None,
+    ) -> dict[str, Any] | None:
+        """Load an entity using the same CatalogOne API shape (with or without BR context)."""
+        normalized = (entity_type or "").strip()
+        spec = resolve_entity_get_spec(normalized)
+        if spec is None:
+            raise ValueError(
+                f"Entity type {normalized!r} is not supported for BR compare yet"
+            )
+
+        query = ""
+        if business_request_id:
+            query = f"?businessRequestId={urllib.parse.quote(business_request_id)}"
+
+        if spec.method == "POST":
+            status, body = self._api_request(
+                "POST",
+                f"/{spec.api_base}/{spec.version}/{spec.post_path or spec.path_template}",
+                query=query,
+                body={spec.post_body_key: [entity_id]},
+            )
+        else:
+            path = spec.path_template.format(entity_id=entity_id)
+            status, body = self._api_request(
+                "GET",
+                f"/{spec.api_base}/{spec.version}/{path}",
+                query=query,
+            )
+
+        if status == 404:
+            return None
+        if status < 200 or status >= 300:
+            context = f" in BR {business_request_id}" if business_request_id else " in production"
+            raise RuntimeError(f"Get entity{context} failed ({status}): {body}")
+
+        parsed = json.loads(body) if body else None
+        if isinstance(parsed, list):
+            return parsed[0] if parsed else None
+        return parsed if isinstance(parsed, dict) else None
+
+    def get_entity_in_business_request(
+        self,
+        entity_type: str,
+        entity_id: str,
+        business_request_id: str,
+    ) -> dict[str, Any] | None:
+        """Load the entity as it exists in the business request (local import)."""
+        return self._get_entity_snapshot(
+            entity_type,
+            entity_id,
+            business_request_id=business_request_id,
+        )
+
+    def get_entity_published(
+        self,
+        entity_type: str,
+        entity_id: str,
+    ) -> dict[str, Any] | None:
+        """Load the entity as it currently exists in production (no BR context)."""
+        return self._get_entity_snapshot(entity_type, entity_id)
+
+    def search_entity_audit_records(
+        self,
+        entity_id: str,
+        entity_type: str,
+        *,
+        limit: int = 10,
+    ) -> list[dict[str, Any]]:
+        """Return audit history records for an entity, newest first."""
+        body = {
+            "types": [entity_type],
+            "criteria": {
+                "type": "BooleanCondition",
+                "and": [
+                    {
+                        "type": "EqualityCondition",
+                        "field": "entityId",
+                        "value": entity_id,
+                    },
+                ],
+            },
+            "sortBy": [
+                {"field": "publishMetaData.publishDateTime", "order": "desc"},
+                {"field": "shareMetaData.shareDateTime", "order": "desc"},
+            ],
+        }
+        status, text = self._api_request(
+            "POST",
+            "/entitySearchServices/v2/audit/search",
+            query=f"?offset=0&limit={max(1, min(limit, 50))}",
+            body=body,
+        )
+        if status < 200 or status >= 300:
+            raise RuntimeError(f"Audit search failed ({status}): {text}")
+        parsed = json.loads(text)
+        return parsed if isinstance(parsed, list) else []
+
+    def audit_compare_entities(
+        self,
+        *,
+        business_request_id: str,
+        entity_id: str,
+        entity_type: str,
+        source_audit_id: str,
+        target_audit_id: str,
+    ) -> Any:
+        """Compare two audit versions for an entity."""
+        body = {
+            "elementId": {"entityId": entity_id, "entityType": entity_type},
+            "context": {
+                "level": "LOCAL",
+                "workstreamName": "production",
+                "businessRequestID": business_request_id,
+                "user": self.connection.username,
+            },
+            "sourceAuditId": source_audit_id,
+            "targetAuditId": target_audit_id,
+        }
+        status, text = self._api_request(
+            "POST",
+            "/entitySearchServices/v1/audit/compare",
+            body=body,
+        )
+        if status < 200 or status >= 300:
+            raise RuntimeError(f"Audit compare failed ({status}): {text}")
+        return json.loads(text) if text else []
+
     def publish_business_request(
         self,
         business_request_id: str,
@@ -278,6 +415,204 @@ class CatalogOneClient:
         except json.JSONDecodeError:
             parsed = body or None
         return status, parsed
+
+    def _raw_request(
+        self,
+        method: str,
+        url: str,
+        *,
+        data: bytes | None = None,
+        headers: dict[str, str] | None = None,
+        timeout: int = 120,
+    ) -> tuple[int, str]:
+        request_headers = {
+            "Authorization": f"Bearer {self.access_token}",
+            "Accept": "application/json",
+        }
+        if headers:
+            request_headers.update(headers)
+        request = urllib.request.Request(
+            url,
+            data=data,
+            method=method,
+            headers=request_headers,
+        )
+        try:
+            with _direct_urlopen(request, timeout=timeout) as response:
+                return response.status, response.read().decode("utf-8", errors="replace")
+        except urllib.error.HTTPError as exc:
+            return exc.code, exc.read().decode("utf-8", errors="replace")
+
+    @staticmethod
+    def _multipart_body(
+        boundary: str,
+        parts: list[tuple[str, str, str | None]],
+        *,
+        file_bytes: bytes | None = None,
+    ) -> bytes:
+        chunks: list[bytes] = []
+        for name, value, filename in parts:
+            if filename is not None:
+                chunks.append(
+                    (
+                        f'--{boundary}\r\nContent-Disposition: form-data; name="{name}"; '
+                        f'filename="{filename}"\r\nContent-Type: application/octet-stream\r\n\r\n'
+                    ).encode()
+                )
+                chunks.append(file_bytes or b"")
+            else:
+                chunks.append(
+                    (
+                        f'--{boundary}\r\nContent-Disposition: form-data; name="{name}"\r\n\r\n'
+                        f"{value}\r\n"
+                    ).encode()
+                )
+        chunks.append(f"--{boundary}--\r\n".encode())
+        return b"".join(chunks)
+
+    def ensure_business_request_local_context(self, business_request_id: str) -> None:
+        """Ensure the current user has a local context on the BR (required for import)."""
+        status, body = self._api_request(
+            "POST",
+            f"/catalogManagement/businessRequestManagement/v1/businessRequest/{business_request_id}/localContext",
+            body={},
+        )
+        if status == 400 and "already exists" in body:
+            return
+        if status < 200 or status >= 300:
+            raise RuntimeError(
+                f"Failed to create BR local context ({status}): {body}"
+            )
+
+    def import_catalog_zip(
+        self,
+        zip_bytes: bytes,
+        business_request_id: str,
+        *,
+        file_name: str = "import.zip",
+    ) -> dict[str, Any]:
+        """Import a CatalogOne export zip into a business request."""
+        if not zip_bytes:
+            raise ValueError("Zip file is empty")
+
+        if not file_name.lower().endswith(".zip"):
+            file_name = f"{Path(file_name).stem}.zip" if file_name else "import.zip"
+
+        self.ensure_business_request_local_context(business_request_id)
+
+        base_url = f"{self.connection.apigw_url.rstrip('/')}/catalogManagement/import/v1"
+        upload_id = str(uuid.uuid4())
+        br_id = business_request_id
+
+        upload_boundary = f"----CatalogTool{int(time.time() * 1000)}"
+        upload_body = self._multipart_body(
+            upload_boundary,
+            [
+                ("businessRequestId", br_id, None),
+                ("stage", "UPLOAD", None),
+                ("uploadId", upload_id, None),
+                ("offset", "0", None),
+                ("file", "", "blob"),
+                ("totalParts", "1", None),
+            ],
+            file_bytes=zip_bytes,
+        )
+        upload_status, upload_text = self._raw_request(
+            "POST",
+            f"{base_url}/uploadPart",
+            data=upload_body,
+            headers={
+                "Content-Type": f"multipart/form-data; boundary={upload_boundary}",
+            },
+        )
+        if upload_status < 200 or upload_status >= 300:
+            raise RuntimeError(f"Zip upload failed ({upload_status}): {upload_text}")
+
+        job_boundary = f"----CatalogTool{int(time.time() * 1000)}J"
+        job_body = self._multipart_body(
+            job_boundary,
+            [
+                ("businessRequestId", br_id, None),
+                ("stage", "UPLOAD", None),
+                ("fileName", file_name, None),
+                ("uploadId", upload_id, None),
+                ("totalParts", "1", None),
+            ],
+        )
+        job_status, job_text = self._raw_request(
+            "POST",
+            f"{base_url}/job",
+            data=job_body,
+            headers={
+                "Content-Type": f"multipart/form-data; boundary={job_boundary}",
+            },
+        )
+        if job_status < 200 or job_status >= 300:
+            raise RuntimeError(f"Import job creation failed ({job_status}): {job_text}")
+
+        try:
+            job_data = json.loads(job_text)
+        except json.JSONDecodeError as exc:
+            raise RuntimeError(f"Import job response was not JSON: {job_text}") from exc
+
+        job_id = job_data.get("id") or job_data.get("jobId")
+        if not job_id:
+            raise RuntimeError(f"Import job created but no job id in response: {job_text}")
+
+        file_location = job_data.get("fileLocation") or f"imported/{upload_id}.zip"
+        trigger_boundary = f"----CatalogTool{int(time.time() * 1000)}T"
+        trigger_body = self._multipart_body(
+            trigger_boundary,
+            [
+                ("businessRequestId", br_id, None),
+                ("stage", "EXTERNAL", None),
+                ("fileLocation ", file_location, None),
+            ],
+        )
+        trigger_status, trigger_text = self._raw_request(
+            "POST",
+            f"{base_url}/job/{job_id}/triggerStage",
+            data=trigger_body,
+            headers={
+                "Content-Type": f"multipart/form-data; boundary={trigger_boundary}",
+            },
+        )
+
+        job_final_state = ""
+        final_status: dict[str, Any] | None = None
+        for _ in range(10):
+            time.sleep(2)
+            poll_status, poll_text = self._raw_request(
+                "GET",
+                f"{base_url}/job/{job_id}",
+            )
+            if poll_status < 200 or poll_status >= 300:
+                continue
+            try:
+                final_status = json.loads(poll_text)
+            except json.JSONDecodeError:
+                continue
+            job_final_state = str(final_status.get("status") or "")
+            if job_final_state in {"COMPLETED", "FAILED", "DONE"}:
+                break
+
+        if trigger_status >= 300:
+            raise RuntimeError(
+                f"Import trigger failed ({trigger_status}): {trigger_text}"
+            )
+        if job_final_state == "FAILED":
+            raise RuntimeError(
+                f"Import job {job_id} failed: {json.dumps(final_status or {}, ensure_ascii=False)}"
+            )
+
+        return {
+            "job_id": job_id,
+            "upload_id": upload_id,
+            "file_name": file_name,
+            "trigger_status": trigger_status,
+            "job_status": job_final_state or "UNKNOWN",
+            "job": final_status,
+        }
 
 
 @dataclass(frozen=True)
