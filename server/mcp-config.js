@@ -8,6 +8,7 @@ import path from "path";
 
 const DEFAULT_MCP_PATH = path.join(os.homedir(), ".mcp-servers", "catalogone-mcp", "dist", "index.js");
 const DEFAULT_MCP_CONFIG = path.join(os.homedir(), ".cursor", "mcp.json");
+const C1_ENV_KEY = /^C1_/;
 
 function loadFromCursorMcpJson() {
   const configPath = process.env.CURSOR_MCP_CONFIG || DEFAULT_MCP_CONFIG;
@@ -54,13 +55,33 @@ function buildFromEnv() {
   };
 }
 
+/** Merge MCP env, replacing C1_* from mcp.json when a web session override is active. */
+export function applyMcpEnv(configEnv = {}, envOverride = null) {
+  const filteredConfigEnv = envOverride
+    ? Object.fromEntries(Object.entries(configEnv).filter(([key]) => !C1_ENV_KEY.test(key)))
+    : configEnv;
+
+  const env = {
+    ...process.env,
+    NODE_TLS_REJECT_UNAUTHORIZED: "0",
+    NO_PROXY: process.env.NO_PROXY || "*.corp.amdocs.com,localhost,127.0.0.1",
+    ...filteredConfigEnv,
+  };
+
+  if (envOverride && typeof envOverride === "object") {
+    Object.assign(env, envOverride);
+  }
+
+  return env;
+}
+
 /** Raw MCP server entry for stdio spawn / Cursor SDK. */
 export function loadCatalogoneMcpConfig() {
   return loadFromCursorMcpJson() || buildFromEnv();
 }
 
 /** Cursor SDK mcpServers map. */
-export function loadCatalogoneMcpServers() {
+export function loadCatalogoneMcpServers({ envOverride = null } = {}) {
   const config = loadCatalogoneMcpConfig();
   if (!config) {
     return {};
@@ -71,7 +92,7 @@ export function loadCatalogoneMcpServers() {
       type: "stdio",
       command: config.command,
       args: config.args,
-      env: config.env,
+      env: applyMcpEnv(config.env, envOverride),
     },
   };
 }

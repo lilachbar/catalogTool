@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import base64
+import json
 import urllib.parse
 
 from flask import request, session
@@ -11,6 +13,7 @@ from catalog_tool.client.catalog_one_client import (
     CatalogOneConnectionConfig,
     derive_catalog_ui_url,
     derive_environment_label,
+    derive_keycloak_realm,
     derive_keycloak_url,
     normalize_apigw_url,
 )
@@ -66,6 +69,42 @@ def client_from_session() -> CatalogOneClient:
         raise RuntimeError("Session expired — log in again")
     client.restore_access_token(token)
     return client
+
+
+def catalogone_mcp_env_from_session() -> dict[str, str] | None:
+    """Map the active web session connection to catalogone MCP C1_* env vars."""
+    if not session.get("logged_in"):
+        return None
+    conn = session.get("connection") or {}
+    apigw_url = (conn.get("apigw_url") or "").strip()
+    if not apigw_url:
+        return None
+
+    apigw_url = normalize_apigw_url(apigw_url)
+    keycloak_url = (conn.get("keycloak_url") or "").strip()
+    if not keycloak_url or "-authoring-runtime" in keycloak_url:
+        try:
+            keycloak_url = derive_keycloak_url(apigw_url)
+        except ValueError:
+            keycloak_url = KEYCLOAK_URL
+
+    return {
+        "C1_APIGW_URL": apigw_url,
+        "C1_WEB_UI_URL": derive_catalog_ui_url(apigw_url),
+        "C1_KEYCLOAK_URL": keycloak_url,
+        "C1_KEYCLOAK_REALM": conn.get("keycloak_realm") or derive_keycloak_realm(apigw_url),
+        "C1_USERNAME": conn.get("username", ""),
+        "C1_PASSWORD": conn.get("password", ""),
+    }
+
+
+def catalogone_mcp_env_proxy_headers() -> dict[str, str]:
+    """Forward session catalogone credentials to the Node MCP proxy."""
+    env = catalogone_mcp_env_from_session()
+    if not env:
+        return {}
+    encoded = base64.b64encode(json.dumps(env, separators=(",", ":")).encode("utf-8")).decode("ascii")
+    return {"X-Catalogone-Env": encoded}
 
 
 def catalog_ui_url_for_request() -> str:

@@ -5,19 +5,49 @@ import {
   callCatalogoneMcpTool,
   getCatalogoneMcpStatus,
   listCatalogoneMcpTools,
+  probeCatalogoneMcpOnline,
 } from "./catalogone-mcp-client.js";
+import { parseCatalogoneEnvFromRequest } from "./mcp-env.js";
 
 export function registerMcpRoutes(app) {
-  app.get("/api/mcp/status", (_req, res) => {
-    res.json(getCatalogoneMcpStatus());
+  app.get("/api/mcp/status", async (req, res) => {
+    const catalogoneEnv = parseCatalogoneEnvFromRequest(req);
+
+    try {
+      const base = getCatalogoneMcpStatus();
+      if (req.query.quick === "1") {
+        res.json({
+          ...base,
+          online: null,
+          checking: false,
+          credentialsSource: catalogoneEnv ? "connected_session" : "mcp_json",
+        });
+        return;
+      }
+
+      const status = await probeCatalogoneMcpOnline({
+        force: req.query.force === "1",
+        envOverride: catalogoneEnv,
+      });
+      res.json(status);
+    } catch (error) {
+      res.status(500).json({
+        configured: false,
+        online: false,
+        error: error.message || "Failed to check MCP status",
+      });
+    }
   });
 
-  app.get("/api/mcp/tools", async (_req, res) => {
+  app.get("/api/mcp/tools", async (req, res) => {
+    const catalogoneEnv = parseCatalogoneEnvFromRequest(req);
+
     try {
-      const tools = await listCatalogoneMcpTools();
+      const tools = await listCatalogoneMcpTools({ envOverride: catalogoneEnv });
       res.json({
         status: "ok",
         count: tools.length,
+        credentialsSource: catalogoneEnv ? "connected_session" : "mcp_json",
         tools: tools.map((tool) => ({
           name: tool.name,
           title: tool.title || tool.name,
@@ -44,13 +74,16 @@ export function registerMcpRoutes(app) {
       return;
     }
 
+    const catalogoneEnv = parseCatalogoneEnvFromRequest(req);
+
     try {
       const started = Date.now();
-      const result = await callCatalogoneMcpTool(toolName, toolArgs);
+      const result = await callCatalogoneMcpTool(toolName, toolArgs, { envOverride: catalogoneEnv });
       res.json({
         status: "ok",
         toolName,
         durationMs: Date.now() - started,
+        credentialsSource: catalogoneEnv ? "connected_session" : "mcp_json",
         result,
       });
     } catch (error) {

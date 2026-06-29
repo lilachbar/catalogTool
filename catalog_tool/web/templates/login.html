@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sign in — Catalog Tool</title>
+  <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/styles.css">
+  <script>
+    (function () {
+      var theme = localStorage.getItem("catalogTool.theme");
+      if (theme === "light" || theme === "dark") {
+        document.documentElement.setAttribute("data-theme", theme);
+      }
+    })();
+  </script>
+</head>
+<body class="login-page-body">
+  <div class="ambient" aria-hidden="true"></div>
+
+  <main class="login-page" aria-labelledby="loginTitle">
+    <div class="login-card">
+      <div class="login-brand">
+        <img class="login-logo" src="/static/logo.svg" width="48" height="48" alt="">
+        <div>
+          <h1 id="loginTitle" class="login-title">Catalog Tool</h1>
+          <p class="login-subtitle">Sign in with your Amdocs account</p>
+        </div>
+      </div>
+
+      {% if not ldap_enabled %}
+      <div class="login-notice">
+        LDAP authentication is disabled. Set <code>LDAP_AUTH_ENABLED=true</code> and <code>LDAP_URI</code> in <code>.env</code>.
+      </div>
+      {% endif %}
+
+      <form id="loginForm" class="login-form" autocomplete="on">
+        <label class="field">
+          <span class="field-label">Username</span>
+          <input
+            type="text"
+            id="usernameInput"
+            name="username"
+            class="input"
+            placeholder="your.name"
+            autocomplete="username"
+            autocapitalize="none"
+            spellcheck="false"
+            required
+            {% if ldap_enabled %}autofocus{% endif %}
+          >
+          <span class="field-hint">Corporate login (without @corp.amdocs.com)</span>
+        </label>
+
+        <label class="field">
+          <span class="field-label">Password</span>
+          <input
+            type="password"
+            id="passwordInput"
+            name="password"
+            class="input"
+            placeholder="LDAP password"
+            autocomplete="current-password"
+            required
+          >
+        </label>
+
+        <p id="loginError" class="login-error" hidden></p>
+
+        <button type="submit" class="btn btn-primary btn-lg login-submit" id="loginSubmitBtn">
+          Sign in
+        </button>
+      </form>
+
+      <p class="login-footnote">
+        Uses Amdocs LDAP / Active Directory. CatalogOne environment connection is configured after sign-in.
+      </p>
+    </div>
+  </main>
+
+  <script>
+    (function () {
+      const form = document.getElementById("loginForm");
+      const errorEl = document.getElementById("loginError");
+      const submitBtn = document.getElementById("loginSubmitBtn");
+      const nextUrl = {{ next_url | tojson }};
+
+      function showError(message) {
+        errorEl.hidden = false;
+        errorEl.textContent = message;
+      }
+
+      form.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        errorEl.hidden = true;
+        submitBtn.disabled = true;
+        submitBtn.textContent = "Signing in…";
+
+        try {
+          const response = await fetch("/api/user/login", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              username: document.getElementById("usernameInput").value.trim(),
+              password: document.getElementById("passwordInput").value,
+              next: nextUrl,
+            }),
+          });
+          const data = await response.json();
+          if (!response.ok) {
+            throw new Error(data.error || "Sign in failed.");
+          }
+          window.location.href = data.redirect || nextUrl || "/";
+        } catch (error) {
+          showError(error.message || "Sign in failed.");
+          submitBtn.disabled = false;
+          submitBtn.textContent = "Sign in";
+        }
+      });
+    })();
+  </script>
+</body>
+</html>

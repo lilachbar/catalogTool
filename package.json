@@ -5,7 +5,9 @@
   "scripts": {
     "build:chat": "esbuild catalog_tool/web/src/chat-client.jsx --bundle --outfile=catalog_tool/web/static/chat.bundle.js --format=esm --jsx=automatic --loader:.jsx=jsx",
     "chat-server": "node server/index.js",
-    "build": "npm run build:chat"
+    "build": "npm run build:chat",
+    "test:server": "node --test server/*.test.js",
+    "preflight": "node server/preflight-check.js"
   },
   "dependencies": {
     "@ai-sdk/openai": "^2.0.0",

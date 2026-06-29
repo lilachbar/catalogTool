@@ -119,6 +119,51 @@ def register(app: Flask) -> None:
             return jsonify({"error": str(exc)}), 500
         return jsonify(result)
 
+    @app.post("/api/business-request")
+    def api_create_business_request():
+        if not session.get("logged_in"):
+            return jsonify({"error": "Log in first"}), 401
+
+        data = request.get_json(force=True)
+        name = (data.get("name") or "").strip()
+        if not name:
+            return jsonify({"error": "Business request name is required"}), 400
+
+        try:
+            client = client_from_session()
+            business_request_id = client.create_business_request(name=name)
+        except (RuntimeError, ValueError) as exc:
+            return jsonify({"error": str(exc)}), 400
+        except Exception as exc:
+            return jsonify({"error": str(exc)}), 500
+
+        return jsonify(
+            {
+                "status": "ok",
+                "business_request_id": business_request_id,
+                "name": name,
+            }
+        )
+
+    @app.get("/api/business-request/<business_request_id>")
+    def api_get_business_request(business_request_id: str):
+        if not session.get("logged_in"):
+            return jsonify({"error": "Log in first"}), 401
+
+        br_id = (business_request_id or "").strip()
+        if not br_id:
+            return jsonify({"error": "Business request ID is required"}), 400
+
+        try:
+            client = client_from_session()
+            business_request = client.get_business_request(br_id)
+        except (RuntimeError, ValueError) as exc:
+            return jsonify({"error": str(exc)}), 400
+        except Exception as exc:
+            return jsonify({"error": str(exc)}), 500
+
+        return jsonify({"status": "ok", "business_request": business_request})
+
     @app.post("/api/publish")
     def api_publish():
         if not session.get("logged_in"):

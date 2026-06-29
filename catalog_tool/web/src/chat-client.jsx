@@ -153,6 +153,66 @@ function formatClientError(error) {
   }
 }
 
+function useChatHealth() {
+  const [health, setHealth] = useState({
+    loading: true,
+    ready: false,
+    message: "",
+  });
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadHealth() {
+      try {
+        const response = await fetch("/api/chat/health");
+        const data = await response.json();
+        if (cancelled) {
+          return;
+        }
+        const reason = data.chatKey?.reason;
+        let message =
+          data.chatKey?.setupInstructions
+          || data.chatKey?.message
+          || (data.chatReady ? "" : "Chat is not configured.");
+
+        if (reason === "missing") {
+          message = data.chatKey?.setupInstructions || message;
+        } else if (reason === "invalid_format" || reason === "invalid") {
+          message = data.chatKey?.setupInstructions || data.chatKey?.message || message;
+        }
+
+        setHealth({
+          loading: false,
+          ready: Boolean(data.chatReady),
+          message,
+        });
+      } catch {
+        if (!cancelled) {
+          setHealth({
+            loading: false,
+            ready: false,
+            message: "Could not reach the chat server. Restart with ./run_web.sh",
+          });
+        }
+      }
+    }
+
+    loadHealth();
+    const intervalId = window.setInterval(loadHealth, 60_000);
+    const onFocus = () => loadHealth();
+    window.addEventListener("focus", onFocus);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(intervalId);
+      window.removeEventListener("focus", onFocus);
+    };
+  }, []);
+
+  return health;
+}
+
 function extractMessageText(message) {
   let text = "";
 
@@ -264,6 +324,7 @@ function ChatPanel({
   onPopOut,
   onAttach,
   popupActive = false,
+  chatHealth = { loading: false, ready: true, message: "" },
 }) {
   const isPopup = mode === "popup";
   const detachedLayout = isPopup ? readDetachedLayout() : null;
@@ -281,6 +342,7 @@ function ChatPanel({
   });
 
   const isBusy = status === "streaming" || status === "submitted";
+  const chatBlocked = !chatHealth.loading && !chatHealth.ready;
 
   const persistPanelWidth = useCallback((width) => {
     const next = clampChatWidth(width);
@@ -429,7 +491,13 @@ function ChatPanel({
       </header>
 
       <div className="chat-messages" role="log" aria-live="polite">
-        {messages.length === 0 ? (
+        {chatBlocked ? (
+          <div className="chat-setup-banner">
+            <strong>Catalog assistant unavailable</strong>
+            <pre className="chat-setup-instructions">{chatHealth.message}</pre>
+          </div>
+        ) : null}
+        {!chatBlocked && messages.length === 0 ? (
           <div className="chat-empty">
             <p>Ask about CatalogOne tables, business requests, or how to use this app.</p>
             <ul>
@@ -438,9 +506,10 @@ function ChatPanel({
               <li>Am I connected to CatalogOne?</li>
             </ul>
           </div>
-        ) : (
-          messages.map((message) => <ChatMessage key={message.id} message={message} />)
-        )}
+        ) : null}
+        {!chatBlocked
+          ? messages.map((message) => <ChatMessage key={message.id} message={message} />)
+          : null}
         {isBusy ? <div className="chat-typing">Thinking…</div> : null}
         {error ? <div className="chat-error">{formatClientError(error)}</div> : null}
         <div ref={messagesEndRef} />
@@ -451,7 +520,7 @@ function ChatPanel({
           ref={inputRef}
           className="chat-input"
           rows={2}
-          placeholder="Ask the catalog assistant…"
+          placeholder={chatBlocked ? "Configure CURSOR_API_KEY in .env to use chat" : "Ask the catalog assistant…"}
           value={input}
           onChange={(event) => setInput(event.target.value)}
           onKeyDown={(event) => {
@@ -460,9 +529,9 @@ function ChatPanel({
               onSubmit(event);
             }
           }}
-          disabled={isBusy}
+          disabled={isBusy || chatBlocked}
         />
-        <button type="submit" className="btn btn-primary" disabled={isBusy || !input.trim()}>
+        <button type="submit" className="btn btn-primary" disabled={isBusy || chatBlocked || !input.trim()}>
           Send
         </button>
       </form>
@@ -490,6 +559,7 @@ function openChatPopup(outerWidth, outerHeight, left, top, sessionId) {
 }
 
 function ChatApp() {
+  const chatHealth = useChatHealth();
   const [open, setOpen] = useState(false);
   const [popupActive, setPopupActive] = useState(false);
   const popupRef = useRef(null);
@@ -666,11 +736,13 @@ function ChatApp() {
       mode="docked"
       onPopOut={handlePopOut}
       popupActive={popupActive}
+      chatHealth={chatHealth}
     />
   );
 }
 
 function ChatPopupApp() {
+  const chatHealth = useChatHealth();
   const channelRef = useRef(null);
 
   useEffect(() => {
@@ -715,6 +787,7 @@ function ChatPopupApp() {
       mode="popup"
       onClose={() => window.close()}
       onAttach={handleAttach}
+      chatHealth={chatHealth}
     />
   );
 }

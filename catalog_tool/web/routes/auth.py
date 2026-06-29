@@ -6,6 +6,10 @@ from flask import Flask, jsonify, request, session
 
 from catalog_tool.client.catalog_one_client import CatalogOneClient, derive_catalog_ui_url, derive_environment_label
 from catalog_tool.web.helpers import connection_from_request
+from catalog_tool.web.user_session import (
+    APP_USER_DISPLAY_KEY,
+    APP_USER_SESSION_KEY,
+)
 
 
 def register(app: Flask) -> None:
@@ -49,7 +53,13 @@ def register(app: Flask) -> None:
 
     @app.post("/api/logout")
     def api_logout():
+        """Disconnect from CatalogOne only — preserve LDAP app login."""
+        app_user = session.get(APP_USER_SESSION_KEY)
+        app_user_display = session.get(APP_USER_DISPLAY_KEY)
         session.clear()
+        if app_user:
+            session[APP_USER_SESSION_KEY] = app_user
+            session[APP_USER_DISPLAY_KEY] = app_user_display
         return jsonify({"status": "ok"})
 
     @app.get("/api/session")
@@ -57,12 +67,14 @@ def register(app: Flask) -> None:
         if not session.get("logged_in"):
             return jsonify({"logged_in": False})
         connection = session.get("connection", {})
+        apigw_url = connection.get("apigw_url", "")
         return jsonify(
             {
                 "logged_in": True,
                 "username": connection.get("username"),
-                "apigw_url": connection.get("apigw_url"),
+                "apigw_url": apigw_url,
                 "keycloak_url": connection.get("keycloak_url"),
                 "realm": connection.get("keycloak_realm"),
+                "environment_label": derive_environment_label(apigw_url) if apigw_url else "",
             }
         )

@@ -94,7 +94,13 @@ def _direct_urlopen(request: urllib.request.Request, *, timeout: int = 30):
     return _direct_opener().open(request, timeout=timeout)
 
 
-def _format_http_error(exc: urllib.error.HTTPError, service: str) -> str:
+def _format_http_error(
+    exc: urllib.error.HTTPError,
+    service: str,
+    *,
+    keycloak_url: str | None = None,
+    keycloak_realm: str | None = None,
+) -> str:
     if exc.code == 401:
         return (
             f"{service} rejected the login (HTTP 401 Unauthorized). "
@@ -102,10 +108,15 @@ def _format_http_error(exc: urllib.error.HTTPError, service: str) -> str:
         )
     hint = ""
     if exc.code in {502, 503, 504}:
-        hint = (
-            " Use Keycloak URL: keycloak-amo-il41-rel285-runtime (not -authoring-runtime)."
-            " Confirm VPN/network access."
-        )
+        if keycloak_url:
+            host = urllib.parse.urlparse(keycloak_url).netloc or keycloak_url
+            realm_note = f" (realm: {keycloak_realm})" if keycloak_realm else ""
+            hint = (
+                f" Keycloak at {host}{realm_note} may be down or unreachable from your network."
+                " Use the *-runtime host (not *-authoring-runtime). Confirm VPN/cluster access."
+            )
+        else:
+            hint = " Confirm VPN/network access to the environment's Keycloak *-runtime host."
     return f"{service} returned HTTP {exc.code} {exc.reason}.{hint}"
 
 
@@ -145,7 +156,14 @@ class CatalogOneClient:
             with _direct_urlopen(request, timeout=30) as response:
                 self._access_token = json.loads(response.read().decode("utf-8"))["access_token"]
         except urllib.error.HTTPError as exc:
-            raise RuntimeError(_format_http_error(exc, "Keycloak")) from exc
+            raise RuntimeError(
+                _format_http_error(
+                    exc,
+                    "Keycloak",
+                    keycloak_url=self.keycloak_url(),
+                    keycloak_realm=self.keycloak_realm(),
+                )
+            ) from exc
         return self._access_token
 
     @property
@@ -298,57 +316,14 @@ def prepare_keycloak_sso_login_form(
         with opener.open(auth_url, timeout=30) as response:
             page_html = response.read().decode("utf-8", errors="replace")
     except urllib.error.HTTPError as exc:
-        raise RuntimeError(_format_http_error(exc, "Keycloak SSO")) from exc
-
-    action_match = re.search(r'action="([^"]+)"', page_html)
-    if not action_match:
-        raise RuntimeError("Could not find Keycloak login form for CatalogOne UI SSO")
-
-    return KeycloakSsoLoginForm(
-        action=html_lib.unescape(action_match.group(1)),
-        username=connection.username,
-        password=connection.password,
-        redirect_uri=redirect_uri,
-    )
-
-
-@dataclass(frozen=True)
-class KeycloakSsoLoginForm:
-    action: str
-    username: str
-    password: str
-    redirect_uri: str
-
-
-def prepare_keycloak_sso_login_form(
-    connection: CatalogOneConnectionConfig,
-    redirect_uri: str,
-) -> KeycloakSsoLoginForm:
-    """Fetch Keycloak login form action for browser SSO into CatalogOne UI."""
-    client = CatalogOneClient(connection)
-    auth_params = {
-        "client_id": connection.keycloak_client_id,
-        "response_type": "code",
-        "scope": "openid",
-        "redirect_uri": redirect_uri,
-    }
-    auth_url = (
-        f"{client.keycloak_url()}/auth/realms/{client.keycloak_realm()}"
-        f"/protocol/openid-connect/auth?{urllib.parse.urlencode(auth_params)}"
-    )
-
-    cookie_jar = http.cookiejar.CookieJar()
-    opener = urllib.request.build_opener(
-        urllib.request.HTTPCookieProcessor(cookie_jar),
-        urllib.request.HTTPSHandler(context=_ssl_context()),
-        urllib.request.ProxyHandler({}),
-    )
-
-    try:
-        with opener.open(auth_url, timeout=30) as response:
-            page_html = response.read().decode("utf-8", errors="replace")
-    except urllib.error.HTTPError as exc:
-        raise RuntimeError(_format_http_error(exc, "Keycloak SSO")) from exc
+        raise RuntimeError(
+            _format_http_error(
+                exc,
+                "Keycloak SSO",
+                keycloak_url=client.keycloak_url(),
+                keycloak_realm=client.keycloak_realm(),
+            )
+        ) from exc
 
     action_match = re.search(r'action="([^"]+)"', page_html)
     if not action_match:

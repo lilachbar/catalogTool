@@ -1,17 +1,26 @@
-"""Persist saved CatalogOne environments to a JSON file on disk."""
+"""Persist saved CatalogOne environments to per-user JSON files on disk."""
 
 from __future__ import annotations
 
 import base64
 import json
+import re
 import shutil
 import tempfile
 from pathlib import Path
 from typing import Any
 
-from catalog_tool.settings import ENVIRONMENTS_FILE, ENVIRONMENTS_FIXTURE_FILE
+from catalog_tool.settings import (
+    DATA_DIR,
+    ENVIRONMENTS_FILE,
+    ENVIRONMENTS_FIXTURE_FILE,
+    LDAP_AUTH_ENABLED,
+)
 
 MAX_ENVIRONMENTS = 12
+ENVIRONMENTS_DIR = DATA_DIR / "environments"
+LEGACY_CLAIM_MARKER = ENVIRONMENTS_DIR / ".legacy_claimed"
+_SAFE_USERNAME_RE = re.compile(r"[^a-z0-9._-]+")
 
 
 def _empty_store() -> dict[str, Any]:
@@ -37,23 +46,70 @@ def _decode_password(stored: str) -> str:
         return stored
 
 
-def ensure_store_file(path: Path | None = None) -> Path:
+def safe_username(username: str | None) -> str:
+    """Filesystem-safe id for per-user environment files."""
+    value = (username or "local").strip().lower()
+    value = _SAFE_USERNAME_RE.sub("_", value).strip("._-")
+    return (value[:64] or "local")
+
+
+def user_store_path(username: str | None) -> Path:
+    return ENVIRONMENTS_DIR / f"{safe_username(username)}.json"
+
+
+def load_user_store(username: str | None) -> dict[str, Any]:
+    """Load environments owned by the given app user."""
+    path = user_store_path(username)
+    if not path.exists():
+        _bootstrap_user_store(username, path)
+    return load_store(path, bootstrap_fixture=False)
+
+
+def save_user_store(username: str | None, store: dict[str, Any]) -> dict[str, Any]:
+    """Persist environments for the given app user."""
+    path = user_store_path(username)
+    return save_store(store, path=path)
+
+
+def _bootstrap_user_store(username: str | None, path: Path) -> None:
+    """Create a new user store, optionally migrating a legacy shared file once."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    safe = safe_username(username)
+
+    if ENVIRONMENTS_FILE.exists() and ENVIRONMENTS_FILE.is_file():
+        if not LDAP_AUTH_ENABLED and safe == "local":
+            shutil.copy(ENVIRONMENTS_FILE, path)
+            return
+        if LDAP_AUTH_ENABLED and not LEGACY_CLAIM_MARKER.exists():
+            shutil.copy(ENVIRONMENTS_FILE, path)
+            LEGACY_CLAIM_MARKER.write_text(safe, encoding="utf-8")
+            return
+
+    save_store(_empty_store(), path=path)
+
+
+def ensure_store_file(path: Path, *, bootstrap_fixture: bool = True) -> Path:
     """Create the environments file from the test fixture when missing."""
-    target = path or ENVIRONMENTS_FILE
+    target = path
     if target.exists():
         return target
 
     target.parent.mkdir(parents=True, exist_ok=True)
-    fixture = ENVIRONMENTS_FIXTURE_FILE
-    if fixture.exists():
-        shutil.copy(fixture, target)
+    if bootstrap_fixture:
+        fixture = ENVIRONMENTS_FIXTURE_FILE
+        if fixture.exists():
+            shutil.copy(fixture, target)
+        else:
+            save_store(_empty_store(), path=target)
     else:
         save_store(_empty_store(), path=target)
     return target
 
 
-def load_store(path: Path | None = None) -> dict[str, Any]:
-    target = ensure_store_file(path)
+def load_store(path: Path | None = None, *, bootstrap_fixture: bool = True) -> dict[str, Any]:
+    target = path or ENVIRONMENTS_FILE
+    if not target.exists():
+        ensure_store_file(target, bootstrap_fixture=bootstrap_fixture)
     try:
         raw = target.read_text(encoding="utf-8")
         if not raw.strip():

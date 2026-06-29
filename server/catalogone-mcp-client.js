@@ -6,7 +6,7 @@ import { spawn } from "child_process";
 import fs from "fs";
 import os from "os";
 import path from "path";
-import { loadCatalogoneMcpConfig } from "./mcp-config.js";
+import { loadCatalogoneMcpConfig, applyMcpEnv } from "./mcp-config.js";
 
 const DEFAULT_MCP_ROOT = path.join(os.homedir(), ".mcp-servers", "catalogone-mcp");
 const CALL_TIMEOUT_MS = Number(process.env.C1_MCP_TIMEOUT_MS || 120000);
@@ -15,7 +15,7 @@ let cachedToolList = null;
 let cachedToolListAt = 0;
 const TOOL_LIST_TTL_MS = 5 * 60 * 1000;
 
-function resolveMcpServerEntry() {
+function resolveMcpServerEntry(envOverride = null) {
   const config = loadCatalogoneMcpConfig();
   if (!config) {
     return null;
@@ -34,17 +34,12 @@ function resolveMcpServerEntry() {
   return {
     command,
     args,
-    env: {
-      ...process.env,
-      NODE_TLS_REJECT_UNAUTHORIZED: "0",
-      NO_PROXY: process.env.NO_PROXY || "*.corp.amdocs.com,localhost,127.0.0.1",
-      ...config.env,
-    },
+    env: applyMcpEnv(config.env, envOverride),
   };
 }
 
-function runMcpRequest(requestBuilder, { timeoutMs = CALL_TIMEOUT_MS } = {}) {
-  const entry = resolveMcpServerEntry();
+function runMcpRequest(requestBuilder, { timeoutMs = CALL_TIMEOUT_MS, envOverride = null } = {}) {
+  const entry = resolveMcpServerEntry(envOverride);
   if (!entry) {
     throw new Error(
       "catalogone MCP is not configured. Check ~/.cursor/mcp.json or set C1_APIGW_URL in .env.",
@@ -156,43 +151,118 @@ export function getCatalogoneMcpStatus() {
   try {
     const entry = resolveMcpServerEntry();
     if (!entry) {
-      return { configured: false, source: null, serverPath: null };
+      return { configured: false, online: false, source: null, serverPath: null };
     }
     return {
       configured: true,
+      online: null,
       source: loadCatalogoneMcpConfig()?.source || "unknown",
       serverPath: entry.args[entry.args.length - 1],
     };
   } catch (error) {
-    return { configured: false, error: error.message };
+    return { configured: false, online: false, error: error.message };
   }
 }
 
-export async function listCatalogoneMcpTools({ refresh = false } = {}) {
+const ONLINE_PROBE_TIMEOUT_MS = 20000;
+let cachedOnlineStatus = null;
+let cachedOnlineStatusAt = 0;
+const ONLINE_STATUS_TTL_MS = 30 * 1000;
+const ONLINE_STATUS_FAIL_TTL_MS = 5 * 1000;
+
+export async function probeCatalogoneMcpOnline({ force = false, envOverride = null } = {}) {
+  const base = getCatalogoneMcpStatus();
+  if (!base.configured) {
+    const offline = {
+      ...base,
+      online: false,
+      onlineError: base.error || "catalogone MCP is not configured",
+    };
+    if (!envOverride) {
+      cachedOnlineStatus = offline;
+      cachedOnlineStatusAt = Date.now();
+    }
+    return offline;
+  }
+
   const now = Date.now();
-  if (!refresh && cachedToolList && now - cachedToolListAt < TOOL_LIST_TTL_MS) {
+  if (!force && !envOverride && cachedOnlineStatus) {
+    const ttl = cachedOnlineStatus.online ? ONLINE_STATUS_TTL_MS : ONLINE_STATUS_FAIL_TTL_MS;
+    if (now - cachedOnlineStatusAt < ttl) {
+      return cachedOnlineStatus;
+    }
+  }
+
+  try {
+    const tools = await Promise.race([
+      listCatalogoneMcpTools({ refresh: true, envOverride }),
+      new Promise((_, reject) => {
+        setTimeout(
+          () => reject(new Error(`MCP server did not respond within ${ONLINE_PROBE_TIMEOUT_MS / 1000}s`)),
+          ONLINE_PROBE_TIMEOUT_MS,
+        );
+      }),
+    ]);
+    const online = {
+      ...base,
+      online: true,
+      toolCount: tools.length,
+      credentialsSource: envOverride ? "connected_session" : "mcp_json",
+    };
+    if (!envOverride) {
+      cachedOnlineStatus = online;
+      cachedOnlineStatusAt = now;
+    }
+    return online;
+  } catch (error) {
+    const offline = {
+      ...base,
+      online: false,
+      onlineError: error.message || "MCP server is offline or failed to start",
+      credentialsSource: envOverride ? "connected_session" : "mcp_json",
+    };
+    if (!envOverride) {
+      cachedOnlineStatus = offline;
+      cachedOnlineStatusAt = now;
+    }
+    return offline;
+  }
+}
+
+export async function listCatalogoneMcpTools({ refresh = false, envOverride = null } = {}) {
+  const now = Date.now();
+  if (!refresh && !envOverride && cachedToolList && now - cachedToolListAt < TOOL_LIST_TTL_MS) {
     return cachedToolList;
   }
 
-  const result = await runMcpRequest(() => ({
-    jsonrpc: "2.0",
-    id: 2,
-    method: "tools/list",
-    params: {},
-  }));
+  const result = await runMcpRequest(
+    () => ({
+      jsonrpc: "2.0",
+      id: 2,
+      method: "tools/list",
+      params: {},
+    }),
+    { envOverride },
+  );
 
-  cachedToolList = result.tools || [];
-  cachedToolListAt = now;
-  return cachedToolList;
+  const tools = result.tools || [];
+  if (!envOverride) {
+    cachedToolList = tools;
+    cachedToolListAt = now;
+  }
+  return tools;
 }
 
-export async function callCatalogoneMcpTool(toolName, toolArgs = {}) {
-  const result = await runMcpRequest(() => ({
-    jsonrpc: "2.0",
-    id: 2,
-    method: "tools/call",
-    params: { name: toolName, arguments: toolArgs },
-  }));
+export async function callCatalogoneMcpTool(toolName, toolArgs = {}, { envOverride = null } = {}) {
+  const result = await runMcpRequest(
+    () => ({
+      jsonrpc: "2.0",
+      id: 2,
+      method: "tools/call",
+      params: { name: toolName, arguments: toolArgs },
+    }),
+    { envOverride },
+  );
 
   if (result.isError) {
     const message = parseToolTextResult(result);

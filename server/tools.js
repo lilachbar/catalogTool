@@ -8,25 +8,7 @@ import {
   callCatalogoneMcpTool,
   listCatalogoneMcpTools,
 } from "./catalogone-mcp-client.js";
-
-const FLASK_BASE_URL = process.env.FLASK_BASE_URL || "http://127.0.0.1:8080";
-
-export async function callInternalApi(path, { method = "GET", body, headers = {} } = {}) {
-  const response = await fetch(`${FLASK_BASE_URL}${path}`, {
-    method,
-    headers: {
-      "Content-Type": "application/json",
-      ...headers,
-    },
-    body: body ? JSON.stringify(body) : undefined,
-  });
-  const text = await response.text();
-  try {
-    return { ok: response.ok, status: response.status, data: JSON.parse(text) };
-  } catch {
-    return { ok: response.ok, status: response.status, data: text };
-  }
-}
+import { fetchCatalogoneEnvFromSession, callInternalApi } from "./mcp-session.js";
 
 function zodFromJsonSchema(inputSchema) {
   if (!inputSchema || inputSchema.type !== "object") {
@@ -68,10 +50,10 @@ function zodFromJsonSchema(inputSchema) {
   return z.object(shape).passthrough();
 }
 
-async function buildCatalogoneMcpTools() {
+async function buildCatalogoneMcpTools(envOverride = null) {
   let mcpTools = [];
   try {
-    mcpTools = await listCatalogoneMcpTools();
+    mcpTools = await listCatalogoneMcpTools({ envOverride });
   } catch (error) {
     console.warn("[chat] Could not list catalogone MCP tools:", error.message);
     return {};
@@ -88,7 +70,7 @@ async function buildCatalogoneMcpTools() {
     wrapped[name] = tool({
       description: meta.description || `CatalogOne MCP tool: ${name}`,
       inputSchema: zodFromJsonSchema(meta.inputSchema),
-      execute: async (args) => callCatalogoneMcpTool(name, args),
+      execute: async (args) => callCatalogoneMcpTool(name, args, { envOverride }),
     });
   }
 
@@ -103,14 +85,14 @@ async function buildCatalogoneMcpTools() {
         .describe("Tool arguments object"),
     }),
     execute: async ({ toolName, arguments: toolArgs }) =>
-      callCatalogoneMcpTool(toolName, toolArgs || {}),
+      callCatalogoneMcpTool(toolName, toolArgs || {}, { envOverride }),
   });
 
   wrapped.list_catalogone_mcp_tools = tool({
     description: "List all available catalogone MCP tools and short descriptions.",
     inputSchema: z.object({}),
     execute: async () => {
-      const tools = await listCatalogoneMcpTools({ refresh: true });
+      const tools = await listCatalogoneMcpTools({ refresh: true, envOverride });
       return tools.map((entry) => ({
         name: entry.name,
         description: entry.description,
@@ -121,21 +103,11 @@ async function buildCatalogoneMcpTools() {
   return wrapped;
 }
 
-let cachedMcpToolsPromise = null;
-
-function getCatalogoneMcpToolsCached() {
-  if (!cachedMcpToolsPromise) {
-    cachedMcpToolsPromise = buildCatalogoneMcpTools().catch((error) => {
-      cachedMcpToolsPromise = null;
-      throw error;
-    });
-  }
-  return cachedMcpToolsPromise;
-}
-
 export async function createChatTools(requestHeaders = {}) {
   const cookie = requestHeaders.cookie || "";
-  const mcpTools = await getCatalogoneMcpToolsCached();
+  const sessionEnv = await fetchCatalogoneEnvFromSession(cookie);
+  const envOverride = sessionEnv?.catalogoneEnv || null;
+  const mcpTools = await buildCatalogoneMcpTools(envOverride);
 
   return {
     ...mcpTools,
@@ -154,6 +126,7 @@ export async function createChatTools(requestHeaders = {}) {
           loggedIn: Boolean(result.data?.logged_in),
           username: result.data?.username || null,
           apigwUrl: result.data?.apigw_url || null,
+          environmentLabel: result.data?.environment_label || null,
         };
       },
     }),

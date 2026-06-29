@@ -7,6 +7,11 @@ import urllib.parse
 from flask import Flask, Response, jsonify, request
 
 from catalog_tool.web.chat_proxy import proxy_to_chat_server
+from catalog_tool.web.helpers import (
+    catalogone_mcp_env_from_session,
+    catalogone_mcp_env_proxy_headers,
+)
+from catalog_tool.client.catalog_one_client import derive_environment_label
 from catalog_tool.web.chat_window import (
     DEFAULT_POPUP_HEIGHT,
     DEFAULT_POPUP_WIDTH,
@@ -14,6 +19,7 @@ from catalog_tool.web.chat_window import (
     resize_chat_app_window,
 )
 from catalog_tool.web.constants import WEB_ROOT
+from catalog_tool.web.mcp_config import load_catalogone_mcp_config
 
 
 def register(app: Flask) -> None:
@@ -51,17 +57,65 @@ def register(app: Flask) -> None:
         )
         return jsonify({"resized": resized})
 
+    @app.get("/api/chat/health")
+    def api_chat_health():
+        return proxy_to_chat_server("/health")
+
+    @app.get("/api/mcp/config")
+    def api_mcp_config():
+        """Fast MCP install check — does not require the Node chat server."""
+        payload = load_catalogone_mcp_config()
+        catalogone_env = catalogone_mcp_env_from_session()
+        if catalogone_env:
+            payload["credentialsSource"] = "connected_session"
+            payload["activeEnvironment"] = {
+                "label": derive_environment_label(catalogone_env["C1_APIGW_URL"]),
+                "apigw_url": catalogone_env["C1_APIGW_URL"],
+            }
+        else:
+            payload["credentialsSource"] = "mcp_json"
+        return jsonify(payload)
+
+    @app.get("/api/mcp/env")
+    def api_mcp_env():
+        """Return catalogone C1_* env derived from the active Connect session."""
+        catalogone_env = catalogone_mcp_env_from_session()
+        if not catalogone_env:
+            return jsonify({"configured": False, "catalogoneEnv": None})
+        return jsonify(
+            {
+                "configured": True,
+                "credentialsSource": "connected_session",
+                "environment_label": derive_environment_label(catalogone_env["C1_APIGW_URL"]),
+                "apigw_url": catalogone_env["C1_APIGW_URL"],
+                "catalogoneEnv": catalogone_env,
+            }
+        )
+
     @app.get("/api/mcp/status")
     def api_mcp_status():
-        return proxy_to_chat_server("/api/mcp/status")
+        qs = request.query_string.decode()
+        path = "/api/mcp/status"
+        if qs:
+            path = f"{path}?{qs}"
+        return proxy_to_chat_server(path, extra_headers=catalogone_mcp_env_proxy_headers())
 
     @app.get("/api/mcp/tools")
     def api_mcp_tools():
-        return proxy_to_chat_server("/api/mcp/tools")
+        return proxy_to_chat_server("/api/mcp/tools", extra_headers=catalogone_mcp_env_proxy_headers())
 
     @app.post("/api/mcp/call")
     def api_mcp_call():
-        return proxy_to_chat_server("/api/mcp/call", method="POST", timeout=180)
+        data = request.get_json(silent=True) or {}
+        catalogone_env = catalogone_mcp_env_from_session()
+        if catalogone_env:
+            data["catalogoneEnv"] = catalogone_env
+        return proxy_to_chat_server(
+            "/api/mcp/call",
+            method="POST",
+            timeout=180,
+            json_body=data,
+        )
 
     @app.post("/api/chat")
     def api_chat():

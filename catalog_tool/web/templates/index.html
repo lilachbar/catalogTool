@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/static/styles.css">
+  <link rel="stylesheet" href="/static/styles.css?v=20260702b">
   <script>
     (function () {
       var theme = localStorage.getItem("catalogTool.theme");
@@ -35,11 +35,22 @@
       <nav class="app-nav" aria-label="Main">
         <button type="button" class="app-nav-item is-active" data-view="push" id="navPushView">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <path d="M12 3v12"/><path d="m8 11 4 4 4-4"/><path d="M4 21h16"/>
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+            <polyline points="17 8 12 3 7 8"/>
+            <line x1="12" x2="12" y1="3" y2="15"/>
           </svg>
-          <span>Merge</span>
+          <span>Merge &amp; Import</span>
         </button>
-        <button type="button" class="app-nav-item" data-view="mcp-tools" id="navMcpToolsView">
+        <button type="button" class="app-nav-item" data-view="dg-import" id="navDgImportView" title="Import WLS Actions &amp; Reasons DG Excel">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+            <polyline points="14 2 14 8 20 8"/>
+            <line x1="8" x2="16" y1="13" y2="13"/>
+            <line x1="8" x2="16" y1="17" y2="17"/>
+          </svg>
+          <span>DG Import</span>
+        </button>
+        <button type="button" class="app-nav-item" data-view="mcp-tools" id="navMcpToolsView" title="Browse and run CatalogOne MCP tools">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>
           </svg>
@@ -100,7 +111,11 @@
                 <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
               </svg>
             </button>
-            <button type="button" id="logoutBtn" class="btn btn-ghost btn-sm" hidden>Sign out</button>
+            <button type="button" id="logoutBtn" class="btn btn-ghost btn-sm" disabled title="Connect to an environment first">Disconnect</button>
+            {% if ldap_auth_enabled and app_user %}
+            <span class="app-user-badge" id="appUserBadge" title="Signed in with Amdocs LDAP">{{ app_user.display_name or app_user.username }}</span>
+            <button type="button" id="appLogoutBtn" class="btn btn-ghost btn-sm" title="Sign out of Catalog Tool">Log out</button>
+            {% endif %}
           </div>
         </header>
 
@@ -108,94 +123,353 @@
           Select an environment in the sidebar and click <strong>Connect</strong>, or add a new one.
         </div>
 
-        <div id="pushView" class="app-view">
-          <main class="workflow">
-          <section class="panel panel-wide">
-            <header class="panel-head">
-              <span class="step">01</span>
-              <div>
-                <h2>Data to merge</h2>
-                <p class="panel-desc">Select a table, prepare its entries, then switch to the next. Merge sends all prepared tables to one business request.</p>
+        <div id="pushView" class="app-view app-view-fill">
+          <main class="workflow workflow-single app-view-body">
+          <section class="panel panel-wide merge-panel">
+            <header class="merge-hero">
+              <div class="merge-hero-icon" aria-hidden="true">
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                  <polyline points="17 8 12 3 7 8"/>
+                  <line x1="12" x2="12" y1="3" y2="15"/>
+                </svg>
+              </div>
+              <div class="merge-hero-text">
+                <p class="merge-hero-eyebrow">CatalogOne merge &amp; import</p>
+                <h2 class="merge-hero-title">Import, review, and ship with confidence</h2>
+                <p class="merge-hero-lead">
+                  Upload a CatalogOne export zip to build a review-only PR package.
+                  Nothing is published until you explicitly choose to.
+                </p>
               </div>
             </header>
 
-            <label class="field table-select-field">
-              <span class="field-label">Table</span>
-              <select id="tableSelect">
-                {% for table in defaults.tables %}
-                <option value="{{ table.key }}" {% if table.key == defaults.table_key %}selected{% endif %}>
-                  {{ table.label }} — {{ table.id }}
-                </option>
-                {% endfor %}
-              </select>
-              <span class="field-hint" id="tableDescription"></span>
-            </label>
+            <ol class="merge-steps" aria-label="Merge &amp; import workflow">
+              <li class="merge-step">
+                <span class="merge-step-num">1</span>
+                <span class="merge-step-label">Upload zip</span>
+              </li>
+              <li class="merge-step-connector" aria-hidden="true"></li>
+              <li class="merge-step">
+                <span class="merge-step-num">2</span>
+                <span class="merge-step-label">Review changes</span>
+              </li>
+              <li class="merge-step-connector" aria-hidden="true"></li>
+              <li class="merge-step">
+                <span class="merge-step-num">3</span>
+                <span class="merge-step-label">Publish when ready</span>
+              </li>
+            </ol>
 
-            <p class="table-draft-summary" id="tableDraftSummary" aria-live="polite"></p>
+            <div class="merge-cards">
+              <article class="merge-card" aria-labelledby="mergeCardZipTitle">
+                <header class="merge-card-head">
+                  <span class="merge-card-step">Step 1</span>
+                  <h3 id="mergeCardZipTitle" class="merge-card-title">Upload your export</h3>
+                  <p class="merge-card-desc">Drop a CatalogOne zip file here. We compare it to your baseline and package only what changed.</p>
+                </header>
 
-            <div class="tabs" id="editorModeTabs" role="tablist">
-              <button type="button" class="tab active" data-mode="form" role="tab">Simple rows</button>
-              <button type="button" class="tab" data-mode="json" role="tab">JSON</button>
+                <div class="zip-dropzone" id="zipDropzone">
+                  <input type="file" id="catalogZipInput" class="zip-dropzone-input" accept=".zip,application/zip">
+                  <div class="zip-dropzone-body">
+                    <span class="zip-dropzone-icon zip-dropzone-icon-empty" aria-hidden="true">
+                      <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                        <polyline points="14 2 14 8 20 8"/>
+                        <line x1="12" x2="12" y1="18" y2="12"/>
+                        <line x1="9" x2="15" y1="15" y2="15"/>
+                      </svg>
+                    </span>
+                    <span class="zip-dropzone-icon zip-dropzone-icon-selected" aria-hidden="true" hidden>
+                      <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                        <polyline points="14 2 14 8 20 8"/>
+                        <path d="m9 15 2 2 4-4"/>
+                      </svg>
+                    </span>
+                    <p class="zip-dropzone-title" id="zipDropzoneTitle">Drag &amp; drop your zip here</p>
+                    <p class="zip-dropzone-hint" id="zipDropzoneHint">or <span class="zip-dropzone-link">browse files</span> · expects <code>promotion/&lt;uuid&gt;.json</code></p>
+                  </div>
+                </div>
+
+                <div class="merge-card-actions merge-card-actions-row">
+                  <button type="button" id="analyzeZipBtn" class="btn btn-primary btn-analyze">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+                      <circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>
+                    </svg>
+                    <span>Analyze &amp; preview</span>
+                  </button>
+                </div>
+                <div id="zipAnalyzeReport" class="analyze-report" hidden>
+                  <div class="analyze-report-toolbar">
+                    <h4 class="analyze-report-heading">Analysis results</h4>
+                    <label class="checkbox analyze-json-toggle">
+                      <input type="checkbox" id="zipAnalyzeShowJson">
+                      <span>Show raw JSON</span>
+                    </label>
+                  </div>
+                  <div id="zipAnalyzePanel" class="analyze-report-panel"></div>
+                  <pre id="zipAnalyzeJson" class="result analyze-report-json" hidden></pre>
+                </div>
+              </article>
+
+              <article class="merge-card" aria-labelledby="mergeCardBrTitle">
+                <header class="merge-card-head">
+                  <span class="merge-card-step">Step 2</span>
+                  <h3 id="mergeCardBrTitle" class="merge-card-title">Business request</h3>
+                  <p class="merge-card-desc">Create a new business request in CatalogOne, or paste an existing one.</p>
+                </header>
+
+                <div id="mergeBrConnectHint" class="merge-br-connect-hint" role="status">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+                    <circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/>
+                  </svg>
+                  <p id="mergeBrConnectHintText">Connect to an environment in the sidebar (click <strong>Connect</strong> on a card), then create your business request below.</p>
+                </div>
+
+                <div class="form-row merge-br-fields">
+                  <label class="field field-grow">
+                    <span class="field-label">Name for new business request</span>
+                    <input type="text" id="businessRequestName" placeholder="e.g. IL12 promo update — Natalia" autocomplete="off">
+                    <span class="field-hint" id="businessRequestNameHint">Enter a name and click <strong>Create business request</strong>.</span>
+                  </label>
+                  <label class="field">
+                    <span class="field-label">Business request ID</span>
+                    <input type="text" id="businessRequestId" placeholder="Auto-filled after create">
+                  </label>
+                </div>
+
+                <div class="merge-card-actions merge-br-actions">
+                  <button type="button" id="createBrBtn" class="btn btn-primary btn-lg">Create business request</button>
+                  <p id="createBrBtnHint" class="merge-br-btn-hint" aria-live="polite"></p>
+                </div>
+                <pre id="brCreateResult" class="result" hidden></pre>
+              </article>
+
+              <article class="merge-card merge-card-publish" aria-labelledby="mergeCardPublishTitle">
+                <header class="merge-card-head">
+                  <span class="merge-card-step">Step 3</span>
+                  <h3 id="mergeCardPublishTitle" class="merge-card-title">Publish to catalog</h3>
+                  <p class="merge-card-desc">When your review is complete, publish the business request to the release queue.</p>
+                </header>
+
+                <div class="merge-safety-banner" role="note">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+                    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                  </svg>
+                  <p>Zip analysis never publishes. You stay in control — publish only when you click the button below.</p>
+                </div>
+
+                <label class="field merge-publish-br-field">
+                  <span class="field-label">Business request ID to publish</span>
+                  <input type="text" id="publishBusinessRequestId" placeholder="Paste BR UUID or use ID from Step 2" autocomplete="off">
+                  <span class="field-hint" id="publishBusinessRequestIdHint">Filled automatically when you create a BR in Step 2.</span>
+                </label>
+
+                <label class="checkbox merge-force-publish">
+                  <input type="checkbox" id="forcePublish">
+                  <span>Force publish (skip validation warnings)</span>
+                </label>
+
+                <div class="actions actions-primary actions-inline merge-publish-actions">
+                  <button type="button" id="publishBtn" class="btn btn-danger" disabled title="Connect to an environment and create a business request first">Publish business request</button>
+                </div>
+                <p class="footnote merge-footnote">Queues via <code>releaseQueue/publish</code> on your connected environment.</p>
+                <pre id="pushResult" class="result" hidden></pre>
+              </article>
             </div>
-
-            <div id="formMode" class="form-stack">
-              <div id="rowsContainer" class="rows"></div>
-              <button type="button" id="addRowBtn" class="btn btn-ghost btn-dashed">+ Add row</button>
-            </div>
-
-            <div id="jsonMode" class="form-stack" hidden>
-              <label class="field">
-                <span class="field-label">genericElementEntry JSON</span>
-                <textarea id="entriesJson" rows="12" spellcheck="false" placeholder='{"id":"...","field":[...]}'></textarea>
-              </label>
-            </div>
-          </section>
-
-          <section class="panel panel-wide">
-            <header class="panel-head">
-              <span class="step">02</span>
-              <div>
-                <h2>Business request &amp; merge</h2>
-                <p class="panel-desc">Create the business request and merge all prepared tables, then publish.</p>
-              </div>
-            </header>
-
-            <div class="form-row">
-              <label class="field">
-                <span class="field-label">Business request ID <span class="optional">optional — leave empty to create new</span></span>
-                <input type="text" id="businessRequestId" placeholder="Existing BR UUID, or leave empty">
-              </label>
-              <label class="field">
-                <span class="field-label">Business request name</span>
-                <input type="text" id="businessRequestName" placeholder="Name for the new business request" autocomplete="off">
-                <span class="field-hint" id="businessRequestNameHint">Required when creating a new business request.</span>
-              </label>
-            </div>
-
-            <div class="option-group">
-              <label class="checkbox">
-                <input type="checkbox" id="createBr" checked>
-                <span>Create a new business request when ID is empty</span>
-              </label>
-              <label class="checkbox">
-                <input type="checkbox" id="forcePublish">
-                <span>Force publish (skip validation warnings)</span>
-              </label>
-            </div>
-
-            <div class="actions actions-primary actions-inline">
-              <button type="button" id="pushBtn" class="btn btn-primary btn-lg" disabled>Merge to CatalogOne</button>
-              <button type="button" id="publishBtn" class="btn btn-danger" disabled title="Publish via release queue API">Publish</button>
-              <div id="openTableLinks" class="open-table-links"></div>
-            </div>
-            <p class="footnote">Publish queues the business request via <code>releaseQueue/publish</code>.</p>
-            <pre id="pushResult" class="result" hidden></pre>
           </section>
           </main>
         </div>
 
-        <div id="mcpToolsView" class="app-view" hidden>
-          <p id="mcpToolsStatus" class="mcp-view-desc">Loading catalogone MCP tools…</p>
+        <div id="dgImportView" class="app-view app-view-fill" hidden>
+          <main class="workflow workflow-single app-view-body">
+          <section class="panel panel-wide merge-panel dg-panel">
+            <header class="merge-hero mcp-hero">
+              <div class="merge-hero-icon" aria-hidden="true">
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                  <polyline points="14 2 14 8 20 8"/>
+                  <line x1="8" x2="16" y1="13" y2="13"/>
+                  <line x1="8" x2="16" y1="17" y2="17"/>
+                </svg>
+              </div>
+              <div class="merge-hero-text">
+                <p class="merge-hero-eyebrow">CatalogOne design guide</p>
+                <h2 class="merge-hero-title">Import Actions &amp; Reasons from Excel</h2>
+                <p class="merge-hero-lead">
+                  Upload a WLS Actions and Reasons workbook. We parse each tab, preview the
+                  genericElementEntry JSON, and outline MCP steps to create a BR and load changes.
+                  Nothing is published until you explicitly choose to.
+                </p>
+              </div>
+            </header>
+
+            <ol class="merge-steps" aria-label="DG import workflow">
+              <li class="merge-step">
+                <span class="merge-step-num">1</span>
+                <span class="merge-step-label">Upload workbook</span>
+              </li>
+              <li class="merge-step-connector" aria-hidden="true"></li>
+              <li class="merge-step">
+                <span class="merge-step-num">2</span>
+                <span class="merge-step-label">Import to catalog</span>
+              </li>
+              <li class="merge-step-connector" aria-hidden="true"></li>
+              <li class="merge-step">
+                <span class="merge-step-num">3</span>
+                <span class="merge-step-label">Publish when ready</span>
+              </li>
+            </ol>
+
+            <div class="merge-cards">
+              <article class="merge-card" aria-labelledby="dgCardUploadTitle">
+                <header class="merge-card-head">
+                  <span class="merge-card-step">Step 1</span>
+                  <h3 id="dgCardUploadTitle" class="merge-card-title">Upload DG workbook</h3>
+                  <p class="merge-card-desc">Expects tabs such as Add, Cancel, Change, Terminate, Modify_Reasons, and proration policy sheets.</p>
+                </header>
+
+                <div class="zip-dropzone" id="excelDropzone">
+                  <input type="file" id="catalogExcelInput" class="zip-dropzone-input" accept=".xlsx,.xlsm,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet">
+                  <div class="zip-dropzone-body">
+                    <span class="zip-dropzone-icon zip-dropzone-icon-empty" aria-hidden="true">
+                      <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                        <polyline points="14 2 14 8 20 8"/>
+                        <line x1="8" x2="16" y1="13" y2="13"/>
+                        <line x1="8" x2="16" y1="17" y2="17"/>
+                      </svg>
+                    </span>
+                    <span class="zip-dropzone-icon zip-dropzone-icon-selected" aria-hidden="true" hidden>
+                      <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                        <polyline points="14 2 14 8 20 8"/>
+                        <path d="m9 15 2 2 4-4"/>
+                      </svg>
+                    </span>
+                    <p class="zip-dropzone-title" id="excelDropzoneTitle">Drag &amp; drop your Excel DG here</p>
+                    <p class="zip-dropzone-hint" id="excelDropzoneHint">or <span class="zip-dropzone-link">browse files</span> · .xlsx / .xlsm</p>
+                  </div>
+                </div>
+
+                <div class="merge-card-actions merge-card-actions-row">
+                  <button type="button" id="analyzeExcelBtn" class="btn btn-primary btn-analyze">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+                      <circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>
+                    </svg>
+                    <span>Analyze &amp; preview</span>
+                  </button>
+                </div>
+                <div id="excelAnalyzeReport" class="analyze-report" hidden>
+                  <div class="analyze-report-toolbar">
+                    <h4 class="analyze-report-heading">Analysis results</h4>
+                    <label class="checkbox analyze-json-toggle">
+                      <input type="checkbox" id="excelAnalyzeShowJson">
+                      <span>Show raw JSON</span>
+                    </label>
+                  </div>
+                  <div id="excelAnalyzePanel" class="analyze-report-panel"></div>
+                  <pre id="excelAnalyzeJson" class="result analyze-report-json" hidden></pre>
+                </div>
+              </article>
+
+              <article class="merge-card" aria-labelledby="dgCardBrTitle">
+                <header class="merge-card-head">
+                  <span class="merge-card-step">Step 2</span>
+                  <h3 id="dgCardBrTitle" class="merge-card-title">Business request &amp; import</h3>
+                  <p class="merge-card-desc">Create a business request, then load Modify Reason and Action entries from the analyzed workbook.</p>
+                </header>
+
+                <div id="dgBrConnectHint" class="merge-br-connect-hint" role="status">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+                    <circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/>
+                  </svg>
+                  <p id="dgBrConnectHintText">Connect to an environment in the sidebar, analyze your workbook in Step 1, then create a business request below.</p>
+                </div>
+
+                <div class="form-row merge-br-fields">
+                  <label class="field field-grow">
+                    <span class="field-label">Name for new business request</span>
+                    <input type="text" id="dgBusinessRequestName" placeholder="e.g. DG import — WLS Actions PI29" autocomplete="off">
+                    <span class="field-hint" id="dgBusinessRequestNameHint">Filled automatically after analyze — edit if needed.</span>
+                  </label>
+                  <label class="field">
+                    <span class="field-label">Business request ID</span>
+                    <input type="text" id="dgBusinessRequestId" placeholder="Auto-filled after create">
+                  </label>
+                </div>
+
+                <div class="merge-card-actions merge-br-actions">
+                  <button type="button" id="dgCreateBrBtn" class="btn btn-primary btn-lg">Create business request</button>
+                  <p id="dgCreateBrBtnHint" class="merge-br-btn-hint" aria-live="polite"></p>
+                </div>
+                <pre id="dgBrCreateResult" class="result" hidden></pre>
+
+                <div class="merge-card-actions merge-card-actions-row dg-import-actions">
+                  <button type="button" id="dgImportEntriesBtn" class="btn btn-primary" disabled title="Analyze workbook, connect, and create a business request first">
+                    Import entries to catalog
+                  </button>
+                  <p id="dgImportEntriesHint" class="merge-br-btn-hint" aria-live="polite">Analyze the workbook first to load entry payloads.</p>
+                </div>
+                <pre id="dgImportResult" class="result" hidden></pre>
+              </article>
+
+              <article class="merge-card merge-card-publish" aria-labelledby="dgCardPublishTitle">
+                <header class="merge-card-head">
+                  <span class="merge-card-step">Step 3</span>
+                  <h3 id="dgCardPublishTitle" class="merge-card-title">Publish to catalog</h3>
+                  <p class="merge-card-desc">When import is complete, publish the business request to the release queue.</p>
+                </header>
+
+                <div class="merge-safety-banner" role="note">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+                    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                  </svg>
+                  <p>Excel analysis never publishes. Import entries in Step 2, then publish only when you click the button below.</p>
+                </div>
+
+                <label class="field merge-publish-br-field">
+                  <span class="field-label">Business request ID to publish</span>
+                  <input type="text" id="dgPublishBusinessRequestId" placeholder="Paste BR UUID or use ID from Step 2" autocomplete="off">
+                  <span class="field-hint" id="dgPublishBusinessRequestIdHint">Filled automatically when you create a BR in Step 2.</span>
+                </label>
+
+                <label class="checkbox merge-force-publish">
+                  <input type="checkbox" id="dgForcePublish">
+                  <span>Force publish (skip validation warnings)</span>
+                </label>
+
+                <div class="actions actions-primary actions-inline merge-publish-actions">
+                  <button type="button" id="dgPublishBtn" class="btn btn-danger" disabled title="Connect to an environment and create a business request first">Publish business request</button>
+                </div>
+                <p class="footnote merge-footnote">Queues via <code>releaseQueue/publish</code> on your connected environment.</p>
+                <pre id="dgPublishResult" class="result" hidden></pre>
+              </article>
+            </div>
+          </section>
+          </main>
+        </div>
+
+        <div id="mcpToolsView" class="app-view app-view-fill" hidden>
+          <div class="app-view-body">
+          <section class="panel panel-wide mcp-panel">
+            <header class="merge-hero mcp-hero">
+              <div class="merge-hero-icon" aria-hidden="true">
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>
+                </svg>
+              </div>
+              <div class="merge-hero-text">
+                <p class="merge-hero-eyebrow">CatalogOne MCP</p>
+                <h2 class="merge-hero-title">Browse and run catalog tools</h2>
+                <p class="merge-hero-lead">
+                  Search catalog, manage business requests, create entities, and validate changes —
+                  using credentials from the environment you connect to in the sidebar.
+                </p>
+                <p id="mcpToolsStatus" class="mcp-tools-status-line">Loading catalogone MCP tools…</p>
+              </div>
+            </header>
 
           <div id="mcpToolsPanel" class="mcp-tools-workbench">
             <aside class="mcp-tools-sidebar">
@@ -244,6 +518,8 @@
               </div>
             </section>
           </div>
+          </section>
+          </div>
         </div>
 
         <footer class="footer">
@@ -281,12 +557,12 @@
           <div class="connection-fields">
             <label class="field">
               <span class="field-label">API Gateway URL</span>
-              <input type="url" name="apigw_url" id="apigwUrlInput" value="{{ defaults.apigw_url }}" placeholder="https://amd-apigw-…-authoring.apps.…" required>
+              <input type="url" name="apigw_url" id="apigwUrlInput" placeholder="https://amd-apigw-…-authoring.apps.…" required>
             </label>
             <label class="field connection-keycloak-field">
               <span class="field-label">Keycloak URL</span>
               <div class="input-row">
-                <input type="url" name="keycloak_url" id="keycloakUrlInput" value="{{ defaults.keycloak_url }}" placeholder="https://keycloak-…-runtime.apps.…" required>
+                <input type="url" name="keycloak_url" id="keycloakUrlInput" placeholder="https://keycloak-…-runtime.apps.…" required>
                 <div class="input-row-actions">
                   <button type="button" id="syncKeycloakBtn" class="btn btn-ghost btn-sm input-action" title="Derive Keycloak URL from API gateway">Sync</button>
                   <button type="button" id="openKeycloakBtn" class="btn btn-ghost btn-sm input-action" title="Open Keycloak in browser">Open</button>
@@ -303,11 +579,11 @@
             <div class="form-row">
               <label class="field">
                 <span class="field-label">Realm</span>
-                <input type="text" name="keycloak_realm" id="keycloakRealmInput" value="{{ defaults.keycloak_realm }}" required>
+                <input type="text" name="keycloak_realm" id="keycloakRealmInput" placeholder="{{ defaults.keycloak_realm }}" required>
               </label>
               <label class="field">
                 <span class="field-label">Username</span>
-                <input type="text" name="username" id="usernameInput" value="{{ defaults.username }}" autocomplete="username" required>
+                <input type="text" name="username" id="usernameInput" placeholder="{{ defaults.username }}" autocomplete="username" required>
               </label>
             </div>
             <label class="field">
@@ -329,24 +605,6 @@
   </dialog>
 
   <div id="chatRoot"></div>
-
-  <template id="rowTemplate">
-    <div class="row-item">
-      <label class="field">
-        <span class="field-label">Name (code)</span>
-        <input type="text" class="row-name" placeholder="POV-CATTOOL-001">
-      </label>
-      <label class="field">
-        <span class="field-label">Localized name</span>
-        <input type="text" class="row-localized" placeholder="Catalog Tool POV - Test Modify Reason">
-      </label>
-      <button type="button" class="btn btn-ghost btn-icon remove-row" title="Remove row" aria-label="Remove row">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
-          <path d="M18 6 6 18M6 6l12 12"/>
-        </svg>
-      </button>
-    </div>
-  </template>
 
   <template id="environmentItemTemplate">
     <li class="env-card" role="listitem">
@@ -387,8 +645,8 @@
 
   <script id="tablesConfig" type="application/json">{{ defaults.tables | tojson }}</script>
   <script id="defaultsConfig" type="application/json">{{ defaults | tojson }}</script>
-  <script src="/static/app.js"></script>
-  <script src="/static/mcp-tools.js"></script>
+  <script src="/static/app.js?v=20260702b"></script>
+  <script src="/static/mcp-tools.js?v=20260701b"></script>
   <script type="module" src="/static/chat.bundle.js"></script>
 </body>
 </html>

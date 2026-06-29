@@ -455,12 +455,45 @@
     }
 
     try {
-      const status = await mcpApi("/api/mcp/status");
+      const status = await mcpApi("/api/mcp/config");
+      if (!status.configured) {
+        const reason = status.onlineError
+          || status.error
+          || "catalogone MCP is not configured in ~/.cursor/mcp.json";
+        if (els.status) {
+          els.status.textContent = reason;
+        }
+        if (els.list) {
+          els.list.innerHTML = `<p class="mcp-tools-list-empty">${reason}</p>`;
+        }
+        if (window.catalogTool?.refreshMcpNav) {
+          window.catalogTool.refreshMcpNav();
+        }
+        return;
+      }
+
+      if (els.status) {
+        els.status.textContent = "Starting catalogone MCP server…";
+      }
+
       const payload = await mcpApi("/api/mcp/tools");
       state.tools = payload.tools || [];
+      let credentialsNote = `credentials from ${status.source || "MCP"}`;
+      if (status.credentialsSource === "connected_session" && status.activeEnvironment?.label) {
+        credentialsNote = `using connected environment: ${status.activeEnvironment.label}`;
+      } else if (payload.credentialsSource === "connected_session") {
+        try {
+          const sessionPayload = await fetch("/api/session").then((r) => r.json());
+          if (sessionPayload.logged_in && sessionPayload.environment_label) {
+            credentialsNote = `using connected environment: ${sessionPayload.environment_label}`;
+          }
+        } catch {
+          // keep default note
+        }
+      }
       if (els.status) {
         els.status.textContent = status.configured
-          ? `${state.tools.length} tools available · credentials from ${status.source || "MCP"}`
+          ? `${state.tools.length} tools available · ${credentialsNote}`
           : "catalogone MCP not configured — check ~/.cursor/mcp.json and restart the chat server";
       }
       renderToolList();
@@ -492,4 +525,7 @@
   });
 
   loadTools();
+
+  window.catalogTool = window.catalogTool || {};
+  window.catalogTool.reloadMcpTools = loadTools;
 })();

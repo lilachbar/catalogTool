@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import urllib.error
 import urllib.request
 
@@ -16,11 +17,18 @@ def proxy_to_chat_server(
     method: str = "GET",
     timeout: int = 120,
     stream: bool = False,
+    json_body: dict | None = None,
+    extra_headers: dict[str, str] | None = None,
 ) -> Response | tuple[Response, int]:
     upstream_url = f"{CHAT_SERVER_URL}{subpath}"
     headers = {"Cookie": request.headers.get("Cookie", "")}
+    if extra_headers:
+        headers.update(extra_headers)
     body = None
-    if method.upper() != "GET":
+    if json_body is not None:
+        body = json.dumps(json_body).encode("utf-8")
+        headers["Content-Type"] = "application/json"
+    elif method.upper() != "GET":
         body = request.get_data()
         headers["Content-Type"] = request.content_type or "application/json"
 

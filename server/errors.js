@@ -59,7 +59,7 @@ export function formatChatError(error) {
     lower.includes("invalid_api_key") ||
     lower.includes("incorrect api key")
   ) {
-    return "Invalid API key. For Cursor: update CURSOR_API_KEY (starts with crsr_) from cursor.com/dashboard → API Keys. For OpenAI: update OPENAI_API_KEY in .env. Then restart ./run_web.sh.";
+    return "Invalid API key. For Cursor: update CURSOR_API_KEY (starts with crsr_) from cursor.com/dashboard/integrations. For OpenAI: update OPENAI_API_KEY in .env. Then restart ./run_web.sh.";
   }
   if (lower.includes("rate limit") || lower.includes("rate_limit")) {
     return "OpenAI rate limit reached. Wait a moment and try again.";

@@ -6,7 +6,7 @@ import "dotenv/config";
 import express from "express";
 import { convertToModelMessages, stepCountIs, streamText } from "ai";
 import { CATALOGONE_AGENT_PROMPT } from "./catalogone-prompt.js";
-import { getCatalogoneMcpStatus } from "./catalogone-mcp-client.js";
+import { probeCatalogoneMcpOnline } from "./catalogone-mcp-client.js";
 import { handleCursorChat, logCatalogoneMcpStartup } from "./cursor-chat.js";
 import { formatChatError } from "./errors.js";
 import { createChatTools } from "./tools.js";
@@ -16,6 +16,7 @@ import {
   getProviderStatus,
   missingKeyMessage,
   resolveChatProvider,
+  validateChatProviderKey,
 } from "./providers.js";
 
 const app = express();
@@ -24,23 +25,32 @@ app.use(express.json({ limit: "2mb" }));
 registerMcpRoutes(app);
 
 const PORT = Number(process.env.CHAT_SERVER_PORT || 3001);
+const HOST = process.env.CHAT_SERVER_HOST || "127.0.0.1";
 
 app.get("/health", async (_req, res) => {
   const status = getProviderStatus();
-  const mcp = getCatalogoneMcpStatus();
+  const chatKey = await validateChatProviderKey({ remote: true });
+  const mcp = await probeCatalogoneMcpOnline();
   res.json({
-    ok: Boolean(status.provider && status.hasApiKey),
-    ...status,
+    ok: Boolean(chatKey.ok && mcp.online),
+    chatReady: chatKey.ok,
+    chatProvider: status,
+    chatKey: {
+      ok: chatKey.ok,
+      reason: chatKey.reason,
+      message: chatKey.message || null,
+      setupInstructions: chatKey.setupInstructions || null,
+    },
     catalogoneMcp: mcp,
   });
 });
 
 app.post("/api/chat", async (req, res) => {
-  const provider = resolveChatProvider();
-  const status = getProviderStatus();
-
-  if (!provider || !status.hasApiKey) {
-    res.status(503).json({ error: missingKeyMessage(provider) });
+  const chatKey = await validateChatProviderKey({ remote: true });
+  if (!chatKey.ok) {
+    res.status(503).json({
+      error: chatKey.setupInstructions || chatKey.message || missingKeyMessage(resolveChatProvider()),
+    });
     return;
   }
 
@@ -51,7 +61,7 @@ app.post("/api/chat", async (req, res) => {
   }
 
   try {
-    if (provider === "cursor") {
+    if (chatKey.provider === "cursor") {
       await handleCursorChat(req, res, messages);
       return;
     }
@@ -76,9 +86,9 @@ app.post("/api/chat", async (req, res) => {
   }
 });
 
-app.listen(PORT, "127.0.0.1", async () => {
+app.listen(PORT, HOST, async () => {
   const status = getProviderStatus();
-  console.log(`[chat-server] listening on http://127.0.0.1:${PORT}`);
+  console.log(`[chat-server] listening on http://${HOST}:${PORT}`);
   console.log(`[chat-server] provider=${status.provider || "none"} model=${status.model || "n/a"}`);
   await logCatalogoneMcpStartup();
 });

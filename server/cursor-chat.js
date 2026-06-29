@@ -9,36 +9,31 @@ import { createUIMessageStream, pipeUIMessageStreamToResponse } from "ai";
 import { CATALOGONE_AGENT_PROMPT } from "./catalogone-prompt.js";
 import { getCatalogoneMcpStatus, listCatalogoneMcpTools } from "./catalogone-mcp-client.js";
 import { formatChatError } from "./errors.js";
-import { loadCatalogoneMcpConfig, loadCatalogoneMcpServers } from "./mcp-config.js";
+import { loadCatalogoneMcpServers } from "./mcp-config.js";
+import { fetchCatalogoneEnvFromSession } from "./mcp-session.js";
 
 const PROJECT_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
-let sharedAgent = null;
-let sharedAgentConfigKey = null;
+const agentCache = new Map();
 
-function mcpConfigKey() {
-  return JSON.stringify(loadCatalogoneMcpServers());
+function agentCacheKey(mcpServers) {
+  return JSON.stringify(mcpServers);
 }
 
-async function getSharedAgent() {
-  const mcpServers = loadCatalogoneMcpServers();
+async function getAgentForMcpServers(mcpServers) {
   if (!mcpServers.catalogone) {
     throw new Error(
       "catalogone MCP is not configured. Add catalogone to ~/.cursor/mcp.json or set C1_* vars in .env.",
     );
   }
 
-  const configKey = mcpConfigKey();
-  if (sharedAgent && sharedAgentConfigKey === configKey) {
-    return sharedAgent;
+  const cacheKey = agentCacheKey(mcpServers);
+  const cached = agentCache.get(cacheKey);
+  if (cached) {
+    return cached;
   }
 
-  if (sharedAgent) {
-    await sharedAgent.close();
-    sharedAgent = null;
-  }
-
-  sharedAgent = await Agent.create({
+  const agent = await Agent.create({
     apiKey: process.env.CURSOR_API_KEY,
     model: { id: process.env.CURSOR_MODEL || "composer-2.5" },
     name: "Catalog Tool Assistant",
@@ -48,8 +43,16 @@ async function getSharedAgent() {
     },
     mcpServers,
   });
-  sharedAgentConfigKey = configKey;
-  return sharedAgent;
+
+  agentCache.set(cacheKey, agent);
+  if (agentCache.size > 4) {
+    const oldestKey = agentCache.keys().next().value;
+    const oldestAgent = agentCache.get(oldestKey);
+    agentCache.delete(oldestKey);
+    await oldestAgent?.close?.();
+  }
+
+  return agent;
 }
 
 function extractLatestUserText(messages) {
@@ -75,16 +78,17 @@ function extractLatestUserText(messages) {
   return "";
 }
 
-function buildPrompt(messages, latestText) {
+function buildPrompt(messages, latestText, sessionEnv) {
   const userTurnCount = messages.filter((message) => message.role === "user").length;
-  const mcpReminder =
-    "Use catalogone MCP tools for all CatalogOne data (login first if needed). Do not guess catalog contents.";
+  const connectedNote = sessionEnv?.environmentLabel
+    ? `The user is already connected to CatalogOne environment "${sessionEnv.environmentLabel}" via the Catalog Tool sidebar. Use catalogone MCP tools with the pre-configured credentials — do NOT call login.`
+    : "Use catalogone MCP tools for all CatalogOne data (call login first if needed). Do not guess catalog contents.";
 
   if (userTurnCount <= 1) {
-    return `${CATALOGONE_AGENT_PROMPT}\n\n${mcpReminder}\n\nUser message:\n${latestText}`;
+    return `${CATALOGONE_AGENT_PROMPT}\n\n${connectedNote}\n\nUser message:\n${latestText}`;
   }
 
-  return `${mcpReminder}\n\nUser message:\n${latestText}`;
+  return `${connectedNote}\n\nUser message:\n${latestText}`;
 }
 
 export async function handleCursorChat(req, res, messages) {
@@ -92,6 +96,18 @@ export async function handleCursorChat(req, res, messages) {
   if (!latestText) {
     res.status(400).json({ error: "No user message found in request." });
     return;
+  }
+
+  const cookie = req.headers.cookie || "";
+  const sessionEnv = await fetchCatalogoneEnvFromSession(cookie);
+  const mcpServers = loadCatalogoneMcpServers({
+    envOverride: sessionEnv?.catalogoneEnv || null,
+  });
+
+  if (sessionEnv?.environmentLabel) {
+    console.log(
+      `[chat-server] Cursor agent using connected environment: ${sessionEnv.environmentLabel}`,
+    );
   }
 
   const stream = createUIMessageStream({
@@ -104,9 +120,8 @@ export async function handleCursorChat(req, res, messages) {
       writer.write({ type: "text-start", id: textId });
 
       try {
-        const agent = await getSharedAgent();
-        const prompt = buildPrompt(messages, latestText);
-        const mcpServers = loadCatalogoneMcpServers();
+        const agent = await getAgentForMcpServers(mcpServers);
+        const prompt = buildPrompt(messages, latestText, sessionEnv);
         let streamedLength = 0;
 
         const run = await agent.send(prompt, {
@@ -169,7 +184,7 @@ export async function logCatalogoneMcpStartup() {
   try {
     const tools = await listCatalogoneMcpTools();
     console.log(
-      `[chat-server] catalogone MCP: ${tools.length} tools from ${status.source}`,
+      `[chat-server] catalogone MCP: ${tools.length} tools from ${status.source} (default until user connects in web UI)`,
     );
   } catch (error) {
     console.warn("[chat-server] catalogone MCP: configured but unreachable:", error.message);
