@@ -43,6 +43,14 @@
     return;
   }
 
+  function showListEmptyMessage(message) {
+    els.list.replaceChildren();
+    const p = document.createElement("p");
+    p.className = "mcp-tools-list-empty";
+    p.textContent = message;
+    els.list.appendChild(p);
+  }
+
   function categorizeTool(name) {
     if (name === "login") return "Auth";
     if (
@@ -463,9 +471,7 @@
         if (els.status) {
           els.status.textContent = reason;
         }
-        if (els.list) {
-          els.list.innerHTML = `<p class="mcp-tools-list-empty">${reason}</p>`;
-        }
+        showListEmptyMessage(reason);
         if (window.catalogTool?.refreshMcpNav) {
           window.catalogTool.refreshMcpNav();
         }
@@ -504,9 +510,7 @@
       if (els.status) {
         els.status.textContent = error.message;
       }
-      if (els.list) {
-        els.list.innerHTML = `<p class="mcp-tools-list-empty">${error.message}</p>`;
-      }
+      showListEmptyMessage(error.message);
     } finally {
       state.loading = false;
     }

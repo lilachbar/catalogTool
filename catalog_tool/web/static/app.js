@@ -270,7 +270,7 @@ function connectionHintForView() {
   const onDgImport = state.activeView === "dg-import";
 
   if (state.loggedIn) {
-    const label = state.currentEnvironmentLabel || "environment";
+    const label = escapeHtml(state.currentEnvironmentLabel || "environment");
     if (onDgImport) {
       return {
         connected: true,
@@ -279,7 +279,7 @@ function connectionHintForView() {
     }
     if (onMcpTools) {
       const toolsNote = state.mcpToolsOnline && state.mcpToolsStatusMessage
-        ? ` ${state.mcpToolsStatusMessage}.`
+        ? ` ${escapeHtml(state.mcpToolsStatusMessage)}.`
         : !state.mcpToolsOnline
           ? " MCP server is starting — tools load on first use."
           : "";
@@ -300,7 +300,7 @@ function connectionHintForView() {
       return {
         connected: false,
         html: state.mcpToolsStatusMessage
-          ? `<span class="connection-error-text">${state.mcpToolsStatusMessage}</span>`
+          ? `<span class="connection-error-text">${escapeHtml(state.mcpToolsStatusMessage)}</span>`
           : "catalogone MCP is not installed. See README — configure ~/.cursor/mcp.json and run npm run preflight.",
       };
     }
@@ -308,7 +308,7 @@ function connectionHintForView() {
       const starting = state.mcpToolsStatusMessage || "Starting catalogone MCP server (first launch can take ~15s)…";
       return {
         connected: false,
-        html: `MCP is configured (${state.mcpToolsStatusMessage || "from ~/.cursor/mcp.json"}). ${starting}`,
+        html: `MCP is configured (${escapeHtml(state.mcpToolsStatusMessage || "from ~/.cursor/mcp.json")}). ${escapeHtml(starting)}`,
       };
     }
     if (store.environments.length === 0) {
@@ -1197,7 +1197,11 @@ function renderEnvironmentSidebar() {
         updateMainConnectionHint();
         if (els.mainConnectionHint) {
           els.mainConnectionHint.className = "main-connection-hint";
-          els.mainConnectionHint.innerHTML = `<span class="connection-error-text">${error.message}</span>`;
+          els.mainConnectionHint.replaceChildren();
+          const errorSpan = document.createElement("span");
+          errorSpan.className = "connection-error-text";
+          errorSpan.textContent = error.message;
+          els.mainConnectionHint.appendChild(errorSpan);
         }
       }
     });
