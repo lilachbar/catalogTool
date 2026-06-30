@@ -26,8 +26,12 @@
     searchInput: document.getElementById("mcpToolsSearch"),
     list: document.getElementById("mcpToolsList"),
     status: document.getElementById("mcpToolsStatus"),
+    statusText: document.getElementById("mcpToolsStatusText"),
+    countBadge: document.getElementById("mcpToolsCount"),
     emptyDetail: document.getElementById("mcpToolsEmptyDetail"),
     detail: document.getElementById("mcpToolsDetail"),
+    detailName: document.getElementById("mcpToolDetailName"),
+    detailCategory: document.getElementById("mcpToolDetailCategory"),
     detailTitle: document.getElementById("mcpToolDetailTitle"),
     detailDesc: document.getElementById("mcpToolDetailDesc"),
     fields: document.getElementById("mcpToolFields"),
@@ -36,11 +40,38 @@
     rawToggle: document.getElementById("mcpToolRawToggle"),
     runBtn: document.getElementById("mcpToolRunBtn"),
     result: document.getElementById("mcpToolResult"),
+    resultCard: document.getElementById("mcpToolResultCard"),
     resultMeta: document.getElementById("mcpToolResultMeta"),
   };
 
   if (!els.panel || !els.list) {
     return;
+  }
+
+  function setStatus(message, tone = "loading") {
+    if (els.statusText) {
+      els.statusText.textContent = message;
+    } else if (els.status) {
+      els.status.textContent = message;
+    }
+    if (els.status) {
+      els.status.classList.remove("is-online", "is-loading", "is-error");
+      if (tone) {
+        els.status.classList.add(`is-${tone}`);
+      }
+    }
+  }
+
+  function updateToolCount(count) {
+    if (!els.countBadge) {
+      return;
+    }
+    if (!count) {
+      els.countBadge.hidden = true;
+      return;
+    }
+    els.countBadge.hidden = false;
+    els.countBadge.textContent = String(count);
   }
 
   function showListEmptyMessage(message) {
@@ -49,6 +80,7 @@
     p.className = "mcp-tools-list-empty";
     p.textContent = message;
     els.list.appendChild(p);
+    updateToolCount(0);
   }
 
   function categorizeTool(name) {
@@ -132,6 +164,8 @@
 
   function renderToolList() {
     const tools = filteredTools();
+    updateToolCount(tools.length);
+
     const grouped = new Map();
     for (const tool of tools) {
       const category = categorizeTool(tool.name);
@@ -199,17 +233,21 @@
   function renderField(name, schema, required) {
     const wrap = document.createElement("label");
     wrap.className = "field mcp-tool-field";
-    const label = document.createElement("span");
-    label.className = "field-label";
-    label.textContent = required ? `${name} *` : name;
-    wrap.appendChild(label);
-
     if (schema.description) {
-      const hint = document.createElement("span");
-      hint.className = "field-hint";
-      hint.textContent = schema.description;
-      wrap.appendChild(hint);
+      wrap.dataset.tipDesc = schema.description;
     }
+
+    const label = document.createElement("span");
+    label.className = "field-label mcp-tool-field-name";
+    label.textContent = name;
+    if (required) {
+      const mark = document.createElement("span");
+      mark.className = "mcp-tool-field-required";
+      mark.textContent = "*";
+      mark.setAttribute("aria-hidden", "true");
+      label.appendChild(mark);
+    }
+    wrap.appendChild(label);
 
     let input;
     const id = `mcp-field-${name}`;
@@ -315,6 +353,12 @@
     if (els.detail) {
       els.detail.hidden = false;
     }
+    if (els.detailName) {
+      els.detailName.textContent = tool.name;
+    }
+    if (els.detailCategory) {
+      els.detailCategory.textContent = categorizeTool(tool.name);
+    }
     if (els.detailTitle) {
       els.detailTitle.textContent = tool.title || tool.name;
     }
@@ -330,8 +374,10 @@
     if (els.fields) {
       els.fields.hidden = false;
     }
+    if (els.resultCard) {
+      els.resultCard.hidden = true;
+    }
     if (els.result) {
-      els.result.hidden = true;
       els.result.textContent = "";
     }
     if (els.resultMeta) {
@@ -349,6 +395,8 @@
     if (els.rawJson) {
       els.rawJson.value = JSON.stringify(exampleArgs, null, 2);
     }
+
+    els.detail?.closest(".mcp-tools-main")?.scrollTo({ top: 0, behavior: "smooth" });
   }
 
   function collectFormArguments(tool) {
@@ -422,8 +470,8 @@
     }
 
     els.runBtn.disabled = true;
-    if (els.result) {
-      els.result.hidden = true;
+    if (els.resultCard) {
+      els.resultCard.hidden = true;
     }
 
     try {
@@ -439,16 +487,20 @@
         els.resultMeta.textContent = `${tool.name} · ${elapsed}ms`;
       }
       if (els.result) {
-        els.result.hidden = false;
         els.result.textContent = JSON.stringify(response.result ?? response, null, 2);
+      }
+      if (els.resultCard) {
+        els.resultCard.hidden = false;
       }
     } catch (error) {
       if (els.resultMeta) {
         els.resultMeta.textContent = `${tool.name} · error`;
       }
       if (els.result) {
-        els.result.hidden = false;
         els.result.textContent = error.message;
+      }
+      if (els.resultCard) {
+        els.resultCard.hidden = false;
       }
     } finally {
       els.runBtn.disabled = false;
@@ -458,19 +510,15 @@
   async function loadTools() {
     state.loading = true;
     renderToolList();
-    if (els.status) {
-      els.status.textContent = "Loading catalogone MCP tools…";
-    }
+    setStatus("Loading CatalogOne MCP tools…", "loading");
 
     try {
       const status = await mcpApi("/api/mcp/config");
       if (!status.configured) {
         const reason = status.onlineError
           || status.error
-          || "catalogone MCP is not configured in ~/.cursor/mcp.json";
-        if (els.status) {
-          els.status.textContent = reason;
-        }
+          || "CatalogOne MCP is not configured in ~/.cursor/mcp.json";
+        setStatus(reason, "error");
         showListEmptyMessage(reason);
         if (window.catalogTool?.refreshMcpNav) {
           window.catalogTool.refreshMcpNav();
@@ -478,9 +526,7 @@
         return;
       }
 
-      if (els.status) {
-        els.status.textContent = "Starting catalogone MCP server…";
-      }
+      setStatus("Starting CatalogOne MCP server…", "loading");
 
       const payload = await mcpApi("/api/mcp/tools");
       state.tools = payload.tools || [];
@@ -497,19 +543,17 @@
           // keep default note
         }
       }
-      if (els.status) {
-        els.status.textContent = status.configured
-          ? `${state.tools.length} tools available · ${credentialsNote}`
-          : "catalogone MCP not configured — check ~/.cursor/mcp.json and restart the chat server";
+      if (status.configured) {
+        setStatus(`${state.tools.length} tools available · ${credentialsNote}`, "online");
+      } else {
+        setStatus("CatalogOne MCP not configured — check ~/.cursor/mcp.json and restart the chat server", "error");
       }
       renderToolList();
       if (state.tools.length && !state.selectedToolName) {
         selectTool(state.tools[0].name);
       }
     } catch (error) {
-      if (els.status) {
-        els.status.textContent = error.message;
-      }
+      setStatus(error.message, "error");
       showListEmptyMessage(error.message);
     } finally {
       state.loading = false;

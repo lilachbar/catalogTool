@@ -19,7 +19,9 @@ def register(app: Flask) -> None:
         """Return saved environments for the signed-in app user."""
         username = _store_username()
         store = load_user_store(username)
-        return jsonify({**store, "owner": username})
+        response = jsonify({**store, "owner": username})
+        response.headers["Cache-Control"] = "no-store"
+        return response
 
     @app.put("/api/environments")
     def api_put_environments():

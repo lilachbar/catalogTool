@@ -57,6 +57,7 @@ catalog_tool/zip_catalog/service.py
 catalog_tool/zip_catalog/validate.py
 tests/test_br_compare.py
 tests/test_catalog_one_client.py
+tests/test_chat_config.py
 tests/test_entity_api.py
 tests/test_env_file.py
 tests/test_environment_store.py

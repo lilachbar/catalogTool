@@ -103,6 +103,22 @@ async function requestDetachedWindowResize(layout) {
   }
 }
 
+async function persistChatModelSelection(model, defaultModel) {
+  const response = await fetch("/api/chat/model", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      model,
+      default_model: defaultModel || undefined,
+    }),
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(payload.error || "Could not save model selection.");
+  }
+  return payload;
+}
+
 function detachedWindowPlacement(outerWidth) {
   const left = Math.max(0, Math.round(window.screenX + window.outerWidth - outerWidth));
   const top = Math.max(0, Math.round(window.screenY));
@@ -419,10 +435,10 @@ function ChatModelSelect({
   defaultModel,
   disabled,
 }) {
-  const autoLabel = defaultModel ? `Automatic (${defaultModel})` : "Automatic";
+  const autoLabel = "Auto";
 
   return (
-    <label className="chat-model-select-wrap">
+    <label className="chat-composer-pill chat-composer-pill-select">
       <span className="visually-hidden">Model</span>
       <select
         className="chat-model-select"
@@ -430,7 +446,7 @@ function ChatModelSelect({
         onChange={(event) => onChange(event.target.value)}
         disabled={disabled}
         aria-label="AI model"
-        title="Select AI model"
+        title={defaultModel ? `Automatic uses ${defaultModel}` : "Select AI model"}
       >
         <option value="auto">{autoLabel}</option>
         {models.map((entry) => (
@@ -438,6 +454,15 @@ function ChatModelSelect({
         ))}
       </select>
     </label>
+  );
+}
+
+function AgentModePill() {
+  return (
+    <div className="chat-composer-pill chat-composer-pill-static" title="Catalog assistant with MCP tools">
+      <span className="chat-composer-pill-icon" aria-hidden="true">∞</span>
+      <span>Agent</span>
+    </div>
   );
 }
 
@@ -533,6 +558,15 @@ function ChatPanel({
   } = chatSession;
 
   const chatBlocked = !chatHealth.loading && !chatHealth.ready;
+
+  const handleModelChange = useCallback(async (model) => {
+    setSelectedModel(model);
+    try {
+      await persistChatModelSelection(model, chatHealth.defaultModel);
+    } catch (err) {
+      console.error("Failed to persist model selection:", err);
+    }
+  }, [setSelectedModel, chatHealth.defaultModel]);
 
   const persistPanelWidth = useCallback((width) => {
     const next = clampChatWidth(width);
@@ -662,13 +696,6 @@ function ChatPanel({
           </div>
         )}
         <div className="chat-panel-actions">
-          <ChatModelSelect
-            selectedModel={selectedModel}
-            onChange={setSelectedModel}
-            models={chatHealth.models}
-            defaultModel={chatHealth.defaultModel}
-            disabled={isBusy}
-          />
           {isPopup ? (
             <ChatIconButton label="Attach chat" title="Attach to main window" onClick={onAttach}>
               <AttachIcon />
@@ -724,24 +751,46 @@ function ChatPanel({
       </div>
 
       <form className="chat-composer" onSubmit={onSubmit}>
-        <textarea
-          ref={inputRef}
-          className="chat-input"
-          rows={2}
-          placeholder={chatBlocked ? "Configure an AI API key at sign-in or in .env" : "Ask the catalog assistant…"}
-          value={input}
-          onChange={(event) => setInput(event.target.value)}
-          onKeyDown={(event) => {
-            if (event.key === "Enter" && !event.shiftKey) {
-              event.preventDefault();
-              onSubmit(event);
-            }
-          }}
-          disabled={isBusy || chatBlocked || sendBlocked}
-        />
-        <button type="submit" className="btn btn-primary" disabled={isBusy || chatBlocked || sendBlocked || !input.trim()}>
-          Send
-        </button>
+        <div className="chat-composer-box">
+          <textarea
+            ref={inputRef}
+            className="chat-input"
+            rows={2}
+            placeholder={chatBlocked ? "Configure an AI API key at sign-in or in .env" : "Add a follow-up"}
+            value={input}
+            onChange={(event) => setInput(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" && !event.shiftKey) {
+                event.preventDefault();
+                onSubmit(event);
+              }
+            }}
+            disabled={isBusy || chatBlocked || sendBlocked}
+          />
+          <div className="chat-composer-toolbar">
+            <div className="chat-composer-toolbar-left">
+              <AgentModePill />
+              <ChatModelSelect
+                selectedModel={selectedModel}
+                onChange={handleModelChange}
+                models={chatHealth.models}
+                defaultModel={chatHealth.defaultModel}
+                disabled={isBusy || chatBlocked}
+              />
+            </div>
+            <button
+              type="submit"
+              className="chat-composer-send"
+              disabled={isBusy || chatBlocked || sendBlocked || !input.trim()}
+              aria-label="Send message"
+              title="Send message"
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.25" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="m5 12 7-7 7 7" /><path d="M12 19V5" />
+              </svg>
+            </button>
+          </div>
+        </div>
       </form>
     </aside>
   );

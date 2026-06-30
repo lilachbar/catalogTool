@@ -27,15 +27,18 @@ const SIDEBAR_WIDTH_DEFAULT = 300;
 const VIEW_META = {
   push: {
     eyebrow: "CatalogOne",
-    title: "Merge & Import",
+    title: "Upload, Review & Publish",
+    description: "Upload a CatalogOne export zip, review changes, and publish when ready.",
   },
   "dg-import": {
     eyebrow: "CatalogOne DG",
     title: "DG Import",
+    description: "Import WLS Actions & Reasons from an Excel workbook into CatalogOne.",
   },
   "mcp-tools": {
     eyebrow: "CatalogOne MCP",
-    title: "MCP Tools",
+    title: "CatalogOne MCP tools",
+    description: "Browse and run CatalogOne MCP tools with your connected environment.",
   },
 };
 
@@ -79,17 +82,18 @@ const els = {
   closeConnectionModalBtn: document.getElementById("closeConnectionModalBtn"),
   cancelConnectionModalBtn: document.getElementById("cancelConnectionModalBtn"),
   addEnvironmentBtn: document.getElementById("addEnvironmentBtn"),
+  refreshEnvironmentsBtn: document.getElementById("refreshEnvironmentsBtn"),
   environmentSidebarList: document.getElementById("environmentSidebarList"),
   envSidebarEmpty: document.getElementById("envSidebarEmpty"),
   environmentItemTemplate: document.getElementById("environmentItemTemplate"),
   environmentDisplayNameInput: document.getElementById("environmentDisplayNameInput"),
   mainConnectionHint: document.getElementById("mainConnectionHint"),
+  mainConnectionHintText: document.getElementById("mainConnectionHintText"),
   logoutBtn: document.getElementById("logoutBtn"),
   appLogoutBtn: document.getElementById("appLogoutBtn"),
   loginResult: document.getElementById("loginResult"),
   pushBtn: document.getElementById("pushBtn"),
   publishBtn: document.getElementById("publishBtn"),
-  forcePublish: document.getElementById("forcePublish"),
   pushResult: document.getElementById("pushResult"),
   catalogZipInput: document.getElementById("catalogZipInput"),
   analyzeZipBtn: document.getElementById("analyzeZipBtn"),
@@ -123,7 +127,6 @@ const els = {
   dgImportResult: document.getElementById("dgImportResult"),
   dgPublishBusinessRequestId: document.getElementById("dgPublishBusinessRequestId"),
   dgPublishBusinessRequestIdHint: document.getElementById("dgPublishBusinessRequestIdHint"),
-  dgForcePublish: document.getElementById("dgForcePublish"),
   dgPublishBtn: document.getElementById("dgPublishBtn"),
   dgPublishResult: document.getElementById("dgPublishResult"),
   rowTemplate: document.getElementById("rowTemplate"),
@@ -162,15 +165,12 @@ const els = {
   usernameInput: document.getElementById("usernameInput"),
   passwordInput: document.getElementById("passwordInput"),
   apigwUrlInput: document.getElementById("apigwUrlInput"),
-  syncKeycloakBtn: document.getElementById("syncKeycloakBtn"),
   openKeycloakBtn: document.getElementById("openKeycloakBtn"),
   themeToggleBtn: document.getElementById("themeToggleBtn"),
   appPage: document.getElementById("appPage"),
   pushView: document.getElementById("pushView"),
   dgImportView: document.getElementById("dgImportView"),
   mcpToolsView: document.getElementById("mcpToolsView"),
-  topbarEyebrow: document.getElementById("topbarEyebrow"),
-  topbarTitle: document.getElementById("topbarTitle"),
   appNavItems: document.querySelectorAll(".app-nav-item"),
   navMcpToolsView: document.getElementById("navMcpToolsView"),
   appShell: document.getElementById("appShell"),
@@ -204,13 +204,24 @@ function initSidebarResize() {
 
   let dragging = false;
 
-  const stopDragging = () => {
+  const stopDragging = (event) => {
     if (!dragging) {
       return;
     }
     dragging = false;
     els.sidebarResizer.classList.remove("is-dragging");
     document.body.classList.remove("is-resizing-sidebar");
+    document.removeEventListener("pointermove", onPointerMove);
+    document.removeEventListener("pointerup", stopDragging);
+    document.removeEventListener("pointercancel", stopDragging);
+    window.removeEventListener("blur", stopDragging);
+    if (event?.pointerId != null && els.sidebarResizer.hasPointerCapture?.(event.pointerId)) {
+      try {
+        els.sidebarResizer.releasePointerCapture(event.pointerId);
+      } catch {
+        // ignore release failures
+      }
+    }
   };
 
   const onPointerMove = (event) => {
@@ -221,19 +232,23 @@ function initSidebarResize() {
   };
 
   els.sidebarResizer.addEventListener("pointerdown", (event) => {
-    if (window.matchMedia("(max-width: 900px)").matches) {
+    if (window.matchMedia("(max-width: 900px)").matches || event.button !== 0) {
       return;
     }
     dragging = true;
     els.sidebarResizer.classList.add("is-dragging");
     document.body.classList.add("is-resizing-sidebar");
-    els.sidebarResizer.setPointerCapture(event.pointerId);
+    document.addEventListener("pointermove", onPointerMove);
+    document.addEventListener("pointerup", stopDragging);
+    document.addEventListener("pointercancel", stopDragging);
+    window.addEventListener("blur", stopDragging);
+    try {
+      els.sidebarResizer.setPointerCapture(event.pointerId);
+    } catch {
+      // pointer capture is optional; document listeners handle cleanup
+    }
     event.preventDefault();
   });
-
-  els.sidebarResizer.addEventListener("pointermove", onPointerMove);
-  els.sidebarResizer.addEventListener("pointerup", stopDragging);
-  els.sidebarResizer.addEventListener("pointercancel", stopDragging);
 
   els.sidebarResizer.addEventListener("keydown", (event) => {
     if (window.matchMedia("(max-width: 900px)").matches) {
@@ -272,91 +287,34 @@ function setActiveView(view) {
     button.classList.toggle("is-active", button.dataset.view === nextView);
   });
 
-  const meta = VIEW_META[nextView];
-  if (els.topbarEyebrow) {
-    els.topbarEyebrow.textContent = meta.eyebrow;
-  }
-  if (els.topbarTitle) {
-    els.topbarTitle.textContent = meta.title;
-  }
-
   updateMainConnectionHint();
 }
 
-function connectionStatusLabel(connected) {
-  const klass = connected ? "connection-status-connected" : "connection-status-disconnected";
-  const text = connected ? "Connected" : "Not connected";
-  return `<span class="connection-status-label ${klass}">${text}</span>`;
-}
-
 function connectionHintForView() {
-  const onMcpTools = state.activeView === "mcp-tools";
-  const onDgImport = state.activeView === "dg-import";
-
   if (state.loggedIn) {
-    const label = escapeHtml(state.currentEnvironmentLabel || "environment");
-    if (onDgImport) {
-      return {
-        connected: true,
-        html: `${connectionStatusLabel(true)} to <strong>${label}</strong>. Analyze the DG Excel to preview the import plan.`,
-      };
-    }
-    if (onMcpTools) {
-      const toolsNote = state.mcpToolsOnline && state.mcpToolsStatusMessage
-        ? ` ${escapeHtml(state.mcpToolsStatusMessage)}.`
-        : !state.mcpToolsOnline
-          ? " MCP server is starting — tools load on first use."
-          : "";
-      return {
-        connected: true,
-        html: `${connectionStatusLabel(true)} to <strong>${label}</strong>. Browse and run CatalogOne MCP tools — search catalog, manage business requests, create entities, and more.${toolsNote}`,
-      };
-    }
+    const label = escapeHtml(state.currentEnvironmentLabel || "Unknown");
     return {
       connected: true,
-      html: `${connectionStatusLabel(true)} to <strong>${label}</strong>. You can merge data and publish.`,
-    };
-  }
-
-  const store = loadEnvironmentStore();
-  if (onMcpTools) {
-    if (!state.mcpToolsConfigured) {
-      return {
-        connected: false,
-        html: `${connectionStatusLabel(false)} ${state.mcpToolsStatusMessage
-          ? `<span class="connection-error-text">${escapeHtml(state.mcpToolsStatusMessage)}</span>`
-          : "catalogone MCP is not installed. See README — configure ~/.cursor/mcp.json and run npm run preflight."}`,
-      };
-    }
-    if (!state.mcpToolsOnline) {
-      const starting = state.mcpToolsStatusMessage || "Starting catalogone MCP server (first launch can take ~15s)…";
-      return {
-        connected: false,
-        html: `${connectionStatusLabel(false)} MCP is configured (${escapeHtml(state.mcpToolsStatusMessage || "from ~/.cursor/mcp.json")}). ${escapeHtml(starting)} Connect an environment in the sidebar to use merge workflows.`,
-      };
-    }
-    if (store.environments.length === 0) {
-      return {
-        connected: false,
-        html: `${connectionStatusLabel(false)} CatalogOne MCP is online. Add an environment with <strong>+ Add</strong>, then click <strong>Connect</strong>.`,
-      };
-    }
-    return {
-      connected: false,
-      html: `${connectionStatusLabel(false)} Connect an environment in the sidebar to use merge/publish workflows, or run MCP tools below with default credentials.`,
-    };
-  }
-
-  if (store.environments.length === 0) {
-    return {
-      connected: false,
-      html: `${connectionStatusLabel(false)} No environments yet. Click <strong>+ Add</strong> in the sidebar, then <strong>Connect</strong> to work with CatalogOne.`,
+      html: `The tool is connected to environment: ${label}`,
     };
   }
   return {
     connected: false,
-    html: `${connectionStatusLabel(false)} Select an environment in the sidebar and click <strong>Connect</strong> to start working with CatalogOne.`,
+    html: "The tool is not connected to any environment yet — connect to get started.",
   };
+}
+
+function setMainConnectionHintState(connected, html) {
+  if (!els.mainConnectionHint) {
+    return;
+  }
+  els.mainConnectionHint.hidden = false;
+  els.mainConnectionHint.className = connected
+    ? "main-connection-hint main-connection-hint-connected"
+    : "main-connection-hint main-connection-hint-disconnected";
+  if (els.mainConnectionHintText) {
+    els.mainConnectionHintText.innerHTML = html;
+  }
 }
 
 function updateMainConnectionHint() {
@@ -365,11 +323,7 @@ function updateMainConnectionHint() {
   }
 
   const hint = connectionHintForView();
-  els.mainConnectionHint.hidden = false;
-  els.mainConnectionHint.className = hint.connected
-    ? "main-connection-hint main-connection-hint-connected"
-    : "main-connection-hint main-connection-hint-disconnected";
-  els.mainConnectionHint.innerHTML = hint.html;
+  setMainConnectionHintState(hint.connected, hint.html);
 }
 
 function updateMcpToolsNav({ configured, online, message }) {
@@ -436,7 +390,7 @@ async function refreshMcpToolsNavStatus() {
       } else {
         const reason = status.onlineError
           || status.error
-          || "MCP server starting — open MCP Tools to load tools (~15s first time)";
+          || "MCP server starting — open CatalogOne MCP tools to load tools (~15s first time)";
         updateMcpToolsNav({ configured: true, online: false, message: reason });
       }
     } catch {
@@ -455,6 +409,195 @@ async function refreshMcpToolsNavStatus() {
     });
     updateMainConnectionHint();
   }
+}
+
+function initSidebarFloatTips() {
+  const sidebar = document.querySelector(".env-sidebar");
+  const tip = document.getElementById("sidebarFloatTip");
+  if (!sidebar || !tip) {
+    return;
+  }
+
+  let tipActive = false;
+  const pointerOffset = 12;
+
+  function hideSidebarFloatTip() {
+    tip.hidden = true;
+    tipActive = false;
+  }
+
+  function positionSidebarFloatTipAtPointer(clientX, clientY) {
+    tip.hidden = false;
+    const tipRect = tip.getBoundingClientRect();
+    let left = clientX + pointerOffset;
+    let top = clientY + pointerOffset;
+
+    if (left + tipRect.width > window.innerWidth - 8) {
+      left = clientX - tipRect.width - pointerOffset;
+    }
+    if (top + tipRect.height > window.innerHeight - 8) {
+      top = clientY - tipRect.height - pointerOffset;
+    }
+
+    left = Math.max(8, Math.min(left, window.innerWidth - tipRect.width - 8));
+    top = Math.max(8, Math.min(top, window.innerHeight - tipRect.height - 8));
+    tip.style.left = `${left}px`;
+    tip.style.top = `${top}px`;
+  }
+
+  function showSidebarFloatTip(html, clientX, clientY) {
+    tip.innerHTML = html;
+    tipActive = true;
+    positionSidebarFloatTipAtPointer(clientX, clientY);
+  }
+
+  function environmentTipHtml(environment) {
+    const displayName = getEnvironmentDisplayName(environment);
+    const label = environment.label || deriveEnvironmentLabel(environment.apigw_url || "");
+    let html = `<p class="sidebar-float-tip-title">${escapeHtml(displayName)}</p>`;
+    if (label && label !== displayName) {
+      html += formatTipDescriptionHtml(label);
+    }
+    return html;
+  }
+
+  function tipTargetForEvent(event) {
+    const navItem = event.target.closest(".app-nav-item[data-view]");
+    if (navItem) {
+      const meta = VIEW_META[navItem.dataset.view];
+      if (!meta?.description) {
+        return null;
+      }
+      return {
+        html: `<p class="sidebar-float-tip-title">${escapeHtml(meta.title)}</p>${formatTipDescriptionHtml(meta.description)}`,
+      };
+    }
+
+    const envInner = event.target.closest(".env-card-inner");
+    if (!envInner) {
+      return null;
+    }
+    const envId = envInner.closest(".env-card")?.dataset.environmentId;
+    const environment = getEnvironmentById(envId);
+    if (!environment) {
+      return null;
+    }
+    return { html: environmentTipHtml(environment) };
+  }
+
+  sidebar.addEventListener("mouseover", (event) => {
+    const target = tipTargetForEvent(event);
+    if (!target) {
+      hideSidebarFloatTip();
+      return;
+    }
+    showSidebarFloatTip(target.html, event.clientX, event.clientY);
+  });
+
+  sidebar.addEventListener("mousemove", (event) => {
+    const target = tipTargetForEvent(event);
+    if (!target) {
+      if (tipActive) {
+        hideSidebarFloatTip();
+      }
+      return;
+    }
+    if (!tipActive || tip.hidden) {
+      showSidebarFloatTip(target.html, event.clientX, event.clientY);
+      return;
+    }
+    positionSidebarFloatTipAtPointer(event.clientX, event.clientY);
+  });
+
+  sidebar.addEventListener("mouseleave", hideSidebarFloatTip);
+  sidebar.addEventListener("scroll", hideSidebarFloatTip, true);
+  document.addEventListener("mouseleave", hideSidebarFloatTip);
+  window.addEventListener("blur", hideSidebarFloatTip);
+  window.addEventListener("scroll", hideSidebarFloatTip, true);
+  window.addEventListener("resize", hideSidebarFloatTip);
+}
+
+function initConnectionModalFloatTips() {
+  const modal = els.connectionModal;
+  const tip = document.getElementById("connectionFloatTip");
+  if (!modal || !tip) {
+    return;
+  }
+
+  let tipActive = false;
+  const pointerOffset = 12;
+
+  function hideConnectionFloatTip() {
+    tip.hidden = true;
+    tipActive = false;
+  }
+
+  function positionConnectionFloatTipAtPointer(clientX, clientY) {
+    tip.hidden = false;
+    const tipRect = tip.getBoundingClientRect();
+    let left = clientX + pointerOffset;
+    let top = clientY + pointerOffset;
+
+    if (left + tipRect.width > window.innerWidth - 8) {
+      left = clientX - tipRect.width - pointerOffset;
+    }
+    if (top + tipRect.height > window.innerHeight - 8) {
+      top = clientY - tipRect.height - pointerOffset;
+    }
+
+    left = Math.max(8, Math.min(left, window.innerWidth - tipRect.width - 8));
+    top = Math.max(8, Math.min(top, window.innerHeight - tipRect.height - 8));
+    tip.style.left = `${left}px`;
+    tip.style.top = `${top}px`;
+  }
+
+  function connectionTipHtml(field) {
+    const title = field.dataset.tipTitle || "";
+    const desc = field.dataset.tipDesc || "";
+    let html = `<p class="sidebar-float-tip-title">${escapeHtml(title)}</p>`;
+    if (desc) {
+      html += formatTipDescriptionHtml(desc);
+    }
+    return html;
+  }
+
+  function tipTargetForEvent(event) {
+    const field = event.target.closest(".connection-tip-field");
+    if (!field || !modal.contains(field)) {
+      return null;
+    }
+    return { html: connectionTipHtml(field), field };
+  }
+
+  modal.addEventListener("mouseover", (event) => {
+    const target = tipTargetForEvent(event);
+    if (!target) {
+      hideConnectionFloatTip();
+      return;
+    }
+    tip.innerHTML = target.html;
+    tipActive = true;
+    positionConnectionFloatTipAtPointer(event.clientX, event.clientY);
+  });
+
+  modal.addEventListener("mousemove", (event) => {
+    const target = tipTargetForEvent(event);
+    if (!target) {
+      if (tipActive) {
+        hideConnectionFloatTip();
+      }
+      return;
+    }
+    if (!tipActive || tip.hidden) {
+      tip.innerHTML = target.html;
+      tipActive = true;
+    }
+    positionConnectionFloatTipAtPointer(event.clientX, event.clientY);
+  });
+
+  modal.addEventListener("mouseleave", hideConnectionFloatTip);
+  modal.addEventListener("close", hideConnectionFloatTip);
+  modal.addEventListener("scroll", hideConnectionFloatTip, true);
 }
 
 function initAppNavigation() {
@@ -637,7 +780,7 @@ function buildCatalogUiLaunchPath(tableKey, businessRequestId) {
 
 function getTheme() {
   const stored = localStorage.getItem(THEME_STORAGE_KEY);
-  return stored === "light" ? "light" : "dark";
+  return stored === "dark" ? "dark" : "light";
 }
 
 function applyTheme(theme) {
@@ -668,6 +811,20 @@ function escapeHtml(value) {
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;");
+}
+
+function formatTipDescriptionHtml(text) {
+  const trimmed = (text || "").trim();
+  if (!trimmed) {
+    return "";
+  }
+  const sentences = trimmed.split(/(?<=\.)\s+/).filter((part) => part.trim());
+  if (sentences.length <= 1) {
+    return `<p class="sidebar-float-tip-desc">${escapeHtml(trimmed)}</p>`;
+  }
+  return sentences.map((sentence) => (
+    `<p class="sidebar-float-tip-desc">${escapeHtml(sentence.trim())}</p>`
+  )).join("");
 }
 
 function analyzeStatCard(label, value, tone = "") {
@@ -1334,28 +1491,77 @@ async function saveEnvironmentStore(store) {
     await persistEnvironmentStore(store);
   } catch (error) {
     console.error("Failed to save environments:", error);
-    if (els.mainConnectionHint) {
-      els.mainConnectionHint.hidden = false;
-      els.mainConnectionHint.className = "main-connection-hint main-connection-hint-disconnected";
-      els.mainConnectionHint.innerHTML =
-        `<span class="connection-status-label connection-status-disconnected">Not connected</span> `
-        + `<span class="connection-error-text">Could not save environments: ${escapeHtml(error.message)}</span>`;
-    }
+    setMainConnectionHintState(
+      false,
+      `<span class="connection-status-label connection-status-disconnected">Not connected</span> `
+        + `<span class="connection-error-text">Could not save environments: ${escapeHtml(error.message)}</span>`,
+    );
     throw error;
   }
 }
 
-async function loadEnvironmentsFromServer() {
+async function loadEnvironmentsFromServer(options = {}) {
+  const { silent = false } = options;
+  const refreshBtn = els.refreshEnvironmentsBtn;
+  if (refreshBtn && !silent) {
+    refreshBtn.disabled = true;
+    refreshBtn.classList.add("is-loading");
+  }
+
   try {
-    const serverStore = await api("/api/environments");
+    const serverStore = await api(`/api/environments?_=${Date.now()}`, { cache: "no-store" });
+    const previousActiveId = state.activeEnvironmentId;
+
     environmentStore = {
       activeEnvironmentId: serverStore.activeEnvironmentId ?? null,
       environments: Array.isArray(serverStore.environments) ? serverStore.environments : [],
     };
+
+    const store = loadEnvironmentStore();
+    if (store.activeEnvironmentId && getEnvironmentById(store.activeEnvironmentId)) {
+      state.activeEnvironmentId = store.activeEnvironmentId;
+    } else if (previousActiveId && getEnvironmentById(previousActiveId)) {
+      state.activeEnvironmentId = previousActiveId;
+    } else {
+      state.activeEnvironmentId = store.environments[0]?.id || null;
+    }
+
+    if (state.activeEnvironmentId) {
+      const environment = getEnvironmentById(state.activeEnvironmentId);
+      if (environment) {
+        applyConnectionFields(environment);
+      }
+    }
+
+    renderEnvironmentSidebar();
+    updateMainConnectionHint();
   } catch (error) {
     console.warn("Could not load environments from server:", error);
+    if (!silent) {
+      setMainConnectionHintState(
+        false,
+        `<span class="connection-status-label connection-status-disconnected">Not connected</span> `
+          + `<span class="connection-error-text">Could not reload environments: ${escapeHtml(error.message)}</span>`,
+      );
+    }
+  } finally {
+    if (refreshBtn && !silent) {
+      refreshBtn.disabled = false;
+      refreshBtn.classList.remove("is-loading");
+    }
   }
-  renderEnvironmentSidebar();
+}
+
+async function refreshEnvironmentsFromServer() {
+  return loadEnvironmentsFromServer({ silent: false });
+}
+
+let environmentsRefreshTimer = null;
+function scheduleEnvironmentsRefresh() {
+  clearTimeout(environmentsRefreshTimer);
+  environmentsRefreshTimer = setTimeout(() => {
+    void loadEnvironmentsFromServer({ silent: true });
+  }, 400);
 }
 
 function getConnectionFields() {
@@ -1405,12 +1611,12 @@ function openConnectionModal(mode, environmentId = null) {
       return;
     }
     applyConnectionFields(environment);
-    els.connectionModalTitle.textContent = "Edit environment";
-    els.connectionModalDesc.textContent = "Update the connection definition. Use Connect to sign in with these settings.";
+    els.connectionModalTitle.textContent = "Edit Environment";
+    els.connectionModalDesc.innerHTML = "Update the connection definition.<br>Connect from the sidebar when you are ready.";
   } else {
     fillDefaultConnectionFields();
-    els.connectionModalTitle.textContent = "New environment";
-    els.connectionModalDesc.textContent = "Define endpoints and credentials. Save for later or connect now.";
+    els.connectionModalTitle.textContent = "New Environment";
+    els.connectionModalDesc.innerHTML = "Define endpoints and credentials.<br>Save now and connect from the sidebar.";
   }
 
   els.connectionModal.showModal();
@@ -1571,6 +1777,37 @@ function sortEnvironmentsForSidebar(environments) {
   });
 }
 
+async function handleEnvironmentConnectClick(environmentId) {
+  try {
+    await connectEnvironment(environmentId);
+  } catch (error) {
+    setLoggedIn(false);
+    if (error.message.includes("Password")) {
+      openConnectionModal("edit", environmentId);
+      showResult(els.loginResult, error.message, true);
+      return;
+    }
+    setMainConnectionHintState(
+      false,
+      `<span class="connection-status-label connection-status-disconnected">Not connected</span> <span class="connection-error-text">${escapeHtml(error.message)}</span>`,
+    );
+  }
+}
+
+async function toggleEnvironmentConnection(environmentId) {
+  const currentlyConnected = state.loggedIn && state.connectedEnvironmentId === environmentId;
+  if (currentlyConnected) {
+    await disconnectSession();
+    return;
+  }
+  state.activeEnvironmentId = environmentId;
+  const environment = getEnvironmentById(environmentId);
+  if (environment) {
+    applyConnectionFields(environment);
+  }
+  await handleEnvironmentConnectClick(environmentId);
+}
+
 function renderEnvironmentSidebar() {
   const store = loadEnvironmentStore();
   const environments = sortEnvironmentsForSidebar(store.environments);
@@ -1596,12 +1833,14 @@ function renderEnvironmentSidebar() {
     item.classList.toggle("env-card-disconnected", !isConnected);
     item.classList.toggle("env-card-selected", isSelected && !isConnected);
 
-    item.querySelector(".env-card-name").textContent = displayName;
-    const stateEl = item.querySelector(".env-card-state");
-    if (stateEl) {
-      stateEl.textContent = isConnected ? "Connected" : "Not connected";
+    const nameEl = item.querySelector(".env-card-name");
+    nameEl.textContent = displayName;
+    nameEl.title = displayName;
+
+    const bodyBtn = item.querySelector(".env-card-body");
+    if (bodyBtn) {
+      bodyBtn.setAttribute("aria-label", `${displayName}${isConnected ? " (connected)" : ""}`);
     }
-    item.querySelector(".env-card-meta").textContent = `${environment.username} · ${environment.label}`;
 
     const connectBtn = item.querySelector(".env-action-connect");
     const disconnectBtn = item.querySelector(".env-action-disconnect");
@@ -1616,22 +1855,7 @@ function renderEnvironmentSidebar() {
 
     item.querySelector(".env-action-connect").addEventListener("click", async (event) => {
       event.stopPropagation();
-      try {
-        await connectEnvironment(environment.id);
-      } catch (error) {
-        setLoggedIn(false);
-        if (error.message.includes("Password")) {
-          openConnectionModal("edit", environment.id);
-          showResult(els.loginResult, error.message, true);
-          return;
-        }
-        if (els.mainConnectionHint) {
-          els.mainConnectionHint.hidden = false;
-          els.mainConnectionHint.className = "main-connection-hint main-connection-hint-disconnected";
-          els.mainConnectionHint.innerHTML =
-            `<span class="connection-status-label connection-status-disconnected">Not connected</span> <span class="connection-error-text">${escapeHtml(error.message)}</span>`;
-        }
-      }
+      await handleEnvironmentConnectClick(environment.id);
     });
 
     item.querySelector(".env-action-disconnect").addEventListener("click", async (event) => {
@@ -1651,10 +1875,11 @@ function renderEnvironmentSidebar() {
       deleteEnvironment(environment.id);
     });
 
-    item.querySelector(".env-card-body").addEventListener("click", () => {
-      state.activeEnvironmentId = environment.id;
-      applyConnectionFields(environment);
-      renderEnvironmentSidebar();
+    item.querySelector(".env-card-inner").addEventListener("click", (event) => {
+      if (event.target.closest(".env-card-actions")) {
+        return;
+      }
+      void toggleEnvironmentConnection(environment.id);
     });
 
     els.environmentSidebarList.appendChild(node);
@@ -1993,12 +2218,10 @@ async function handleSessionExpired(message) {
     return;
   }
   setLoggedIn(false);
-  if (els.mainConnectionHint) {
-    els.mainConnectionHint.hidden = false;
-    els.mainConnectionHint.className = "main-connection-hint main-connection-hint-disconnected";
-    els.mainConnectionHint.innerHTML =
-      `<span class="connection-status-label connection-status-disconnected">Not connected</span> <span class="connection-error-text">${escapeHtml(message || "CatalogOne session expired — connect again.")}</span>`;
-  }
+  setMainConnectionHintState(
+    false,
+    `<span class="connection-status-label connection-status-disconnected">Not connected</span> <span class="connection-error-text">${escapeHtml(message || "CatalogOne session expired — connect again.")}</span>`,
+  );
 }
 
 async function api(path, options = {}) {
@@ -2028,8 +2251,28 @@ applyTheme(getTheme());
 
 els.addEnvironmentBtn?.addEventListener("click", () => openConnectionModal("create"));
 
+els.refreshEnvironmentsBtn?.addEventListener("click", () => {
+  void refreshEnvironmentsFromServer();
+});
+
+window.addEventListener("focus", scheduleEnvironmentsRefresh);
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible") {
+    scheduleEnvironmentsRefresh();
+  }
+});
+window.addEventListener("catalogTool:environments-changed", () => {
+  void loadEnvironmentsFromServer({ silent: true });
+});
+
 els.closeConnectionModalBtn?.addEventListener("click", closeConnectionModal);
 els.cancelConnectionModalBtn?.addEventListener("click", closeConnectionModal);
+
+els.connectionModal?.addEventListener("click", (event) => {
+  if (event.target === els.connectionModal) {
+    closeConnectionModal();
+  }
+});
 
 els.connectionModal?.addEventListener("cancel", (event) => {
   event.preventDefault();
@@ -2038,29 +2281,9 @@ els.connectionModal?.addEventListener("cancel", (event) => {
 
 els.connectionForm?.addEventListener("submit", async (event) => {
   event.preventDefault();
-  const action = event.submitter?.value || "save";
   els.loginResult.hidden = true;
 
   try {
-    if (action === "connect") {
-      const saved = saveEnvironmentFromForm();
-      applyConnectionFields(saved);
-      await api("/api/logout", { method: "POST", body: "{}" }).catch(() => null);
-      setLoggedIn(false);
-      const result = await api("/api/login", {
-        method: "POST",
-        body: JSON.stringify(getConnectionFields()),
-      });
-      if (result.normalized_apigw_url) {
-        els.apigwUrlInput.value = result.normalized_apigw_url;
-        upsertEnvironment({ ...saved, apigw_url: result.normalized_apigw_url });
-      }
-      state.connectedEnvironmentId = saved.id;
-      setLoggedIn(true, result.username, getEnvironmentDisplayName(saved));
-      closeConnectionModal();
-      return;
-    }
-
     saveEnvironmentFromForm();
     closeConnectionModal();
   } catch (error) {
@@ -2069,7 +2292,7 @@ els.connectionForm?.addEventListener("submit", async (event) => {
   }
 });
 
-els.logoutBtn.addEventListener("click", () => {
+els.logoutBtn?.addEventListener("click", () => {
   if (els.logoutBtn?.disabled) {
     return;
   }
@@ -2105,9 +2328,7 @@ async function syncKeycloakFromGateway() {
 
 els.apigwUrlInput.addEventListener("change", syncKeycloakFromGateway);
 
-els.syncKeycloakBtn.addEventListener("click", syncKeycloakFromGateway);
-
-els.openKeycloakBtn.addEventListener("click", () => {
+els.openKeycloakBtn?.addEventListener("click", () => {
   const url = els.keycloakUrlInput.value.trim();
   if (!url) {
     showResult(els.loginResult, "Enter a Keycloak URL first.", true);
@@ -2475,9 +2696,8 @@ els.publishBtn.addEventListener("click", async () => {
     return;
   }
 
-  const forceLabel = els.forcePublish.checked ? " with force publish enabled" : "";
   const confirmed = window.confirm(
-    `Publish business request ${businessRequestId}${forceLabel}?\n\nThis queues the BR for production and cannot be undone once publishing completes.`
+    `Publish business request ${businessRequestId}?\n\nThis queues the BR for production and cannot be undone once publishing completes.`
   );
   if (!confirmed) {
     return;
@@ -2491,7 +2711,6 @@ els.publishBtn.addEventListener("click", async () => {
       method: "POST",
       body: JSON.stringify({
         business_request_id: businessRequestId,
-        force_publish: els.forcePublish.checked,
       }),
     });
     showResult(els.pushResult, result, !result.ok);
@@ -2601,9 +2820,8 @@ els.dgPublishBtn?.addEventListener("click", async () => {
     return;
   }
 
-  const forceLabel = els.dgForcePublish?.checked ? " with force publish enabled" : "";
   const confirmed = window.confirm(
-    `Publish business request ${businessRequestId}${forceLabel}?\n\nThis queues the BR for production and cannot be undone once publishing completes.`
+    `Publish business request ${businessRequestId}?\n\nThis queues the BR for production and cannot be undone once publishing completes.`
   );
   if (!confirmed) {
     return;
@@ -2617,7 +2835,6 @@ els.dgPublishBtn?.addEventListener("click", async () => {
       method: "POST",
       body: JSON.stringify({
         business_request_id: businessRequestId,
-        force_publish: els.dgForcePublish?.checked,
       }),
     });
     showResult(els.dgPublishResult, result, !result.ok);
@@ -2758,6 +2975,8 @@ async function initApp() {
   }
 
   initSidebarResize();
+  initSidebarFloatTips();
+  initConnectionModalFloatTips();
   initZipDropzone();
   updateZipValidateButton();
   initExcelDropzone();
@@ -2785,4 +3004,7 @@ initApp();
 
 window.catalogTool = window.catalogTool || {};
 window.catalogTool.refreshMcpNav = refreshMcpToolsNavStatus;
-window.catalogTool.refreshMcpNav = refreshMcpToolsNavStatus;
+window.catalogTool.refreshEnvironments = refreshEnvironmentsFromServer;
+window.catalogTool.notifyEnvironmentsChanged = () => {
+  window.dispatchEvent(new CustomEvent("catalogTool:environments-changed"));
+};

@@ -3,8 +3,12 @@
 from __future__ import annotations
 
 import unittest
+from unittest.mock import patch
 
-from catalog_tool.web.routes.chat_config import _provider_env_updates
+from catalog_tool.web.routes.chat_config import (
+    _provider_env_updates,
+    apply_chat_model_selection,
+)
 
 
 class ChatConfigUpdatesTests(unittest.TestCase):
@@ -47,6 +51,71 @@ class ChatConfigUpdatesTests(unittest.TestCase):
             },
         )
         self.assertNotIn("CURSOR_API_KEY", updates)
+
+
+class ChatModelSelectionTests(unittest.TestCase):
+    @patch("catalog_tool.web.routes.chat_config._reload_node_env")
+    @patch("catalog_tool.web.routes.chat_config._reload_python_env")
+    @patch("catalog_tool.web.routes.chat_config.upsert_env_vars")
+    @patch("catalog_tool.web.routes.chat_config.read_env_file")
+    def test_persists_explicit_model_to_env(
+        self,
+        mock_read_env,
+        mock_upsert,
+        mock_reload_python,
+        mock_reload_node,
+    ) -> None:
+        mock_read_env.return_value = {
+            "CHAT_PROVIDER": "cursor",
+            "CURSOR_MODEL": "auto",
+        }
+        mock_reload_node.return_value = {"ok": True}
+
+        payload, status = apply_chat_model_selection("claude-sonnet-4-5")
+
+        self.assertEqual(status, 200)
+        self.assertEqual(payload["model"], "claude-sonnet-4-5")
+        self.assertEqual(payload["modelVar"], "CURSOR_MODEL")
+        mock_upsert.assert_called_once_with({"CURSOR_MODEL": "claude-sonnet-4-5"})
+        mock_reload_python.assert_called_once()
+        mock_reload_node.assert_called_once()
+
+    @patch("catalog_tool.web.routes.chat_config._reload_node_env")
+    @patch("catalog_tool.web.routes.chat_config._reload_python_env")
+    @patch("catalog_tool.web.routes.chat_config.upsert_env_vars")
+    @patch("catalog_tool.web.routes.chat_config.read_env_file")
+    def test_auto_uses_default_model(
+        self,
+        mock_read_env,
+        mock_upsert,
+        mock_reload_python,
+        mock_reload_node,
+    ) -> None:
+        mock_read_env.return_value = {
+            "CHAT_PROVIDER": "openai",
+            "OPENAI_MODEL": "gpt-4o-mini",
+        }
+        mock_reload_node.return_value = {"ok": True}
+
+        payload, status = apply_chat_model_selection("auto", default_model="gpt-4o")
+
+        self.assertEqual(status, 200)
+        self.assertEqual(payload["model"], "gpt-4o")
+        mock_upsert.assert_called_once_with({"OPENAI_MODEL": "gpt-4o"})
+
+    @patch("catalog_tool.web.routes.chat_config.upsert_env_vars")
+    @patch("catalog_tool.web.routes.chat_config.read_env_file")
+    def test_skips_write_when_unchanged(self, mock_read_env, mock_upsert) -> None:
+        mock_read_env.return_value = {
+            "CHAT_PROVIDER": "cursor",
+            "CURSOR_MODEL": "claude-sonnet-4-5",
+        }
+
+        payload, status = apply_chat_model_selection("claude-sonnet-4-5")
+
+        self.assertEqual(status, 200)
+        self.assertTrue(payload.get("unchanged"))
+        mock_upsert.assert_not_called()
 
 
 if __name__ == "__main__":

@@ -197,6 +197,48 @@ def configure_chat_provider(provider: str, api_key: str, model: str | None = Non
     }, 200
 
 
+def apply_chat_model_selection(
+    model: str | None,
+    *,
+    default_model: str | None = None,
+) -> tuple[dict, int]:
+    """Persist the user's model choice to .env for the active chat provider."""
+    env_values = read_env_file()
+    provider = normalize_chat_provider(env_values.get("CHAT_PROVIDER"))
+    if not provider:
+        return {"error": "No chat provider configured in .env."}, 400
+
+    model_var = PROVIDER_MODEL_VARS.get(provider)
+    if not model_var:
+        return {"error": f"No model variable for provider {provider}."}, 400
+
+    selected = (model or "").strip()
+    if not selected or selected == "auto":
+        resolved = (default_model or env_values.get(model_var) or "").strip()
+    else:
+        resolved = selected
+
+    if not resolved:
+        return {"error": "Model is required."}, 400
+
+    current = (env_values.get(model_var) or "").strip()
+    if resolved == current:
+        return {"ok": True, "model": resolved, "modelVar": model_var, "unchanged": True}, 200
+
+    upsert_env_vars({model_var: resolved})
+    _reload_python_env()
+    os.environ[model_var] = resolved
+
+    node_reload = _reload_node_env()
+    if not node_reload.get("ok"):
+        return {
+            "error": "Saved to .env but could not reload the chat server. Restart ./run_web.sh.",
+            "nodeReload": node_reload,
+        }, 503
+
+    return {"ok": True, "model": resolved, "modelVar": model_var}, 200
+
+
 def register(app: Flask) -> None:
     @app.get("/api/chat/providers")
     def api_chat_providers():
@@ -225,4 +267,12 @@ def register(app: Flask) -> None:
             return jsonify({"error": "API key is required."}), 400
 
         payload, status = configure_chat_provider(provider, api_key, model)
+        return jsonify(payload), status
+
+    @app.post("/api/chat/model")
+    def api_chat_model():
+        data = request.get_json(silent=True) or {}
+        model = str(data.get("model") or "").strip() or None
+        default_model = str(data.get("default_model") or "").strip() or None
+        payload, status = apply_chat_model_selection(model, default_model=default_model)
         return jsonify(payload), status
