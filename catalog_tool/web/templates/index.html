@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/static/styles.css?v=20260702app62">
+  <link rel="stylesheet" href="/static/styles.css?v=20260702app64">
   <script>
     (function () {
       var theme = localStorage.getItem("catalogTool.theme");
@@ -238,8 +238,8 @@
                     <button type="button" class="workflow-step-btn is-active" data-workflow-step="upload" aria-selected="true">
                       <span class="workflow-step-num">1</span>
                       <span class="workflow-step-copy">
-                        <span class="workflow-step-label">Upload &amp; validate</span>
-                        <span class="workflow-step-desc">Choose zip and run validation</span>
+                        <span class="workflow-step-label">Upload zip</span>
+                        <span class="workflow-step-desc">Choose zip (validate optional)</span>
                       </span>
                     </button>
                     <button type="button" class="workflow-step-btn" data-workflow-step="review" aria-selected="false">
@@ -265,7 +265,7 @@
                       <div class="mcp-tool-form-card">
                         <div class="mcp-tool-form-card-head">
                           <div class="mcp-tool-detail-meta">
-                            <h3 id="mergeCardZipTitle" class="mcp-tool-detail-title">Upload &amp; validate</h3>
+                            <h3 id="mergeCardZipTitle" class="mcp-tool-detail-title">Upload zip</h3>
                             <span class="mcp-tool-category-badge">Step 1</span>
                           </div>
                         </div>
@@ -966,8 +966,9 @@
 
   <script id="tablesConfig" type="application/json">{{ defaults.tables | tojson }}</script>
   <script id="defaultsConfig" type="application/json">{{ defaults | tojson }}</script>
-  <script src="/static/app.js?v=20260702app61"></script>
+  <script src="/static/page-control.js?v=20260702app65"></script>
+  <script src="/static/app.js?v=20260702app65"></script>
   <script src="/static/mcp-tools.js?v=20260702app57"></script>
-  <script type="module" src="/static/chat.bundle.js?v=20260702app59"></script>
+  <script type="module" src="/static/chat.bundle.js?v=20260702app65"></script>
 </body>
 </html>

@@ -3,12 +3,15 @@
 from __future__ import annotations
 
 import json
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from typing import Any, Literal
 
 from catalog_tool.client.catalog_one_client import CatalogOneClient
 
 CompareType = Literal["production", "audit"]
+DEFAULT_COMPARE_ENTITY_LIMIT = 100
+DEFAULT_COMPARE_MAX_WORKERS = 8
 
 
 @dataclass
@@ -42,6 +45,8 @@ class BrCompareReport:
     missing_in_br: int
     errors: int
     entities: list[EntityCompareResult] = field(default_factory=list)
+    total_entity_count: int = 0
+    truncated: bool = False
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -49,6 +54,8 @@ class BrCompareReport:
             "business_request_id": self.business_request_id,
             "summary": {
                 "entity_count": self.entity_count,
+                "total_entity_count": self.total_entity_count or self.entity_count,
+                "truncated": self.truncated,
                 "identical": self.identical,
                 "changed": self.changed,
                 "new_in_br": self.new_in_br,
@@ -85,6 +92,8 @@ def compare_business_request(
     business_request_id: str,
     compare_type: CompareType,
     entities: list[dict[str, str]],
+    max_entities: int = DEFAULT_COMPARE_ENTITY_LIMIT,
+    max_workers: int = DEFAULT_COMPARE_MAX_WORKERS,
 ) -> BrCompareReport:
     """Compare entities in a BR against production or audit baselines."""
     if compare_type not in {"production", "audit"}:
@@ -92,33 +101,48 @@ def compare_business_request(
 
     client.ensure_business_request_local_context(business_request_id)
 
-    results: list[EntityCompareResult] = []
+    normalized: list[dict[str, str]] = []
     for entity in entities:
         entity_id = (entity.get("entity_id") or "").strip()
         entity_type = (entity.get("entity_type") or "").strip()
         title = (entity.get("title") or entity_id).strip()
-        if not entity_id or not entity_type:
-            continue
-        if compare_type == "production":
-            results.append(
-                _compare_entity_production(
+        if entity_id and entity_type:
+            normalized.append(
+                {
+                    "entity_id": entity_id,
+                    "entity_type": entity_type,
+                    "title": title,
+                }
+            )
+
+    total_entity_count = len(normalized)
+    truncated = False
+    if max_entities > 0 and len(normalized) > max_entities:
+        normalized = normalized[:max_entities]
+        truncated = True
+
+    results: list[EntityCompareResult] = []
+    if normalized:
+        compare_fn = (
+            _compare_entity_production
+            if compare_type == "production"
+            else _compare_entity_audit
+        )
+        worker_count = min(max_workers, len(normalized))
+        with ThreadPoolExecutor(max_workers=worker_count) as pool:
+            futures = [
+                pool.submit(
+                    compare_fn,
                     client,
                     business_request_id=business_request_id,
-                    entity_id=entity_id,
-                    entity_type=entity_type,
-                    title=title,
+                    entity_id=item["entity_id"],
+                    entity_type=item["entity_type"],
+                    title=item["title"],
                 )
-            )
-        else:
-            results.append(
-                _compare_entity_audit(
-                    client,
-                    business_request_id=business_request_id,
-                    entity_id=entity_id,
-                    entity_type=entity_type,
-                    title=title,
-                )
-            )
+                for item in normalized
+            ]
+            for future in as_completed(futures):
+                results.append(future.result())
 
     counts = {"identical": 0, "changed": 0, "new_in_br": 0, "missing_in_br": 0, "errors": 0}
     for item in results:
@@ -135,6 +159,8 @@ def compare_business_request(
         missing_in_br=counts["missing_in_br"],
         errors=counts["errors"],
         entities=results,
+        total_entity_count=total_entity_count,
+        truncated=truncated,
     )
 
 

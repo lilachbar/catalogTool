@@ -439,6 +439,9 @@ function useCatalogChatSession({ channelRef, windowRole }) {
         model: selectedModel === "auto" ? undefined : selectedModel,
         mode: selectedMode,
         attachments: pendingSendExtrasRef.current.attachments,
+        pageContext: typeof window.catalogTool?.getPageContext === "function"
+          ? window.catalogTool.getPageContext()
+          : null,
       }),
     }),
     [selectedModel, selectedMode],
@@ -509,6 +512,7 @@ function useCatalogChatSession({ channelRef, windowRole }) {
   }, [channelRef, messageChatModes, messages, selectedModel, selectedMode, status, windowId, windowRole]);
 
   useEffect(() => {
+    window.dispatchEvent(new CustomEvent("catalogTool:chat-busy", { detail: { busy: isBusy } }));
     channelRef.current?.postMessage({ type: "chat-busy", busy: isBusy, sender: windowId });
   }, [channelRef, isBusy, windowId]);
 

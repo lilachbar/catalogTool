@@ -26,6 +26,8 @@ import {
 } from "./providers.js";
 import { reloadChatEnvFromFile } from "./env-reload.js";
 import { getContextUsageBaselines } from "./context-usage.js";
+import { formatPageContextNote, storePageContext } from "./ui-control.js";
+import { callInternalApi } from "./mcp-session.js";
 
 const app = express();
 app.use(express.json({ limit: "12mb" }));
@@ -148,6 +150,25 @@ app.post("/api/reload-env", (_req, res) => {
   res.json(result);
 });
 
+async function resolvePageContext(req) {
+  const cookie = req.headers.cookie || "";
+  const incoming = req.body?.pageContext;
+  if (incoming && typeof incoming === "object" && Object.keys(incoming).length > 0) {
+    await storePageContext(incoming, cookie);
+    return incoming;
+  }
+  if (!cookie) {
+    return null;
+  }
+  const stored = await callInternalApi("/api/ui-control/context", {
+    headers: { Cookie: cookie },
+  });
+  if (stored.ok && stored.data && typeof stored.data === "object" && Object.keys(stored.data).length > 0) {
+    return stored.data;
+  }
+  return null;
+}
+
 app.post("/api/chat", async (req, res) => {
   const chatKey = await validateChatProviderKey({ remote: true });
   if (!chatKey.ok) {
@@ -163,6 +184,9 @@ app.post("/api/chat", async (req, res) => {
     return;
   }
 
+  const pageContext = await resolvePageContext(req);
+  const pageNote = formatPageContextNote(pageContext);
+
   const mode = normalizeChatMode(requestedMode);
   const safeAttachments = Array.isArray(attachments) ? attachments : [];
   const modelId = resolveModelId(requestedModel, chatKey.provider);
@@ -175,7 +199,11 @@ app.post("/api/chat", async (req, res) => {
 
   try {
     if (chatKey.provider === "cursor") {
-      await handleCursorChat(req, res, messages, modelId, { mode, attachments: safeAttachments });
+      await handleCursorChat(req, res, messages, modelId, {
+        mode,
+        attachments: safeAttachments,
+        pageContext,
+      });
       return;
     }
 
@@ -183,7 +211,7 @@ app.post("/api/chat", async (req, res) => {
     const chatModel = chatKey.provider === "claude"
       ? getClaudeModel(modelId)
       : getOpenAiModel(modelId);
-    const systemPrompt = [CATALOGONE_AGENT_PROMPT, modeNote, historyNote].filter(Boolean).join("\n\n");
+    const systemPrompt = [CATALOGONE_AGENT_PROMPT, modeNote, pageNote, historyNote].filter(Boolean).join("\n\n");
     const modelMessages = appendAttachmentsToModelMessages(
       await convertToModelMessages(messages),
       safeAttachments,

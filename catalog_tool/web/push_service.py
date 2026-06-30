@@ -1,4 +1,4 @@
-"""Business-request push and publish logic."""
+"""Business-request push and publish logic (via catalogone MCP tools)."""
 
 from __future__ import annotations
 
@@ -6,10 +6,16 @@ import json
 import uuid
 
 from catalog_tool.builders.generic_element_entry import build_name_localized_entry
-from catalog_tool.client.catalog_one_client import CatalogOneClient, derive_catalog_ui_url
+from catalog_tool.client.catalog_one_client import derive_catalog_ui_url
 from catalog_tool.tables import GenericElementTable, get_catalog_table
-
 from catalog_tool.web.helpers import table_ui_url
+from catalog_tool.web.mcp_catalog import (
+    create_business_request_via_mcp,
+    create_generic_element_entry_via_mcp,
+    get_business_request_via_mcp,
+    publish_business_request_via_mcp,
+)
+from catalog_tool.web.mcp_client import McpToolError
 
 
 def parse_entries(table: GenericElementTable, data: dict) -> list[dict]:
@@ -83,27 +89,50 @@ def _entry_display_name(entry: dict) -> str:
     )
 
 
-def push_entry_results(
-    client: CatalogOneClient,
+def push_entry_results_mcp(
+    *,
     entries: list[dict],
     business_request_id: str,
+    catalogone_env: dict[str, str],
 ) -> list[dict]:
     results = []
     for entry in entries:
-        status, body = client.post_generic_element_entry(entry, business_request_id)
-        results.append(
-            {
-                "entry_id": entry.get("id"),
-                "name": _entry_display_name(entry),
-                "status": status,
-                "ok": 200 <= status < 300,
-                "body": body,
-            }
-        )
+        try:
+            body = create_generic_element_entry_via_mcp(
+                entry=entry,
+                business_request_id=business_request_id,
+                catalogone_env=catalogone_env,
+            )
+            results.append(
+                {
+                    "entry_id": entry.get("id"),
+                    "name": _entry_display_name(entry),
+                    "status": 200,
+                    "ok": True,
+                    "body": body,
+                    "source": "mcp:create_entity",
+                }
+            )
+        except McpToolError as exc:
+            results.append(
+                {
+                    "entry_id": entry.get("id"),
+                    "name": _entry_display_name(entry),
+                    "status": 502,
+                    "ok": False,
+                    "body": {"error": str(exc)},
+                    "source": "mcp:create_entity",
+                }
+            )
     return results
 
 
-def push_to_catalog(client: CatalogOneClient, data: dict) -> dict:
+def push_to_catalog(
+    catalogone_env: dict[str, str],
+    data: dict,
+    *,
+    apigw_url: str,
+) -> dict:
     push_targets = collect_push_targets(data)
     business_request_id = (data.get("business_request_id") or "").strip()
     create_business_request = data.get("create_business_request", True)
@@ -114,13 +143,20 @@ def push_to_catalog(client: CatalogOneClient, data: dict) -> dict:
             raise ValueError("Provide a business request ID or enable create new BR")
         if not business_request_name:
             raise ValueError("Business request name is required when creating a new business request")
-        business_request_id = client.create_business_request(name=business_request_name)
+        business_request_id = create_business_request_via_mcp(
+            name=business_request_name,
+            catalogone_env=catalogone_env,
+        )
 
-    catalog_ui_url = derive_catalog_ui_url(client.connection.apigw_url)
+    catalog_ui_url = derive_catalog_ui_url(apigw_url)
     table_results = []
     all_results = []
     for table, entries in push_targets:
-        results = push_entry_results(client, entries, business_request_id)
+        results = push_entry_results_mcp(
+            entries=entries,
+            business_request_id=business_request_id,
+            catalogone_env=catalogone_env,
+        )
         table_results.append(
             {
                 "table_key": table.key,
@@ -137,6 +173,7 @@ def push_to_catalog(client: CatalogOneClient, data: dict) -> dict:
     return {
         "status": "ok" if not failed else "partial",
         "business_request_id": business_request_id,
+        "import_source": "mcp",
         "table_key": first_table.key,
         "table_id": first_table.generic_element_id,
         "table_ui_url": table_ui_url(first_table, business_request_id, catalog_ui_url),
@@ -145,27 +182,31 @@ def push_to_catalog(client: CatalogOneClient, data: dict) -> dict:
     }
 
 
-def publish_business_request(client: CatalogOneClient, data: dict) -> dict:
+def publish_business_request(
+    catalogone_env: dict[str, str],
+    data: dict,
+    *,
+    apigw_url: str,
+) -> dict:
     business_request_id = (data.get("business_request_id") or "").strip()
     if not business_request_id:
         raise ValueError("Business request ID is required to publish")
 
-    force_publish = bool(data.get("force_publish", False))
-    publish_after = (data.get("publish_after") or "").strip() or None
     table = get_catalog_table(data.get("table_key"))
-
-    status, body = client.publish_business_request(
-        business_request_id,
-        force_publish=force_publish,
-        publish_after=publish_after,
+    publish_business_request_via_mcp(
+        business_request_id=business_request_id,
+        catalogone_env=catalogone_env,
     )
-    business_request = client.get_business_request(business_request_id)
-    ok = 200 <= status < 300
+    business_request = get_business_request_via_mcp(
+        business_request_id=business_request_id,
+        catalogone_env=catalogone_env,
+    )
+    catalog_ui_url = derive_catalog_ui_url(apigw_url)
     return {
-        "status": "ok" if ok else "error",
-        "http_status": status,
-        "ok": ok,
-        "body": body,
+        "status": "ok",
+        "ok": True,
+        "import_source": "mcp",
+        "body": {"tool": "publish_business_request"},
         "business_request_id": business_request_id,
         "business_request_status": business_request.get("status"),
         "published_at": business_request.get("publishedAt"),
@@ -175,6 +216,6 @@ def publish_business_request(client: CatalogOneClient, data: dict) -> dict:
         "table_ui_url": table_ui_url(
             table,
             business_request_id,
-            derive_catalog_ui_url(client.connection.apigw_url),
+            catalog_ui_url,
         ),
     }

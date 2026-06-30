@@ -155,6 +155,11 @@ def catalogone_mcp_env_from_session() -> dict[str, str] | None:
         "C1_KEYCLOAK_REALM": conn.get("keycloak_realm") or derive_keycloak_realm(apigw_url),
         "C1_USERNAME": conn.get("username", ""),
         "C1_PASSWORD": conn.get("password", ""),
+        **(
+            {"C1_TOKEN": session.get("access_token")}
+            if session.get("access_token")
+            else {}
+        ),
     }
 
 

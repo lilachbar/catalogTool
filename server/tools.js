@@ -10,6 +10,7 @@ import {
 } from "./catalogone-mcp-client.js";
 import { modeAllowsWriteTools, READ_ONLY_CATALOGONE_TOOLS } from "./chat-mode.js";
 import { fetchCatalogoneEnvFromSession, callInternalApi } from "./mcp-session.js";
+import { formatPageContextNote, queueUiAction, storePageContext } from "./ui-control.js";
 
 function zodFromJsonSchema(inputSchema) {
   if (!inputSchema || inputSchema.type !== "object") {
@@ -159,6 +160,42 @@ export async function createChatTools(requestHeaders = {}, { mode = "agent" } = 
           },
         ],
       }),
+    }),
+    get_catalog_tool_page: tool({
+      description:
+        "Read the live Catalog Tool browser page: active view, workflow step, form values, and clickable controls.",
+      inputSchema: z.object({}),
+      execute: async (_args, { requestHeaders }) => {
+        const cookie = requestHeaders?.cookie || "";
+        const result = await callInternalApi("/api/ui-control/context", {
+          headers: cookie ? { Cookie: cookie } : {},
+        });
+        if (!result.ok) {
+          return { error: result.data?.error || "Could not read Catalog Tool page context." };
+        }
+        return result.data || {};
+      },
+    }),
+    catalog_tool_ui_action: tool({
+      description:
+        "Click or navigate the Catalog Tool web UI in the user's browser. Use actionId from get_catalog_tool_page (e.g. analyzeZipBtn for Validate).",
+      inputSchema: z.object({
+        type: z
+          .enum(["click", "set_view", "workflow_step", "set_field"])
+          .optional()
+          .describe("Action type. Defaults to click."),
+        actionId: z.string().optional().describe("Control id, e.g. analyzeZipBtn"),
+        label: z.string().optional().describe("Fallback label match, e.g. Validate"),
+        view: z.string().optional().describe("For set_view: push | dg-import | mcp-tools"),
+        workflow: z.enum(["push", "dg"]).optional(),
+        step: z.string().optional().describe("For workflow_step: upload | review | publish | import"),
+        fieldId: z.string().optional(),
+        value: z.string().optional(),
+      }),
+      execute: async (args, { requestHeaders }) => {
+        const cookie = requestHeaders?.cookie || "";
+        return queueUiAction(args, cookie);
+      },
     }),
   };
 }

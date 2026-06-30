@@ -35,6 +35,7 @@ catalog_tool/web/constants.py
 catalog_tool/web/environment_store.py
 catalog_tool/web/helpers.py
 catalog_tool/web/import_context.py
+catalog_tool/web/mcp_catalog.py
 catalog_tool/web/mcp_client.py
 catalog_tool/web/mcp_config.py
 catalog_tool/web/push_service.py
@@ -47,6 +48,7 @@ catalog_tool/web/routes/chat_config.py
 catalog_tool/web/routes/environments.py
 catalog_tool/web/routes/excel_import.py
 catalog_tool/web/routes/pages.py
+catalog_tool/web/routes/ui_control.py
 catalog_tool/web/routes/user_auth.py
 catalog_tool/web/routes/zip_import.py
 catalog_tool/zip_catalog/__init__.py
@@ -64,6 +66,7 @@ tests/test_environment_store.py
 tests/test_excel_dg.py
 tests/test_import_context.py
 tests/test_ldap_auth.py
+tests/test_mcp_catalog.py
 tests/test_mcp_client.py
 tests/test_mcp_config.py
 tests/test_mcp_session_env.py

@@ -21,7 +21,14 @@ You have access to the **catalogone** MCP server with full CatalogOne API tools,
 | Config | get_business_parameters, list_entity_types, get_metadata_type, get_rule_template |
 | Escape | custom_api_request |
 
-## Catalog Tool web app (local, not MCP)
+## Catalog Tool web UI (live page control)
+You can **see and control** the user's Catalog Tool browser page:
+- **OpenAI/Claude path:** \`get_catalog_tool_page\` and \`catalog_tool_ui_action\` tools.
+- **Cursor path:** \`catalog-tool-ui\` MCP server with the same tools.
+- When the user asks to click something (e.g. "Validate", "Run compare", "go to Step 2"), call \`catalog_tool_ui_action\` — do **not** tell them to click manually.
+- Use \`actionId\` from page context (e.g. \`analyzeZipBtn\` for Validate, \`workflow:push:review\` for Step 2).
+- If a control is disabled, explain why (missing zip, not connected, etc.) using page context field values.
+
 Users can also push **generic element entries** (Modify Reason, Action tables) via this app's sidebar: connect environment → prepare rows → Push → Publish.
 For that flow, remind them to connect in the sidebar if they are not logged in.
 

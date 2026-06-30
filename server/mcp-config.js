@@ -5,6 +5,9 @@
 import fs from "fs";
 import os from "os";
 import path from "path";
+import { fileURLToPath } from "url";
+
+const SERVER_ROOT = path.dirname(fileURLToPath(import.meta.url));
 
 const DEFAULT_MCP_PATH = path.join(os.homedir(), ".mcp-servers", "catalogone-mcp", "dist", "index.js");
 const DEFAULT_MCP_CONFIG = path.join(os.homedir(), ".cursor", "mcp.json");
@@ -94,14 +97,31 @@ function normalizeCursorMcpEntry(name, entry, envOverride = null) {
   };
 }
 
+/** Catalog Tool browser UI MCP (page context + clicks). */
+export function loadCatalogToolUiMcpServer(sessionCookie = "") {
+  return {
+    "catalog-tool-ui": {
+      type: "stdio",
+      command: "node",
+      args: [path.join(SERVER_ROOT, "catalog-tool-ui-mcp.js")],
+      env: {
+        ...process.env,
+        NODE_TLS_REJECT_UNAUTHORIZED: "0",
+        FLASK_BASE_URL: process.env.FLASK_BASE_URL || "http://127.0.0.1:8080",
+        CATALOG_TOOL_SESSION_COOKIE: sessionCookie || "",
+      },
+    },
+  };
+}
+
 /** All MCP servers from ~/.cursor/mcp.json (preferred) with catalogone env override. */
-export function loadAllCursorMcpServers({ envOverride = null } = {}) {
+export function loadAllCursorMcpServers({ envOverride = null, sessionCookie = null } = {}) {
   const configPath = process.env.CURSOR_MCP_CONFIG || DEFAULT_MCP_CONFIG;
   try {
     const raw = JSON.parse(fs.readFileSync(configPath, "utf8"));
     const servers = raw?.mcpServers;
     if (!servers || typeof servers !== "object") {
-      return loadCatalogoneMcpServers({ envOverride });
+      return loadCatalogoneMcpServers({ envOverride, sessionCookie });
     }
 
     const result = {};
@@ -113,20 +133,20 @@ export function loadAllCursorMcpServers({ envOverride = null } = {}) {
     }
 
     if (Object.keys(result).length > 0) {
-      return result;
+      return { ...result, ...loadCatalogToolUiMcpServer(sessionCookie) };
     }
   } catch {
     // Fall back to catalogone-only config below.
   }
 
-  return loadCatalogoneMcpServers({ envOverride });
+  return loadCatalogoneMcpServers({ envOverride, sessionCookie });
 }
 
 /** Cursor SDK mcpServers map. */
-export function loadCatalogoneMcpServers({ envOverride = null } = {}) {
+export function loadCatalogoneMcpServers({ envOverride = null, sessionCookie = null } = {}) {
   const config = loadCatalogoneMcpConfig();
   if (!config) {
-    return {};
+    return loadCatalogToolUiMcpServer(sessionCookie);
   }
 
   return {
@@ -136,5 +156,6 @@ export function loadCatalogoneMcpServers({ envOverride = null } = {}) {
       args: config.args,
       env: applyMcpEnv(config.env, envOverride),
     },
+    ...loadCatalogToolUiMcpServer(sessionCookie),
   };
 }

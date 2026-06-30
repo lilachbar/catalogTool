@@ -100,6 +100,65 @@ def store_zip_analyze_entities(session: dict[str, Any], entities: list[dict[str,
     session.modified = True
 
 
+def store_zip_entity_refs_from_path(session: dict[str, Any], zip_path: str) -> list[dict[str, Any]]:
+    """Parse a stored zip and persist entity refs for compare (no full validation)."""
+    from catalog_tool.zip_catalog.parser import parse_catalog_zip
+    from catalog_tool.zip_catalog.service import _entity_title
+
+    with open(zip_path, "rb") as handle:
+        parsed = parse_catalog_zip(handle.read())
+
+    entities = [
+        {
+            "entity_id": item.entity_id,
+            "entity_type": item.entity_type,
+            "title": _entity_title(item.data) or item.entity_id,
+        }
+        for item in parsed
+        if item.entity_id and item.entity_type
+    ]
+    store_zip_analyze_entities(session, entities)
+    return entities
+
+
+def resolve_compare_entities(
+    session: dict[str, Any],
+    entities: list[dict[str, Any]] | None,
+) -> list[dict[str, Any]]:
+    """Entity list for BR compare — request body, sidecar, or zip parse."""
+    if isinstance(entities, list) and entities:
+        normalized: list[dict[str, Any]] = []
+        for item in entities:
+            if not isinstance(item, dict):
+                continue
+            entity_id = (item.get("entity_id") or "").strip()
+            entity_type = (item.get("entity_type") or "").strip()
+            if not entity_id or not entity_type:
+                continue
+            normalized.append(
+                {
+                    "entity_id": entity_id,
+                    "entity_type": entity_type,
+                    "title": (item.get("title") or entity_id).strip(),
+                }
+            )
+        if normalized:
+            return normalized
+
+    sidecar = get_zip_analyze_entities(session)
+    if sidecar:
+        return sidecar
+
+    ctx = get_import_context(session)
+    if ctx and ctx.get("import_type") == "zip" and ctx.get("path"):
+        try:
+            return store_zip_entity_refs_from_path(session, ctx["path"])
+        except (OSError, ValueError):
+            return []
+
+    return []
+
+
 def get_zip_analyze_entities(session: dict[str, Any]) -> list[dict[str, Any]] | None:
     ctx = get_import_context(session)
     if not ctx:

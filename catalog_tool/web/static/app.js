@@ -73,6 +73,14 @@ const state = {
   zipImportError: null,
   importType: null,
   importFilename: null,
+  brCompareData: null,
+  brCompareTableUi: {
+    query: "",
+    status: "all",
+    entityType: "all",
+    sortKey: "status",
+    sortDir: "asc",
+  },
 };
 
 let pushWorkflowNav = null;
@@ -1116,11 +1124,12 @@ function updatePushWorkflowStepStates() {
   if (!els.pushStepNav) {
     return;
   }
-  const hasZip = Boolean(state.zipAnalyzeResult);
+  const hasZip = isZipFile(els.catalogZipInput?.files?.[0]);
+  const hasValidatedZip = Boolean(state.zipAnalyzeResult);
   const hasBr = Boolean(els.businessRequestId?.value.trim());
   const importDone = Boolean(state.zipImportCompleted);
   els.pushStepNav.querySelector('[data-workflow-step="upload"]')
-    ?.classList.toggle("is-complete", hasZip && !state.zipAnalyzeResult?.has_blocking_issues);
+    ?.classList.toggle("is-complete", hasValidatedZip && !state.zipAnalyzeResult?.has_blocking_issues);
   els.pushStepNav.querySelector('[data-workflow-step="review"]')
     ?.classList.toggle("is-complete", importDone || hasBr);
   els.pushStepNav.querySelector('[data-workflow-step="publish"]')
@@ -1411,6 +1420,11 @@ function resetMergeCompareUi() {
   state.zipImportCompleted = false;
   state.zipImportBusinessRequestId = null;
   state.zipImportError = null;
+  state.brCompareData = null;
+  resetBrCompareTableUi();
+  if (els.brCompareReport) {
+    els.brCompareReport.dataset.compareTableWired = "";
+  }
   if (els.brComparePanel) {
     els.brComparePanel.hidden = true;
   }
@@ -1481,6 +1495,325 @@ function resetMergeBelowStep1() {
   syncBusinessRequestFields();
 }
 
+const COMPARE_STATUS_ORDER = {
+  identical: 0,
+  changed: 1,
+  new_in_br: 2,
+  missing_in_br: 3,
+  errors: 4,
+};
+
+function resetBrCompareTableUi() {
+  state.brCompareTableUi = {
+    query: "",
+    status: "all",
+    entityType: "all",
+    sortKey: "status",
+    sortDir: "asc",
+  };
+}
+
+function getBrCompareEntityTypes(entities) {
+  return [...new Set(entities.map((entity) => entity.entity_type).filter(Boolean))].sort();
+}
+
+function entityMatchesCompareFilter(entity, ui) {
+  if (ui.status !== "all" && entity.status !== ui.status) {
+    return false;
+  }
+  if (ui.entityType !== "all" && entity.entity_type !== ui.entityType) {
+    return false;
+  }
+  const query = (ui.query || "").trim().toLowerCase();
+  if (!query) {
+    return true;
+  }
+  const haystack = [
+    entity.status,
+    compareStatusLabel(entity.status),
+    entity.entity_type,
+    entity.title,
+    entity.entity_id,
+    entity.summary,
+    entity.error,
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+  return haystack.includes(query);
+}
+
+function sortCompareEntities(entities, ui) {
+  const dir = ui.sortDir === "desc" ? -1 : 1;
+  const sorted = [...entities];
+  sorted.sort((left, right) => {
+    let cmp = 0;
+    if (ui.sortKey === "status") {
+      const leftOrder = COMPARE_STATUS_ORDER[left.status] ?? 99;
+      const rightOrder = COMPARE_STATUS_ORDER[right.status] ?? 99;
+      cmp = leftOrder - rightOrder;
+      if (cmp === 0) {
+        cmp = String(left.entity_type || "").localeCompare(String(right.entity_type || ""));
+      }
+    } else if (ui.sortKey === "type") {
+      cmp = String(left.entity_type || "").localeCompare(String(right.entity_type || ""));
+    } else if (ui.sortKey === "entity") {
+      cmp = String(left.title || left.entity_id || "").localeCompare(
+        String(right.title || right.entity_id || ""),
+        undefined,
+        { sensitivity: "base" },
+      );
+    } else {
+      cmp = String(left.summary || "").localeCompare(String(right.summary || ""), undefined, {
+        sensitivity: "base",
+      });
+    }
+    if (cmp === 0) {
+      cmp = String(left.entity_id || "").localeCompare(String(right.entity_id || ""));
+    }
+    return cmp * dir;
+  });
+  return sorted;
+}
+
+function filterAndSortCompareEntities(entities, ui = state.brCompareTableUi) {
+  return sortCompareEntities(
+    entities.filter((entity) => entityMatchesCompareFilter(entity, ui)),
+    ui,
+  );
+}
+
+function buildBrCompareEntityRow(entity) {
+  return `<tr>
+    <td><span class="analyze-badge is-${compareStatusTone(entity.status)}">${escapeHtml(compareStatusLabel(entity.status))}</span></td>
+    <td>${escapeHtml(entity.entity_type)}</td>
+    <td>${escapeHtml(entity.title || entity.entity_id)}</td>
+    <td>${escapeHtml(entity.summary || "")}${entity.error ? `<br><span class="analyze-step-note">${escapeHtml(entity.error)}</span>` : ""}</td>
+  </tr>`;
+}
+
+function buildBrCompareSortButton(sortKey, label, ui) {
+  const active = ui.sortKey === sortKey;
+  const dirLabel = active ? (ui.sortDir === "asc" ? "ascending" : "descending") : "none";
+  const arrow = active ? (ui.sortDir === "asc" ? "↑" : "↓") : "";
+  return `<button
+    type="button"
+    class="br-compare-sort-btn${active ? " is-active" : ""}"
+    data-compare-sort="${sortKey}"
+    aria-sort="${dirLabel}"
+  ><span>${escapeHtml(label)}</span>${arrow ? `<span class="br-compare-sort-arrow" aria-hidden="true">${arrow}</span>` : ""}</button>`;
+}
+
+function buildBrCompareEntitiesSection(body, ui = state.brCompareTableUi) {
+  const entities = body.entities || [];
+  if (!entities.length) {
+    return "";
+  }
+
+  const entityTypes = getBrCompareEntityTypes(entities);
+  const filtered = filterAndSortCompareEntities(entities, ui);
+  const statusOptions = [
+    ["all", "All statuses"],
+    ["identical", "Identical"],
+    ["changed", "Changed"],
+    ["new_in_br", "New in BR"],
+    ["missing_in_br", "Missing in BR"],
+    ["errors", "Errors"],
+  ];
+
+  return `<section class="br-compare-entities" id="brCompareEntitiesSection">
+    <div class="br-compare-toolbar">
+      <label class="br-compare-filter br-compare-filter-search">
+        <span class="visually-hidden">Filter entities</span>
+        <input
+          type="search"
+          id="brCompareFilterQuery"
+          class="br-compare-filter-input"
+          placeholder="Filter by name, type, status, summary…"
+          value="${escapeHtml(ui.query)}"
+          autocomplete="off"
+        >
+      </label>
+      <label class="br-compare-filter">
+        <span class="br-compare-filter-label">Status</span>
+        <select id="brCompareFilterStatus" class="br-compare-filter-select">
+          ${statusOptions.map(([value, label]) => `<option value="${value}"${ui.status === value ? " selected" : ""}>${escapeHtml(label)}</option>`).join("")}
+        </select>
+      </label>
+      <label class="br-compare-filter">
+        <span class="br-compare-filter-label">Type</span>
+        <select id="brCompareFilterType" class="br-compare-filter-select">
+          <option value="all"${ui.entityType === "all" ? " selected" : ""}>All types</option>
+          ${entityTypes.map((type) => `<option value="${escapeHtml(type)}"${ui.entityType === type ? " selected" : ""}>${escapeHtml(type)}</option>`).join("")}
+        </select>
+      </label>
+      <p id="brCompareFilterCount" class="br-compare-filter-count">Showing ${filtered.length} of ${entities.length}</p>
+    </div>
+    <h5 class="analyze-section-title">Entities (<span id="brCompareEntityCount">${filtered.length}</span>)</h5>
+    <div class="analyze-table-wrap br-compare-table-wrap">
+      <table class="analyze-table br-compare-table">
+        <thead>
+          <tr>
+            <th>${buildBrCompareSortButton("status", "Status", ui)}</th>
+            <th>${buildBrCompareSortButton("type", "Type", ui)}</th>
+            <th>${buildBrCompareSortButton("entity", "Entity", ui)}</th>
+            <th>${buildBrCompareSortButton("summary", "Summary", ui)}</th>
+          </tr>
+        </thead>
+        <tbody id="brCompareEntitiesTbody">
+          ${filtered.length
+    ? filtered.map((entity) => buildBrCompareEntityRow(entity)).join("")
+    : `<tr><td colspan="4" class="br-compare-empty-row">No entities match the current filters.</td></tr>`}
+        </tbody>
+      </table>
+    </div>
+  </section>
+  <div id="brCompareChangedDetails">${buildBrCompareChangedDetails(filtered)}</div>`;
+}
+
+function buildBrCompareChangedDetails(entities) {
+  const changedEntities = entities.filter(
+    (entity) => entity.field_changes?.length || entity.audit_versions?.length > 1,
+  );
+  if (!changedEntities.length) {
+    return "";
+  }
+
+  let html = "";
+  for (const entity of changedEntities.slice(0, 6)) {
+    html += `<section>
+      <h5 class="analyze-section-title">${escapeHtml(entity.title || entity.entity_id)}</h5>`;
+    if (entity.audit_versions?.length) {
+      html += `<ul class="analyze-meta-list">
+        ${entity.audit_versions.slice(0, 4).map((version) => `
+          <li><strong>${escapeHtml(version.published_at || "—")}</strong> · ${escapeHtml(version.operation || "")} · ${escapeHtml(version.business_request_name || version.id || "")}</li>
+        `).join("")}
+      </ul>`;
+    }
+    if (entity.field_changes?.length) {
+      html += `<div class="analyze-table-wrap">
+        <table class="analyze-table">
+          <thead><tr><th>Change</th><th>Field</th><th>Production</th><th>BR (local)</th></tr></thead>
+          <tbody>
+            ${entity.field_changes.slice(0, 12).map((change) => `<tr>
+              <td>${escapeHtml(change.change)}</td>
+              <td>${escapeHtml(change.path)}</td>
+              <td>${escapeHtml(change.baseline ?? "—")}</td>
+              <td>${escapeHtml(change.current ?? "—")}</td>
+            </tr>`).join("")}
+          </tbody>
+        </table>
+      </div>`;
+      if (entity.field_changes.length > 12) {
+        html += `<p class="analyze-step-note">…and ${entity.field_changes.length - 12} more field changes (see raw JSON).</p>`;
+      }
+    }
+    html += `</section>`;
+  }
+  if (changedEntities.length > 6) {
+    html += `<p class="analyze-step-note">Showing details for 6 of ${changedEntities.length} changed entities in the filtered set.</p>`;
+  }
+  return html;
+}
+
+function updateBrCompareSortButtons(ui = state.brCompareTableUi) {
+  if (!els.brCompareReport) {
+    return;
+  }
+  els.brCompareReport.querySelectorAll("[data-compare-sort]").forEach((button) => {
+    const sortKey = button.dataset.compareSort;
+    const active = sortKey === ui.sortKey;
+    button.classList.toggle("is-active", active);
+    const dirLabel = active ? (ui.sortDir === "asc" ? "ascending" : "descending") : "none";
+    button.setAttribute("aria-sort", dirLabel);
+    let arrow = button.querySelector(".br-compare-sort-arrow");
+    if (active) {
+      if (!arrow) {
+        arrow = document.createElement("span");
+        arrow.className = "br-compare-sort-arrow";
+        arrow.setAttribute("aria-hidden", "true");
+        button.appendChild(arrow);
+      }
+      arrow.textContent = ui.sortDir === "asc" ? "↑" : "↓";
+    } else if (arrow) {
+      arrow.remove();
+    }
+  });
+}
+
+function refreshBrCompareEntitiesTable() {
+  if (!state.brCompareData || !els.brCompareReport) {
+    return;
+  }
+
+  const entities = state.brCompareData.entities || [];
+  const filtered = filterAndSortCompareEntities(entities);
+  const tbody = els.brCompareReport.querySelector("#brCompareEntitiesTbody");
+  if (tbody) {
+    tbody.innerHTML = filtered.length
+      ? filtered.map((entity) => buildBrCompareEntityRow(entity)).join("")
+      : `<tr><td colspan="4" class="br-compare-empty-row">No entities match the current filters.</td></tr>`;
+  }
+
+  const countEl = els.brCompareReport.querySelector("#brCompareFilterCount");
+  if (countEl) {
+    countEl.textContent = `Showing ${filtered.length} of ${entities.length}`;
+  }
+  const entityCountEl = els.brCompareReport.querySelector("#brCompareEntityCount");
+  if (entityCountEl) {
+    entityCountEl.textContent = String(filtered.length);
+  }
+
+  updateBrCompareSortButtons();
+
+  const details = els.brCompareReport.querySelector("#brCompareChangedDetails");
+  if (details) {
+    details.innerHTML = buildBrCompareChangedDetails(filtered);
+  }
+}
+
+function wireBrCompareTableInteractions() {
+  if (!els.brCompareReport || els.brCompareReport.dataset.compareTableWired === "1") {
+    return;
+  }
+  els.brCompareReport.dataset.compareTableWired = "1";
+
+  els.brCompareReport.addEventListener("input", (event) => {
+    if (event.target.id !== "brCompareFilterQuery") {
+      return;
+    }
+    state.brCompareTableUi.query = event.target.value;
+    refreshBrCompareEntitiesTable();
+  });
+
+  els.brCompareReport.addEventListener("change", (event) => {
+    if (event.target.id === "brCompareFilterStatus") {
+      state.brCompareTableUi.status = event.target.value;
+      refreshBrCompareEntitiesTable();
+      return;
+    }
+    if (event.target.id === "brCompareFilterType") {
+      state.brCompareTableUi.entityType = event.target.value;
+      refreshBrCompareEntitiesTable();
+    }
+  });
+
+  els.brCompareReport.addEventListener("click", (event) => {
+    const sortBtn = event.target.closest("[data-compare-sort]");
+    if (!sortBtn) {
+      return;
+    }
+    const sortKey = sortBtn.dataset.compareSort;
+    if (state.brCompareTableUi.sortKey === sortKey) {
+      state.brCompareTableUi.sortDir = state.brCompareTableUi.sortDir === "asc" ? "desc" : "asc";
+    } else {
+      state.brCompareTableUi.sortKey = sortKey;
+      state.brCompareTableUi.sortDir = "asc";
+    }
+    refreshBrCompareEntitiesTable();
+  });
+}
+
 function compareStatusTone(status) {
   if (status === "identical") {
     return "ok";
@@ -1522,6 +1855,10 @@ function buildBrComparePanel(body) {
     <span class="analyze-badge is-muted">BR ${escapeHtml(body.business_request_id || "")}</span>
   </div>`;
 
+  if (summary.truncated && summary.total_entity_count > summary.entity_count) {
+    html += `<p class="analyze-step-note">Compared the first ${summary.entity_count} of ${summary.total_entity_count} entities for responsiveness. Re-run on a smaller zip or filter entities for a full compare.</p>`;
+  }
+
   if (body.compare_type !== "audit") {
     html += `<p class="analyze-step-note">Production is what is live in the environment today. Local is what you imported into this business request.</p>`;
   }
@@ -1531,56 +1868,7 @@ function buildBrComparePanel(body) {
     return html;
   }
 
-  html += `<section>
-    <h5 class="analyze-section-title">Entities (${entities.length})</h5>
-    <div class="analyze-table-wrap">
-      <table class="analyze-table">
-        <thead><tr><th>Status</th><th>Type</th><th>Entity</th><th>Summary</th></tr></thead>
-        <tbody>
-          ${entities.map((entity) => `<tr>
-            <td><span class="analyze-badge is-${compareStatusTone(entity.status)}">${escapeHtml(compareStatusLabel(entity.status))}</span></td>
-            <td>${escapeHtml(entity.entity_type)}</td>
-            <td>${escapeHtml(entity.title || entity.entity_id)}</td>
-            <td>${escapeHtml(entity.summary || "")}${entity.error ? `<br><span class="analyze-step-note">${escapeHtml(entity.error)}</span>` : ""}</td>
-          </tr>`).join("")}
-        </tbody>
-      </table>
-    </div>
-  </section>`;
-
-  const changedEntities = entities.filter(
-    (entity) => entity.field_changes?.length || entity.audit_versions?.length > 1,
-  );
-  for (const entity of changedEntities.slice(0, 6)) {
-    html += `<section>
-      <h5 class="analyze-section-title">${escapeHtml(entity.title || entity.entity_id)}</h5>`;
-    if (entity.audit_versions?.length) {
-      html += `<ul class="analyze-meta-list">
-        ${entity.audit_versions.slice(0, 4).map((version) => `
-          <li><strong>${escapeHtml(version.published_at || "—")}</strong> · ${escapeHtml(version.operation || "")} · ${escapeHtml(version.business_request_name || version.id || "")}</li>
-        `).join("")}
-      </ul>`;
-    }
-    if (entity.field_changes?.length) {
-      html += `<div class="analyze-table-wrap">
-        <table class="analyze-table">
-          <thead><tr><th>Change</th><th>Field</th><th>Production</th><th>BR (local)</th></tr></thead>
-          <tbody>
-            ${entity.field_changes.slice(0, 12).map((change) => `<tr>
-              <td>${escapeHtml(change.change)}</td>
-              <td>${escapeHtml(change.path)}</td>
-              <td>${escapeHtml(change.baseline ?? "—")}</td>
-              <td>${escapeHtml(change.current ?? "—")}</td>
-            </tr>`).join("")}
-          </tbody>
-        </table>
-      </div>`;
-      if (entity.field_changes.length > 12) {
-        html += `<p class="analyze-step-note">…and ${entity.field_changes.length - 12} more field changes (see raw JSON).</p>`;
-      }
-    }
-    html += `</section>`;
-  }
+  html += buildBrCompareEntitiesSection(body);
 
   return html;
 }
@@ -1595,6 +1883,12 @@ function showBrCompareReport(body, { isError = false } = {}) {
       ? "Compare failed"
       : `Compare with ${compareLabel}`;
   }
+  if (!isError && body?.entities?.length) {
+    state.brCompareData = body;
+    resetBrCompareTableUi();
+  } else {
+    state.brCompareData = null;
+  }
   wireAnalyzeReport({
     reportEl: els.brComparePanel,
     panelEl: els.brCompareReport,
@@ -1608,6 +1902,9 @@ function showBrCompareReport(body, { isError = false } = {}) {
     isError,
     defaultCollapsed: false,
   });
+  if (!isError && body?.entities?.length) {
+    wireBrCompareTableInteractions();
+  }
   if (els.brCompareSection) {
     els.brCompareSection.hidden = false;
   }
@@ -1618,19 +1915,6 @@ async function runBrCompare(compareType, businessRequestId) {
   const brId = businessRequestId || getCompareBusinessRequestId();
   if (!brId) {
     showBrCompareReport("No business request ID available for compare.", { isError: true });
-    return;
-  }
-
-  const entities = (state.zipAnalyzeResult?.entities || [])
-    .filter((entity) => entity.entity_id && entity.entity_type)
-    .map((entity) => ({
-      entity_id: entity.entity_id,
-      entity_type: entity.entity_type,
-      title: entity.title,
-    }));
-
-  if (!entities.length) {
-    showBrCompareReport("No analyzed entities available for compare.", { isError: true });
     return;
   }
 
@@ -1647,15 +1931,24 @@ async function runBrCompare(compareType, businessRequestId) {
   if (els.brCompareReport) {
     els.brCompareReport.innerHTML = `<p class="analyze-step-note">Running ${compareType} compare…</p>`;
   }
+  if (els.brCompareProductionBtn) {
+    els.brCompareProductionBtn.disabled = true;
+    els.brCompareProductionBtn.classList.add("is-busy");
+  }
 
   try {
     const result = await api(`/api/business-request/${encodeURIComponent(brId)}/compare`, {
       method: "POST",
-      body: JSON.stringify({ compare_type: compareType, entities }),
+      body: JSON.stringify({ compare_type: compareType }),
     });
     showBrCompareReport(result);
   } catch (error) {
     showBrCompareReport(error.message, { isError: true });
+  } finally {
+    if (els.brCompareProductionBtn) {
+      els.brCompareProductionBtn.classList.remove("is-busy");
+    }
+    updateCompareUi();
   }
 }
 
@@ -2277,9 +2570,7 @@ function updateMergeBrUi() {
   const hasBr = !!els.businessRequestId?.value.trim();
   const hasName = !!els.businessRequestName?.value.trim();
   const hasZip = isZipFile(els.catalogZipInput?.files?.[0]);
-  const hasAnalyzedZip = state.importType === "zip" && Boolean(state.zipAnalyzeResult);
   const connected = isCatalogOneConnected();
-  const blocking = state.zipAnalyzeResult?.has_blocking_issues;
 
   if (els.clearBrBtn) {
     els.clearBrBtn.hidden = !hasBr;
@@ -2289,14 +2580,13 @@ function updateMergeBrUi() {
   }
   if (els.createBrBtn) {
     const busy = els.createBrBtn.classList.contains("is-busy");
-    els.createBrBtn.disabled = busy || hasBr || !connected || !hasAnalyzedZip || !hasName || blocking;
+    els.createBrBtn.disabled = busy || hasBr || !connected || !hasZip || !hasName;
     const reasons = [];
     if (hasBr) reasons.push("Clear the business request ID to create another");
     else if (!connected) reasons.push("Connect to CatalogOne first");
-    else if (!hasZip || !hasAnalyzedZip) reasons.push("Validate a zip in Step 1 first");
+    else if (!hasZip) reasons.push("Choose a zip file in Step 1 first");
     else if (!hasName) reasons.push("Enter a business request name");
-    else if (blocking) reasons.push("Resolve blocking validation issues");
-    els.createBrBtn.title = reasons.join(" · ") || "Create a business request and import the validated zip";
+    els.createBrBtn.title = reasons.join(" · ") || "Create a business request and import the zip";
   }
   updateCompareUi();
   updatePushWorkflowStepStates();
@@ -2784,6 +3074,7 @@ function initZipDropzone() {
       return;
     }
     updateZipDropzoneLabel();
+    updatePushWorkflowStepStates();
   });
 
   ["dragenter", "dragover"].forEach((eventName) => {
@@ -3007,16 +3298,13 @@ els.analyzeZipBtn?.addEventListener("click", async () => {
 
 els.createBrBtn?.addEventListener("click", async () => {
   const name = els.businessRequestName.value.trim();
+  const zipFile = els.catalogZipInput?.files?.[0];
   if (!state.loggedIn) {
     showBrCreateResult("Connect to CatalogOne first.", { isError: true });
     return;
   }
-  if (!state.zipAnalyzeResult || state.importType !== "zip") {
-    showBrCreateResult("Validate a zip in Step 1 first.", { isError: true });
-    return;
-  }
-  if (state.zipAnalyzeResult?.has_blocking_issues) {
-    showBrCreateResult("Resolve blocking validation issues first.", { isError: true });
+  if (!isZipFile(zipFile)) {
+    showBrCreateResult("Choose a zip file in Step 1 first.", { isError: true });
     return;
   }
   if (!name) {
@@ -3042,10 +3330,7 @@ els.createBrBtn?.addEventListener("click", async () => {
     const formData = new FormData();
     formData.append("name", name);
     formData.append("import_type", "zip");
-    const zipFile = els.catalogZipInput?.files?.[0];
-    if (zipFile) {
-      formData.append("zip_file", zipFile);
-    }
+    formData.append("zip_file", zipFile);
 
     const result = await apiForm("/api/business-request", formData);
 
@@ -3407,6 +3692,91 @@ window.catalogTool.updateAgenticUi = updateAgenticUi;
 window.catalogTool.openAgenticSettings = openAgenticSettingsModal;
 window.catalogTool.refreshEnvironments = refreshEnvironmentsFromServer;
 window.catalogTool.isEnvironmentConnected = () => Boolean(state.loggedIn && state.connectedEnvironmentId);
+window.catalogTool.getActiveView = () => state.activeView;
+window.catalogTool.setActiveView = setActiveView;
+window.catalogTool.getEnvironmentLabel = getConnectedEnvironmentLabel;
 window.catalogTool.notifyEnvironmentsChanged = () => {
   window.dispatchEvent(new CustomEvent("catalogTool:environments-changed"));
 };
+
+function initUiControlBridge() {
+  let pollTimer = null;
+  let contextTimer = null;
+
+  async function syncPageContext() {
+    if (typeof window.catalogTool?.getPageContext !== "function") {
+      return;
+    }
+    try {
+      await fetch("/api/ui-control/context", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(window.catalogTool.getPageContext()),
+      });
+    } catch {
+      // Best-effort sync for popup chat and Cursor MCP bridge.
+    }
+  }
+
+  async function pollPendingAction() {
+    try {
+      const response = await fetch("/api/ui-control/pending");
+      if (!response.ok) {
+        return;
+      }
+      const data = await response.json();
+      if (!data?.id || !data?.action) {
+        return;
+      }
+      const result = typeof window.catalogTool?.executePageAction === "function"
+        ? window.catalogTool.executePageAction(data.action)
+        : { ok: false, error: "UI executor unavailable in this window." };
+      await fetch("/api/ui-control/complete", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: data.id, result }),
+      });
+    } catch {
+      // Ignore transient network errors while polling.
+    }
+  }
+
+  function setActionPolling(active) {
+    if (active && !pollTimer) {
+      pollPendingAction();
+      pollTimer = window.setInterval(pollPendingAction, 250);
+    } else if (!active && pollTimer) {
+      window.clearInterval(pollTimer);
+      pollTimer = null;
+    }
+  }
+
+  syncPageContext();
+  contextTimer = window.setInterval(syncPageContext, 2000);
+
+  window.addEventListener("catalogTool:chat-busy", (event) => {
+    setActionPolling(Boolean(event.detail?.busy));
+  });
+
+  try {
+    const chatChannel = new BroadcastChannel("catalog-tool-chat");
+    chatChannel.onmessage = (event) => {
+      if (event.data?.type === "chat-busy") {
+        setActionPolling(Boolean(event.data.busy));
+      }
+    };
+  } catch {
+    // BroadcastChannel unavailable — docked chat still uses catalogTool:chat-busy.
+  }
+
+  window.addEventListener("beforeunload", () => {
+    if (pollTimer) {
+      window.clearInterval(pollTimer);
+    }
+    if (contextTimer) {
+      window.clearInterval(contextTimer);
+    }
+  });
+}
+
+initUiControlBridge();

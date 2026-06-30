@@ -144,19 +144,15 @@ def build_mcp_plan(
             {
                 "step": step_no,
                 "phase": "import",
-                "tool": "catalog_tool_api",
+                "tool": "create_entity",
                 "arguments": {
-                    "method": "POST",
-                    "path": "/api/push",
-                    "body": {
-                        "table_key": "modify_reason",
-                        "create_business_request": False,
-                        "entries": "<see planned_entries.generic_element_entry>",
-                    },
+                    "entityType": "genericElementEntry",
+                    "businessRequestId": "<business_request_id>",
+                    "body": "<see planned_entries.generic_element_entry>",
                 },
                 "note": (
                     f"Post {modify_reason_count} Modify Reason and {action_count} Action "
-                    "genericElementEntry payloads (preview JSON below). Uses connected session."
+                    "genericElementEntry payloads via MCP create_entity (preview JSON below)."
                 ),
             },
             {

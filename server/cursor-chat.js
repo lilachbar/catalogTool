@@ -19,6 +19,7 @@ import {
 } from "./chat-history.js";
 import { loadAllCursorMcpServers } from "./mcp-config.js";
 import { fetchCatalogoneEnvFromSession } from "./mcp-session.js";
+import { formatPageContextNote } from "./ui-control.js";
 
 const PROJECT_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const LOCAL_AGENT_STORE_DIR = path.join(PROJECT_ROOT, ".catalog-tool", "agent-store");
@@ -87,7 +88,7 @@ function extractLatestUserText(messages) {
   return "";
 }
 
-function buildPrompt(messages, latestText, sessionEnv, mode = "agent", latestAttachments = []) {
+function buildPrompt(messages, latestText, sessionEnv, mode = "agent", latestAttachments = [], pageContext = null) {
   const userTurnCount = messages.filter((message) => message.role === "user").length;
   const connectedNote = sessionEnv?.environmentLabel
     ? `The user is already connected to CatalogOne environment "${sessionEnv.environmentLabel}" via the Catalog Tool sidebar. Use catalogone MCP tools with the pre-configured credentials — do NOT call login.`
@@ -117,6 +118,10 @@ function buildPrompt(messages, latestText, sessionEnv, mode = "agent", latestAtt
     sections.push(modeBehavior[normalizedMode]);
   }
   sections.push(connectedNote);
+  const pageNote = formatPageContextNote(pageContext);
+  if (pageNote) {
+    sections.push(pageNote);
+  }
   if (historyNote) {
     sections.push(historyNote);
   }
@@ -167,7 +172,7 @@ function resolveSdkMode(mode) {
 }
 
 export async function handleCursorChat(req, res, messages, modelId = null, options = {}) {
-  const { mode: requestedMode = "agent", attachments = [] } = options;
+  const { mode: requestedMode = "agent", attachments = [], pageContext = null } = options;
   const mode = normalizeChatMode(requestedMode);
   const resolvedModel = modelId || process.env.CURSOR_MODEL || "composer-2.5";
   const latestText = extractLatestUserText(messages);
@@ -181,6 +186,7 @@ export async function handleCursorChat(req, res, messages, modelId = null, optio
   const sessionEnv = await fetchCatalogoneEnvFromSession(cookie);
   const mcpServers = loadAllCursorMcpServers({
     envOverride: sessionEnv?.catalogoneEnv || null,
+    sessionCookie: cookie,
   });
 
   if (!mcpServers.catalogone) {
@@ -210,6 +216,7 @@ export async function handleCursorChat(req, res, messages, modelId = null, optio
           sessionEnv,
           mode,
           safeAttachments,
+          pageContext,
         );
         const latestImages = extractLatestTurnImages(messages, safeAttachments);
         const userMessage = buildUserMessage(prompt, [], latestImages);

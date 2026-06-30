@@ -10,13 +10,14 @@ from catalog_tool.settings import (
     CATALOG_PR_DIR,
 )
 from catalog_tool.zip_catalog.service import analyze_catalog_zip
-from catalog_tool.web.helpers import client_from_session
+from catalog_tool.web.helpers import catalogone_mcp_env_from_session
 from catalog_tool.web.import_context import (
-    clear_import_context,
+    get_import_context,
     load_import_bytes,
     store_import_file,
     store_zip_analyze_entities,
 )
+from catalog_tool.web.mcp_client import McpToolError, import_catalog_data_via_mcp
 
 
 def register(app: Flask) -> None:
@@ -80,7 +81,7 @@ def register(app: Flask) -> None:
 
     @app.post("/api/zip/import")
     def api_zip_import():
-        """Import an analyzed CatalogOne export zip into a business request."""
+        """Import an analyzed CatalogOne export zip into a business request via MCP."""
         if not session.get("logged_in"):
             return jsonify({"error": "Log in first"}), 401
 
@@ -88,6 +89,10 @@ def register(app: Flask) -> None:
         business_request_id = (request.form.get("business_request_id") or "").strip()
         if not business_request_id:
             return jsonify({"error": "business_request_id is required"}), 400
+
+        catalogone_env = catalogone_mcp_env_from_session()
+        if not catalogone_env:
+            return jsonify({"error": "Connect to CatalogOne first"}), 401
 
         if upload and upload.filename:
             zip_bytes = upload.read()
@@ -105,17 +110,24 @@ def register(app: Flask) -> None:
             file_name = upload.filename
         else:
             try:
-                file_name, zip_bytes = load_import_bytes(session, expected_type="zip")
+                file_name, _zip_bytes = load_import_bytes(session, expected_type="zip")
             except ValueError as exc:
                 return jsonify({"error": str(exc)}), 400
 
+        import_ctx = get_import_context(session)
+        if not import_ctx:
+            return jsonify({"error": "No zip file found — upload in Step 1 first"}), 400
+        zip_path = import_ctx["path"]
+
         try:
-            client = client_from_session()
-            import_result = client.import_catalog_zip(
-                zip_bytes,
-                business_request_id,
+            import_result = import_catalog_data_via_mcp(
+                business_request_id=business_request_id,
+                zip_path=zip_path,
                 file_name=file_name,
+                catalogone_env=catalogone_env,
             )
+        except McpToolError as exc:
+            return jsonify({"error": str(exc), "mcp": exc.payload}), 502
         except (RuntimeError, ValueError) as exc:
             return jsonify({"error": str(exc)}), 400
         except Exception as exc:
@@ -126,6 +138,7 @@ def register(app: Flask) -> None:
                 "status": "ok",
                 "business_request_id": business_request_id,
                 "zip_name": file_name,
+                "import_source": "mcp",
                 "import": import_result,
             }
         )
