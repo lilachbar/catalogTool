@@ -65,7 +65,7 @@ export const CHAT_PROVIDER_OPTIONS = [
     apiKeyEnv: "OPENAI_API_KEY",
     modelEnv: "OPENAI_MODEL",
     defaultModel: "gpt-4o-mini",
-    keyHint: "sk-… from platform.openai.com/api-keys",
+    keyHint: "sk-… or sk-proj-… from platform.openai.com/api-keys",
     keyPrefix: "sk-",
   },
   {
@@ -78,6 +78,44 @@ export const CHAT_PROVIDER_OPTIONS = [
     keyPrefix: "sk-ant-",
   },
 ];
+
+/** Strip BOM, quotes, and whitespace from pasted API keys. */
+export function normalizeApiKey(value) {
+  return String(value ?? "")
+    .replace(/^\uFEFF/, "")
+    .trim()
+    .replace(/^["']|["']$/g, "")
+    .replace(/\s+/g, "");
+}
+
+export function isValidCursorKeyFormat(key) {
+  const normalized = normalizeApiKey(key);
+  return normalized.startsWith("crsr_") && normalized.length > 10;
+}
+
+export function isValidOpenAiKeyFormat(key) {
+  const normalized = normalizeApiKey(key);
+  // Accept legacy sk-… keys and project keys such as sk-proj-… / sk-live-…
+  return /^sk-(?!ant-)[A-Za-z0-9_-]{20,}$/.test(normalized);
+}
+
+export function isValidAnthropicKeyFormat(key) {
+  const normalized = normalizeApiKey(key);
+  return normalized.startsWith("sk-ant-") && normalized.length > 16;
+}
+
+export function isValidProviderKeyFormat(providerId, key) {
+  if (providerId === "cursor") {
+    return isValidCursorKeyFormat(key);
+  }
+  if (providerId === "openai") {
+    return isValidOpenAiKeyFormat(key);
+  }
+  if (providerId === "claude") {
+    return isValidAnthropicKeyFormat(key);
+  }
+  return false;
+}
 
 export function resolveChatProvider() {
   const explicit = (process.env.CHAT_PROVIDER || "").trim().toLowerCase();
@@ -107,13 +145,13 @@ export function resolveChatProvider() {
 
 function readApiKey(provider) {
   if (provider === "cursor") {
-    return (process.env.CURSOR_API_KEY || "").trim();
+    return normalizeApiKey(process.env.CURSOR_API_KEY);
   }
   if (provider === "openai") {
-    return (process.env.OPENAI_API_KEY || "").trim();
+    return normalizeApiKey(process.env.OPENAI_API_KEY);
   }
   if (provider === "claude") {
-    return (process.env.ANTHROPIC_API_KEY || "").trim();
+    return normalizeApiKey(process.env.ANTHROPIC_API_KEY);
   }
   return "";
 }
@@ -148,7 +186,7 @@ export function getProviderStatus() {
       provider: "cursor",
       model: process.env.CURSOR_MODEL || "composer-2.5",
       hasApiKey: Boolean(apiKey),
-      keyFormatValid: apiKey.startsWith("crsr_"),
+      keyFormatValid: isValidCursorKeyFormat(apiKey),
     };
   }
 
@@ -158,7 +196,7 @@ export function getProviderStatus() {
       provider: "openai",
       model: process.env.OPENAI_MODEL || "gpt-4o-mini",
       hasApiKey: Boolean(apiKey),
-      keyFormatValid: apiKey.startsWith("sk-"),
+      keyFormatValid: isValidOpenAiKeyFormat(apiKey),
     };
   }
 
@@ -168,7 +206,7 @@ export function getProviderStatus() {
       provider: "claude",
       model: process.env.ANTHROPIC_MODEL || "claude-sonnet-4-20250514",
       hasApiKey: Boolean(apiKey),
-      keyFormatValid: apiKey.startsWith("sk-ant-"),
+      keyFormatValid: isValidAnthropicKeyFormat(apiKey),
     };
   }
 
@@ -217,7 +255,7 @@ export async function validateChatProviderKey({ remote = false } = {}) {
     };
   }
 
-  if (provider === "cursor" && !apiKey.startsWith("crsr_")) {
+  if (provider === "cursor" && !isValidCursorKeyFormat(apiKey)) {
     return {
       ok: false,
       provider,
@@ -227,7 +265,7 @@ export async function validateChatProviderKey({ remote = false } = {}) {
     };
   }
 
-  if (provider === "openai" && !apiKey.startsWith("sk-")) {
+  if (provider === "openai" && !isValidOpenAiKeyFormat(apiKey)) {
     return {
       ok: false,
       provider,
@@ -237,7 +275,7 @@ export async function validateChatProviderKey({ remote = false } = {}) {
     };
   }
 
-  if (provider === "claude" && !apiKey.startsWith("sk-ant-")) {
+  if (provider === "claude" && !isValidAnthropicKeyFormat(apiKey)) {
     return {
       ok: false,
       provider,
@@ -371,15 +409,15 @@ export async function validateProviderCredentials(providerId, apiKey, { remote =
     return { ok: false, reason: "invalid_provider", message: "Unknown AI provider." };
   }
 
-  const trimmedKey = (apiKey || "").trim();
+  const trimmedKey = normalizeApiKey(apiKey);
   if (!trimmedKey) {
     return { ok: false, reason: "missing", message: `${option.apiKeyEnv} is required.` };
   }
-  if (!trimmedKey.startsWith(option.keyPrefix)) {
+  if (!isValidProviderKeyFormat(providerId, trimmedKey)) {
     return {
       ok: false,
       reason: "invalid_format",
-      message: `${option.apiKeyEnv} has an invalid format (expected ${option.keyPrefix}…).`,
+      message: `${option.apiKeyEnv} has an invalid format (expected ${option.keyHint}).`,
     };
   }
 

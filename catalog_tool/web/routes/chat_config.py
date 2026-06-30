@@ -23,22 +23,51 @@ from catalog_tool.settings import CHAT_SERVER_URL, PROJECT_ROOT
 from catalog_tool.web.chat_proxy import proxy_to_chat_server
 
 
-def _provider_env_updates(provider: str, api_key: str, model: str | None) -> dict[str, str]:
-    provider = provider.strip().lower()
-    updates: dict[str, str] = {"CHAT_PROVIDER": provider}
+def _looks_like_masked_key(value: str) -> bool:
+    return "…" in value or "•" in value
 
-    if provider == "cursor":
-        updates["CURSOR_API_KEY"] = api_key.strip()
-        if model:
+
+def resolve_chat_api_key(provider: str, api_key: str | None = None) -> str:
+    trimmed = _normalize_api_key(api_key or "")
+    if _looks_like_masked_key(trimmed):
+        trimmed = ""
+    if trimmed:
+        return trimmed
+    return existing_api_key_for_provider(provider)
+
+
+def _normalize_api_key(value: str) -> str:
+    cleaned = (value or "").strip().lstrip("\ufeff").strip().strip('"').strip("'")
+    return "".join(cleaned.split())
+
+
+def _provider_env_updates(
+    provider: str,
+    api_key: str,
+    model: str | None,
+    env_values: dict[str, str] | None = None,
+) -> dict[str, str]:
+    provider = provider.strip().lower()
+    env_values = env_values if env_values is not None else read_env_file()
+    normalized = normalize_chat_provider(provider) or provider
+    updates: dict[str, str] = {"CHAT_PROVIDER": normalized}
+    resolved_key = _normalize_api_key(api_key)
+
+    if normalized == "cursor":
+        if resolved_key != existing_api_key_for_provider("cursor", env_values):
+            updates["CURSOR_API_KEY"] = resolved_key
+        if model and model.strip() != (env_values.get("CURSOR_MODEL") or "").strip():
             updates["CURSOR_MODEL"] = model.strip()
-    elif provider == "openai":
-        updates["OPENAI_API_KEY"] = api_key.strip()
-        if model:
+    elif normalized == "openai":
+        if resolved_key != existing_api_key_for_provider("openai", env_values):
+            updates["OPENAI_API_KEY"] = resolved_key
+        if model and model.strip() != (env_values.get("OPENAI_MODEL") or "").strip():
             updates["OPENAI_MODEL"] = model.strip()
-    elif provider in {"claude", "anthropic"}:
+    elif normalized in {"claude", "anthropic"}:
         updates["CHAT_PROVIDER"] = "claude"
-        updates["ANTHROPIC_API_KEY"] = api_key.strip()
-        if model:
+        if resolved_key != existing_api_key_for_provider("claude", env_values):
+            updates["ANTHROPIC_API_KEY"] = resolved_key
+        if model and model.strip() != (env_values.get("ANTHROPIC_MODEL") or "").strip():
             updates["ANTHROPIC_MODEL"] = model.strip()
     else:
         raise ValueError(f"Unknown provider: {provider}")
@@ -70,10 +99,12 @@ def needs_chat_reconfigure(
     current_provider = normalize_chat_provider(env_values.get("CHAT_PROVIDER"))
     if target_provider != current_provider:
         return True
-    if api_key and api_key.strip() != existing_api_key_for_provider(
-        target_provider or "", env_values
-    ):
-        return True
+    if api_key:
+        submitted = resolve_chat_api_key(target_provider or "", api_key)
+        if submitted and submitted != existing_api_key_for_provider(
+            target_provider or "", env_values
+        ):
+            return True
     if model:
         model_var = PROVIDER_MODEL_VARS.get(target_provider or "")
         if model_var and model.strip() != (env_values.get(model_var) or "").strip():
@@ -96,16 +127,13 @@ def apply_chat_login_config(
         return {"error": f"API key is required for {normalized}."}, 400
 
     if not needs_chat_reconfigure(normalized, api_key, model):
+        env_values = read_env_file()
+        current_provider = normalize_chat_provider(env_values.get("CHAT_PROVIDER"))
+        if normalized != current_provider:
+            return configure_chat_provider(normalized, resolved_key, model)
         return None, None
 
     return configure_chat_provider(normalized, resolved_key, model)
-
-
-def resolve_chat_api_key(provider: str, api_key: str | None = None) -> str:
-    trimmed = (api_key or "").strip()
-    if trimmed:
-        return trimmed
-    return existing_api_key_for_provider(provider)
 
 
 def configure_chat_provider(provider: str, api_key: str, model: str | None = None) -> tuple[dict, int]:
@@ -113,6 +141,29 @@ def configure_chat_provider(provider: str, api_key: str, model: str | None = Non
         updates = _provider_env_updates(provider, api_key, model)
     except ValueError as exc:
         return {"error": str(exc)}, 400
+
+    resolved_key = resolve_chat_api_key(provider, api_key)
+
+    validate_response = proxy_to_chat_server(
+        "/api/configure",
+        method="POST",
+        json_body={
+            "provider": updates["CHAT_PROVIDER"],
+            "api_key": resolved_key,
+            "model": model,
+        },
+        timeout=30,
+    )
+    if isinstance(validate_response, tuple):
+        return {"error": "Chat server unavailable during validation."}, 503
+    if validate_response.status_code >= 400:
+        try:
+            payload = json.loads(validate_response.get_data(as_text=True))
+        except json.JSONDecodeError:
+            payload = {}
+        return {
+            "error": payload.get("error") or "API key validation failed.",
+        }, validate_response.status_code
 
     upsert_env_vars(updates)
     _reload_python_env()

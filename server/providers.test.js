@@ -2,7 +2,10 @@ import assert from "node:assert/strict";
 import { afterEach, describe, it } from "node:test";
 import {
   CURSOR_KEY_SETUP_INSTRUCTIONS,
+  isValidOpenAiKeyFormat,
+  normalizeApiKey,
   validateChatProviderKey,
+  validateProviderCredentials,
 } from "./providers.js";
 
 const ENV_KEYS = [
@@ -24,6 +27,9 @@ function restoreEnv(snapshot) {
     }
   }
 }
+
+const FAKE_OPENAI_PROJ_KEY =
+  "sk-proj-test_key_for_unit_tests_only_1234567890abcdefghijklmnopqrst";
 
 describe("validateChatProviderKey", () => {
   let envSnapshot;
@@ -74,5 +80,47 @@ describe("validateChatProviderKey", () => {
     const result = await validateChatProviderKey({ remote: false });
     assert.equal(result.ok, true);
     assert.equal(result.provider, "cursor");
+  });
+});
+
+describe("normalizeApiKey", () => {
+  it("strips BOM and whitespace from pasted keys", () => {
+    assert.equal(normalizeApiKey("\uFEFF sk-proj-test_key"), "sk-proj-test_key");
+  });
+});
+
+describe("isValidOpenAiKeyFormat", () => {
+  it("accepts sk-proj project keys", () => {
+    assert.equal(isValidOpenAiKeyFormat(FAKE_OPENAI_PROJ_KEY), true);
+  });
+
+  it("accepts legacy sk- keys", () => {
+    assert.equal(isValidOpenAiKeyFormat("sk-1234567890abcdefghijklmnopqrst"), true);
+  });
+
+  it("rejects anthropic keys for openai validation", () => {
+    assert.equal(isValidOpenAiKeyFormat("sk-ant-api03-test_key_for_unit_tests"), false);
+  });
+});
+
+describe("validateProviderCredentials", () => {
+  let envSnapshot;
+
+  afterEach(() => {
+    restoreEnv(envSnapshot);
+  });
+
+  it("accepts openai project keys before remote validation", async () => {
+    envSnapshot = snapshotEnv();
+    process.env.CHAT_PROVIDER = "cursor";
+    process.env.CURSOR_API_KEY = "crsr_test_key_for_unit_tests_only";
+
+    const result = await validateProviderCredentials(
+      "openai",
+      FAKE_OPENAI_PROJ_KEY,
+      { remote: false },
+    );
+    assert.equal(result.ok, true);
+    assert.equal(result.provider, "openai");
   });
 });

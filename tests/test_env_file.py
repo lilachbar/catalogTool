@@ -49,6 +49,27 @@ class EnvFileTests(unittest.TestCase):
         self.assertIn("OPENAI_API_KEY=sk-openai-new-key", text)
         self.assertIn("CHAT_PROVIDER=openai", text)
 
+    def test_upsert_provider_switch_only_updates_chat_provider(self) -> None:
+        self.env_path.write_text(
+            "\n".join(
+                [
+                    "CHAT_PROVIDER=cursor",
+                    "CURSOR_API_KEY=crsr_old_key_value_1234567890",
+                    "OPENAI_API_KEY=sk-openai-existing-key",
+                ]
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+
+        upsert_env_vars({"CHAT_PROVIDER": "openai"}, path=self.env_path)
+
+        text = self.env_path.read_text(encoding="utf-8")
+        self.assertIn("CURSOR_API_KEY=crsr_old_key_value_1234567890", text)
+        self.assertIn("OPENAI_API_KEY=sk-openai-existing-key", text)
+        self.assertIn("CHAT_PROVIDER=openai", text)
+        self.assertNotIn("CURSOR_API_KEY=sk-", text)
+
     def test_collect_provider_config_reports_all_saved_keys(self) -> None:
         with patch(
             "catalog_tool.env_file.read_env_file",

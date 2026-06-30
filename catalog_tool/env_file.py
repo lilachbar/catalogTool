@@ -68,6 +68,7 @@ def collect_provider_config(env_values: dict[str, str] | None = None) -> dict:
         providers[provider_id] = {
             "configured": bool(key),
             "maskedApiKey": mask_api_key(key),
+            "envVar": PROVIDER_API_KEY_VARS[provider_id],
         }
     masked_key = ""
     if provider:
@@ -122,7 +123,15 @@ def upsert_env_vars(updates: dict[str, str], path: Path | None = None) -> Path:
 
     for key, value in filtered.items():
         if key not in seen:
-            output.append(f"{key}={value}")
+            insert_at = len(output)
+            last_chat_idx = -1
+            for idx, line in enumerate(output):
+                match = _KEY_LINE.match(line.strip())
+                if match and match.group(1) in CHAT_ENV_KEYS:
+                    last_chat_idx = idx
+            if last_chat_idx >= 0:
+                insert_at = last_chat_idx + 1
+            output.insert(insert_at, f"{key}={value}")
 
     text = "\n".join(output)
     if text and not text.endswith("\n"):

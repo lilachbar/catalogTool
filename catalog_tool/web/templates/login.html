@@ -3,20 +3,12 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Sign in — Catalog Tool</title>
+  <title>Sign in — AI Catalog Tool</title>
   <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/static/styles.css">
-  <script>
-    (function () {
-      var theme = localStorage.getItem("catalogTool.theme");
-      if (theme === "light" || theme === "dark") {
-        document.documentElement.setAttribute("data-theme", theme);
-      }
-    })();
-  </script>
+  <link rel="stylesheet" href="/static/styles.css?v=20260702login3">
   <script>
     (function () {
       sessionStorage.removeItem("catalogTool.appTabActive");
@@ -24,102 +16,103 @@
   </script>
 </head>
 <body class="login-page-body">
-  <div class="ambient" aria-hidden="true"></div>
+  <div class="login-bg-shape" aria-hidden="true"></div>
 
   <main class="login-page" aria-labelledby="loginTitle">
     <div class="login-card">
-      <div class="login-brand">
-        <img class="login-logo" src="/static/logo.svg" width="48" height="48" alt="">
-        <div>
-          <h1 id="loginTitle" class="login-title">Catalog Tool</h1>
-          <p class="login-subtitle">Sign in with your Amdocs account</p>
-        </div>
-      </div>
+      <p class="login-eyebrow">AI Catalog Tool</p>
+      <h1 id="loginTitle" class="login-title">Hello!</h1>
+      <p class="login-subtitle">Sign in with your Amdocs LDAP account</p>
 
       {% if not ldap_enabled %}
       <div class="login-notice">
         LDAP authentication is disabled. Set <code>LDAP_AUTH_ENABLED=true</code> and <code>LDAP_URI</code> in <code>.env</code>.
       </div>
-      {% elif relogin_reason == 'refresh' %}
-      <div class="login-notice">
-        Your session ended because the page was refreshed. Please sign in again to continue.
-      </div>
       {% endif %}
 
       <form id="loginForm" class="login-form" autocomplete="on">
-        <label class="field">
-          <span class="field-label">Username</span>
+        <label class="login-pill-field">
+          <span class="login-pill-icon" aria-hidden="true">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="2" y="4" width="20" height="16" rx="2"/>
+              <path d="m2 7 10 7 10-7"/>
+            </svg>
+          </span>
+          <span class="visually-hidden">Username</span>
           <input
             type="text"
             id="usernameInput"
             name="username"
-            class="input"
-            placeholder="your.name"
+            class="login-pill-input"
+            placeholder="Amdocs LDAP username"
             autocomplete="username"
             autocapitalize="none"
             spellcheck="false"
             required
             {% if ldap_enabled %}autofocus{% endif %}
           >
-          <span class="field-hint">Corporate login (without @corp.amdocs.com)</span>
         </label>
 
-        <label class="field">
-          <span class="field-label">Password</span>
+        <label class="login-pill-field">
+          <span class="login-pill-icon" aria-hidden="true">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="3" y="11" width="18" height="11" rx="2"/>
+              <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+            </svg>
+          </span>
+          <span class="visually-hidden">Password</span>
           <input
             type="password"
             id="passwordInput"
             name="password"
-            class="input"
-            placeholder="LDAP password"
+            class="login-pill-input"
+            placeholder="Password"
             autocomplete="current-password"
             required
           >
         </label>
 
-        <div class="login-section-divider" aria-hidden="true"></div>
+        <label class="login-pill-field login-pill-field-select">
+          <span class="login-pill-icon" aria-hidden="true">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 3v3"/><path d="M12 18v3"/><path d="M3 12h3"/><path d="M18 12h3"/>
+              <circle cx="12" cy="12" r="4"/>
+            </svg>
+          </span>
+          <span class="visually-hidden">AI provider</span>
+          <select id="chatProviderSelect" class="login-pill-input login-pill-select" required>
+            <option value="cursor">Cursor</option>
+            <option value="openai">OpenAI</option>
+            <option value="claude">Claude (Anthropic)</option>
+          </select>
+        </label>
 
-        <fieldset class="login-ai-fieldset">
-          <legend class="login-ai-legend">AI assistant (catalog agent)</legend>
-          <p class="login-ai-intro" id="aiConfigIntro">Choose an AI provider and API key for the catalog assistant. Existing keys from <code>.env</code> are pre-filled and can be changed.</p>
-
-          <label class="field">
-            <span class="field-label">AI provider</span>
-            <select id="chatProviderSelect" class="input" aria-describedby="aiConfigIntro">
-              <option value="">Skip — configure later in .env</option>
-              <option value="cursor">Cursor</option>
-              <option value="openai">OpenAI</option>
-              <option value="claude">Claude (Anthropic)</option>
-            </select>
-          </label>
-
-          <label class="field" id="apiKeyField" hidden>
-            <span class="field-label" id="apiKeyLabel">API key</span>
-            <input
-              type="password"
-              id="apiKeyInput"
-              class="input"
-              placeholder=""
-              autocomplete="off"
-              spellcheck="false"
-            >
-            <span class="field-hint" id="apiKeyHint"></span>
-          </label>
-
-          <p id="existingAiConfig" class="login-ai-status" hidden></p>
-        </fieldset>
+        <label class="login-pill-field" id="apiKeyField">
+          <span class="login-pill-icon" aria-hidden="true">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0 3 3L22 7l-3-3m-3.5 3.5L19 4"/>
+            </svg>
+          </span>
+          <span class="visually-hidden" id="apiKeyLabel">API key</span>
+          <input
+            type="text"
+            id="apiKeyInput"
+            class="login-pill-input"
+            placeholder="API key"
+            autocomplete="off"
+            autocapitalize="off"
+            spellcheck="false"
+            data-1p-ignore
+            data-lpignore="true"
+          >
+        </label>
 
         <p id="loginError" class="login-error" hidden></p>
 
-        <button type="submit" class="btn btn-primary btn-lg login-submit" id="loginSubmitBtn">
-          Sign in
+        <button type="submit" class="login-pill-btn" id="loginSubmitBtn">
+          Login
         </button>
       </form>
-
-      <p class="login-footnote">
-        Uses Amdocs LDAP / Active Directory. CatalogOne environment connection is configured after sign-in.
-        AI keys are saved to the local <code>.env</code> file and validated before you enter the app.
-      </p>
     </div>
   </main>
 
@@ -129,72 +122,58 @@
       const errorEl = document.getElementById("loginError");
       const submitBtn = document.getElementById("loginSubmitBtn");
       const providerSelect = document.getElementById("chatProviderSelect");
-      const apiKeyField = document.getElementById("apiKeyField");
       const apiKeyInput = document.getElementById("apiKeyInput");
-      const apiKeyHint = document.getElementById("apiKeyHint");
-      const existingAiConfig = document.getElementById("existingAiConfig");
       const nextUrl = {{ next_url | tojson }};
 
       const providerMeta = {
-        cursor: {
-          label: "Cursor API key",
-          hint: "crsr_… from cursor.com/dashboard/integrations",
-          placeholder: "crsr_…",
-        },
-        openai: {
-          label: "OpenAI API key",
-          hint: "sk-… from platform.openai.com/api-keys",
-          placeholder: "sk-…",
-        },
-        claude: {
-          label: "Anthropic API key",
-          hint: "sk-ant-… from console.anthropic.com/settings/keys",
-          placeholder: "sk-ant-…",
-        },
+        cursor: { placeholder: "crsr_…" },
+        openai: { placeholder: "sk-… or sk-proj-…" },
+        claude: { placeholder: "sk-ant-…" },
       };
 
       let providerDefaults = {};
+
+      function isMaskedKey(value) {
+        return /…/.test(value) || /•/.test(value);
+      }
 
       function showError(message) {
         errorEl.hidden = false;
         errorEl.textContent = message;
       }
 
-      function configuredProvidersSummary(providers) {
-        return Object.entries(providers || {})
-          .filter(([, info]) => info.configured)
-          .map(([name, info]) => `${name}${info.maskedApiKey ? ` (${info.maskedApiKey})` : ""}`)
-          .join(", ");
-      }
-
       function updateProviderFields() {
         const provider = providerSelect.value;
-        if (!provider || !providerMeta[provider]) {
-          apiKeyField.hidden = true;
-          apiKeyInput.required = false;
-          apiKeyInput.value = "";
+        const meta = providerMeta[provider];
+        if (!meta) {
           return;
         }
-        const meta = providerMeta[provider];
         const saved = providerDefaults[provider] || {};
-        apiKeyField.hidden = false;
-        document.getElementById("apiKeyLabel").textContent = meta.label;
-        apiKeyHint.textContent = saved.configured
-          ? `${meta.hint} Leave blank to keep the saved key (${saved.maskedApiKey}).`
-          : meta.hint;
         apiKeyInput.placeholder = saved.configured
-          ? saved.maskedApiKey || meta.placeholder
+          ? saved.maskedApiKey
           : meta.placeholder;
         apiKeyInput.required = !saved.configured;
         apiKeyInput.value = "";
+        apiKeyInput.dataset.savedConfigured = saved.configured ? "1" : "0";
+        apiKeyInput.dataset.savedMasked = saved.maskedApiKey || "";
       }
 
       providerSelect.addEventListener("change", updateProviderFields);
+
+      const providerField = providerSelect.closest(".login-pill-field-select");
+      providerField?.addEventListener("click", (event) => {
+        if (event.target === providerSelect) {
+          return;
+        }
+        providerSelect.focus();
+        providerSelect.click();
+      });
 
       async function loadExistingConfig() {
         try {
           const response = await fetch("/api/chat/config");
           if (!response.ok) {
+            updateProviderFields();
             return;
           }
           const data = await response.json();
@@ -204,19 +183,9 @@
             providerSelect.value = data.provider;
           }
 
-          const savedSummary = configuredProvidersSummary(providerDefaults);
-          if (savedSummary) {
-            existingAiConfig.hidden = false;
-            existingAiConfig.textContent = data.configured
-              ? `Saved in .env: ${savedSummary}. Change provider or enter a new key below to update after sign-in.`
-              : `Saved API keys in .env: ${savedSummary}. Select a provider to activate one.`;
-          } else if (data.configured) {
-            existingAiConfig.hidden = false;
-            existingAiConfig.textContent = `Current AI provider: ${data.provider}${data.maskedApiKey ? ` (${data.maskedApiKey})` : ""}.`;
-          }
           updateProviderFields();
         } catch {
-          // Non-fatal — login still works.
+          updateProviderFields();
         }
       }
 
@@ -226,27 +195,26 @@
         event.preventDefault();
         errorEl.hidden = true;
         submitBtn.disabled = true;
-        submitBtn.textContent = "Signing in…";
+        submitBtn.textContent = "Logging in…";
+
+        const provider = providerSelect.value.trim();
+        const apiKey = apiKeyInput.value.trim();
+        const saved = providerDefaults[provider] || {};
 
         const payload = {
           username: document.getElementById("usernameInput").value.trim(),
           password: document.getElementById("passwordInput").value,
           next: nextUrl,
+          chat_provider: provider,
         };
 
-        const provider = providerSelect.value.trim();
-        const apiKey = apiKeyInput.value.trim();
-        if (provider) {
-          payload.chat_provider = provider;
-          const saved = providerDefaults[provider] || {};
-          if (apiKey) {
-            payload.api_key = apiKey;
-          } else if (!saved.configured) {
-            showError("API key is required for the selected AI provider.");
-            submitBtn.disabled = false;
-            submitBtn.textContent = "Sign in";
-            return;
-          }
+        if (apiKey && !isMaskedKey(apiKey) && apiKey !== saved.maskedApiKey) {
+          payload.api_key = apiKey;
+        } else if (!saved.configured) {
+          showError("API key is required for the selected AI provider.");
+          submitBtn.disabled = false;
+          submitBtn.textContent = "Login";
+          return;
         }
 
         try {
@@ -263,7 +231,7 @@
         } catch (error) {
           showError(error.message || "Sign in failed.");
           submitBtn.disabled = false;
-          submitBtn.textContent = "Sign in";
+          submitBtn.textContent = "Login";
         }
       });
     })();

@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Catalog Tool — Push to CatalogOne</title>
+  <title>AI Catalog Tool — Push to CatalogOne</title>
   <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="/static/favicon.svg">
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -86,7 +86,7 @@
       <div class="sidebar-brand">
         <img class="sidebar-brand-logo" src="/static/logo.svg" width="36" height="36" alt="">
         <div class="sidebar-brand-copy">
-          <span class="sidebar-brand-title">Catalog Tool</span>
+          <span class="sidebar-brand-title">AI Catalog Tool</span>
           <span class="sidebar-brand-sub">CatalogOne</span>
         </div>
       </div>
@@ -173,7 +173,7 @@
             <button type="button" id="logoutBtn" class="btn btn-ghost btn-sm" disabled title="Connect to an environment first">Disconnect</button>
             {% if ldap_auth_enabled and app_user %}
             <span class="app-user-badge" id="appUserBadge" title="Signed in with Amdocs LDAP">{{ app_user.display_name or app_user.username }}</span>
-            <button type="button" id="appLogoutBtn" class="btn btn-ghost btn-sm" title="Sign out of Catalog Tool">Log out</button>
+            <button type="button" id="appLogoutBtn" class="btn btn-ghost btn-sm" title="Sign out of AI Catalog Tool">Log out</button>
             {% endif %}
           </div>
         </header>

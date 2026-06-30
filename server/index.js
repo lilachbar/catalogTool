@@ -74,8 +74,10 @@ app.get("/api/providers", (_req, res) => {
 });
 
 app.post("/api/configure", async (req, res) => {
-  const { provider, apiKey, model } = req.body ?? {};
-  const providerId = String(provider || "").trim().toLowerCase();
+  const body = req.body ?? {};
+  const providerId = String(body.provider || "").trim().toLowerCase();
+  const apiKey = body.apiKey ?? body.api_key;
+  const model = body.model;
   const validation = await validateProviderCredentials(providerId, apiKey, { remote: true });
   if (!validation.ok) {
     res.status(400).json({
