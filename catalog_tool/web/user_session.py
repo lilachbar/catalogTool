@@ -8,6 +8,7 @@ from catalog_tool.settings import LDAP_AUTH_ENABLED
 
 APP_USER_SESSION_KEY = "app_user"
 APP_USER_DISPLAY_KEY = "app_user_display"
+USE_AGENTIC_SESSION_KEY = "use_agentic"
 
 
 def is_app_user_authenticated() -> bool:
@@ -37,6 +38,28 @@ def login_app_user(username: str, display_name: str | None = None) -> None:
 def logout_app_user() -> None:
     session.pop(APP_USER_SESSION_KEY, None)
     session.pop(APP_USER_DISPLAY_KEY, None)
+    session.pop(USE_AGENTIC_SESSION_KEY, None)
+
+
+def is_agentic_enabled() -> bool:
+    if USE_AGENTIC_SESSION_KEY in session:
+        return bool(session.get(USE_AGENTIC_SESSION_KEY))
+
+    try:
+        from catalog_tool.env_file import normalize_chat_provider, read_env_file
+
+        provider = normalize_chat_provider(read_env_file().get("CHAT_PROVIDER"))
+        if provider == "none":
+            return False
+    except Exception:
+        pass
+
+    return True
+
+
+def set_use_agentic(enabled: bool) -> None:
+    session[USE_AGENTIC_SESSION_KEY] = bool(enabled)
+    session.permanent = True
 
 
 def register_auth_guard(app: Flask) -> None:
@@ -55,7 +78,7 @@ def register_auth_guard(app: Flask) -> None:
             return None
         if path in {"/login", "/api/user/login"}:
             return None
-        if path in {"/api/chat/config", "/api/chat/providers"}:
+        if path in {"/api/chat/config", "/api/chat/providers", "/api/user/agentic"}:
             return None
         if path == "/api/user/session":
             return None
@@ -74,4 +97,5 @@ def register_auth_guard(app: Flask) -> None:
         return {
             "app_user": user,
             "ldap_auth_enabled": LDAP_AUTH_ENABLED,
+            "use_agentic": is_agentic_enabled(),
         }

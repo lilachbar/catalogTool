@@ -9,6 +9,7 @@ const PROJECT_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), 
 
 const CHAT_ENV_KEYS = [
   "CHAT_PROVIDER",
+  "CHAT_MODE",
   "CURSOR_API_KEY",
   "CURSOR_MODEL",
   "OPENAI_API_KEY",

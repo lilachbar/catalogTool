@@ -13,6 +13,7 @@ ENV_FILE_PATH = PROJECT_ROOT / ".env"
 CHAT_ENV_KEYS = frozenset(
     {
         "CHAT_PROVIDER",
+        "CHAT_MODE",
         "CURSOR_API_KEY",
         "CURSOR_MODEL",
         "OPENAI_API_KEY",
@@ -37,12 +38,21 @@ PROVIDER_MODEL_VARS: dict[str, str] = {
 }
 
 
+def normalize_chat_mode(mode: str | None) -> str:
+    normalized = (mode or "agent").strip().lower()
+    if normalized not in {"agent", "plan", "ask"}:
+        return "agent"
+    return normalized
+
+
 def normalize_chat_provider(provider: str | None) -> str | None:
     if not provider:
         return None
     normalized = provider.strip().lower()
     if normalized == "anthropic":
         return "claude"
+    if normalized == "none":
+        return "none"
     return normalized or None
 
 
@@ -70,12 +80,21 @@ def collect_provider_config(env_values: dict[str, str] | None = None) -> dict:
             "maskedApiKey": mask_api_key(key),
             "envVar": PROVIDER_API_KEY_VARS[provider_id],
         }
+    if provider == "none":
+        return {
+            "configured": False,
+            "provider": "none",
+            "chatMode": normalize_chat_mode(env_values.get("CHAT_MODE")),
+            "maskedApiKey": "",
+            "providers": providers,
+        }
     masked_key = ""
     if provider:
         masked_key = str(providers.get(provider, {}).get("maskedApiKey") or "")
     return {
         "configured": bool(provider and masked_key),
         "provider": provider,
+        "chatMode": normalize_chat_mode(env_values.get("CHAT_MODE")),
         "maskedApiKey": masked_key,
         "providers": providers,
     }

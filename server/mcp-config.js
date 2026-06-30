@@ -80,6 +80,48 @@ export function loadCatalogoneMcpConfig() {
   return loadFromCursorMcpJson() || buildFromEnv();
 }
 
+function normalizeCursorMcpEntry(name, entry, envOverride = null) {
+  if (!entry?.command) {
+    return null;
+  }
+
+  const override = name === "catalogone" ? envOverride : null;
+  return {
+    type: "stdio",
+    command: entry.command,
+    args: entry.args || [],
+    env: applyMcpEnv(entry.env || {}, override),
+  };
+}
+
+/** All MCP servers from ~/.cursor/mcp.json (preferred) with catalogone env override. */
+export function loadAllCursorMcpServers({ envOverride = null } = {}) {
+  const configPath = process.env.CURSOR_MCP_CONFIG || DEFAULT_MCP_CONFIG;
+  try {
+    const raw = JSON.parse(fs.readFileSync(configPath, "utf8"));
+    const servers = raw?.mcpServers;
+    if (!servers || typeof servers !== "object") {
+      return loadCatalogoneMcpServers({ envOverride });
+    }
+
+    const result = {};
+    for (const [name, entry] of Object.entries(servers)) {
+      const normalized = normalizeCursorMcpEntry(name, entry, envOverride);
+      if (normalized) {
+        result[name] = normalized;
+      }
+    }
+
+    if (Object.keys(result).length > 0) {
+      return result;
+    }
+  } catch {
+    // Fall back to catalogone-only config below.
+  }
+
+  return loadCatalogoneMcpServers({ envOverride });
+}
+
 /** Cursor SDK mcpServers map. */
 export function loadCatalogoneMcpServers({ envOverride = null } = {}) {
   const config = loadCatalogoneMcpConfig();

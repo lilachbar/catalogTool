@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/static/styles.css?v=20260702app2">
+  <link rel="stylesheet" href="/static/styles.css?v=20260702app47">
   <script>
     (function () {
       sessionStorage.removeItem("catalogTool.appTabActive");
@@ -78,8 +78,9 @@
               <circle cx="12" cy="12" r="4"/>
             </svg>
           </span>
-          <span class="visually-hidden">AI provider</span>
+          <span class="visually-hidden">Agentic assistant</span>
           <select id="chatProviderSelect" class="login-pill-input login-pill-select" required>
+            <option value="none">None</option>
             <option value="cursor">Cursor</option>
             <option value="openai">OpenAI</option>
             <option value="claude">Claude (Anthropic)</option>
@@ -106,6 +107,8 @@
           >
         </label>
 
+        <p class="login-agentic-hint">Choose <strong>None</strong> to use the tool without the catalog assistant or MCP tools. Cursor reuses your local MCP install.</p>
+
         <p id="loginError" class="login-error" hidden></p>
 
         <button type="submit" class="login-pill-btn" id="loginSubmitBtn">
@@ -122,6 +125,7 @@
       const submitBtn = document.getElementById("loginSubmitBtn");
       const providerSelect = document.getElementById("chatProviderSelect");
       const apiKeyInput = document.getElementById("apiKeyInput");
+      const apiKeyField = document.getElementById("apiKeyField");
       const nextUrl = {{ next_url | tojson }};
 
       const providerMeta = {
@@ -136,6 +140,10 @@
         return /…/.test(value) || /•/.test(value);
       }
 
+      function isAgenticProvider(provider) {
+        return Boolean(provider) && provider !== "none";
+      }
+
       function showError(message) {
         errorEl.hidden = false;
         errorEl.textContent = message;
@@ -143,6 +151,16 @@
 
       function updateProviderFields() {
         const provider = providerSelect.value;
+        const useAgentic = isAgenticProvider(provider);
+        apiKeyField.classList.toggle("is-disabled", !useAgentic);
+        apiKeyInput.disabled = !useAgentic;
+        if (!useAgentic) {
+          apiKeyInput.required = false;
+          apiKeyInput.value = "";
+          apiKeyInput.placeholder = "Not required";
+          apiKeyInput.blur();
+          return;
+        }
         const meta = providerMeta[provider];
         if (!meta) {
           return;
@@ -169,17 +187,21 @@
           const data = await response.json();
           providerDefaults = data.providers || {};
 
-          if (data.provider && providerMeta[data.provider]) {
+          if (data.provider === "none" || !data.provider) {
+            providerSelect.value = "none";
+          } else if (data.provider && providerMeta[data.provider]) {
             providerSelect.value = data.provider;
+          } else {
+            providerSelect.value = "none";
           }
-
-          updateProviderFields();
         } catch {
-          updateProviderFields();
+          // Keep current selection.
         }
+        updateProviderFields();
       }
 
       loadExistingConfig();
+      updateProviderFields();
 
       form.addEventListener("submit", async (event) => {
         event.preventDefault();
@@ -198,13 +220,15 @@
           chat_provider: provider,
         };
 
-        if (apiKey && !isMaskedKey(apiKey) && apiKey !== saved.maskedApiKey) {
-          payload.api_key = apiKey;
-        } else if (!saved.configured) {
-          showError("API key is required for the selected AI provider.");
-          submitBtn.disabled = false;
-          submitBtn.textContent = "Login";
-          return;
+        if (isAgenticProvider(provider)) {
+          if (apiKey && !isMaskedKey(apiKey) && apiKey !== saved.maskedApiKey) {
+            payload.api_key = apiKey;
+          } else if (!saved.configured) {
+            showError("API key is required for the selected AI provider.");
+            submitBtn.disabled = false;
+            submitBtn.textContent = "Login";
+            return;
+          }
         }
 
         try {

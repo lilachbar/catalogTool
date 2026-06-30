@@ -120,6 +120,9 @@ export function isValidProviderKeyFormat(providerId, key) {
 export function resolveChatProvider() {
   const explicit = (process.env.CHAT_PROVIDER || "").trim().toLowerCase();
 
+  if (explicit === "none") {
+    return null;
+  }
   if (explicit === "cursor") {
     return "cursor";
   }

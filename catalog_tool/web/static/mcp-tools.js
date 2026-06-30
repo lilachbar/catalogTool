@@ -19,7 +19,11 @@
     selectedToolName: null,
     rawJsonMode: false,
     loading: false,
+    runningTool: false,
+    environmentConnected: false,
   };
+
+  const RUN_TOOL_BLOCKED_TIP = "Connect to a CatalogOne environment in the sidebar before running tools.";
 
   const els = {
     panel: document.getElementById("mcpToolsPanel"),
@@ -30,15 +34,14 @@
     countBadge: document.getElementById("mcpToolsCount"),
     emptyDetail: document.getElementById("mcpToolsEmptyDetail"),
     detail: document.getElementById("mcpToolsDetail"),
-    detailName: document.getElementById("mcpToolDetailName"),
     detailCategory: document.getElementById("mcpToolDetailCategory"),
     detailTitle: document.getElementById("mcpToolDetailTitle"),
-    detailDesc: document.getElementById("mcpToolDetailDesc"),
     fields: document.getElementById("mcpToolFields"),
     rawJsonWrap: document.getElementById("mcpToolRawJsonWrap"),
     rawJson: document.getElementById("mcpToolRawJson"),
     rawToggle: document.getElementById("mcpToolRawToggle"),
     runBtn: document.getElementById("mcpToolRunBtn"),
+    runWrap: document.getElementById("mcpToolRunWrap"),
     result: document.getElementById("mcpToolResult"),
     resultCard: document.getElementById("mcpToolResultCard"),
     resultMeta: document.getElementById("mcpToolResultMeta"),
@@ -46,6 +49,136 @@
 
   if (!els.panel || !els.list) {
     return;
+  }
+
+  function escapeHtml(text) {
+    return String(text)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+  }
+
+  function initMcpFloatTips() {
+    const tip = document.getElementById("mcpFloatTip");
+    if (!tip) {
+      return;
+    }
+
+    let tipActive = false;
+    const pointerOffset = 12;
+
+    function hideMcpFloatTip() {
+      tip.hidden = true;
+      tipActive = false;
+    }
+
+    function positionMcpFloatTipAtPointer(clientX, clientY) {
+      tip.hidden = false;
+      const tipRect = tip.getBoundingClientRect();
+      let left = clientX + pointerOffset;
+      let top = clientY + pointerOffset;
+
+      if (left + tipRect.width > window.innerWidth - 8) {
+        left = clientX - tipRect.width - pointerOffset;
+      }
+      if (top + tipRect.height > window.innerHeight - 8) {
+        top = clientY - tipRect.height - pointerOffset;
+      }
+
+      left = Math.max(8, Math.min(left, window.innerWidth - tipRect.width - 8));
+      top = Math.max(8, Math.min(top, window.innerHeight - tipRect.height - 8));
+      tip.style.left = `${left}px`;
+      tip.style.top = `${top}px`;
+    }
+
+    function showMcpFloatTip(text, clientX, clientY) {
+      tip.innerHTML = `<p class="sidebar-float-tip-desc">${escapeHtml(text)}</p>`;
+      tipActive = true;
+      positionMcpFloatTipAtPointer(clientX, clientY);
+    }
+
+    function tipTargetForEvent(event) {
+      const card = event.target.closest(".mcp-tool-card-inner[data-tip-desc]");
+      if (card?.dataset.tipDesc) {
+        return { text: card.dataset.tipDesc };
+      }
+      const field = event.target.closest(".mcp-tool-field[data-tip-desc]");
+      if (field?.dataset.tipDesc) {
+        return { text: field.dataset.tipDesc };
+      }
+      const runWrap = event.target.closest(".mcp-tool-run-wrap[data-tip-desc]");
+      if (runWrap?.dataset.tipDesc) {
+        return { text: runWrap.dataset.tipDesc };
+      }
+      return null;
+    }
+
+    els.panel.addEventListener("mouseover", (event) => {
+      const target = tipTargetForEvent(event);
+      if (!target) {
+        hideMcpFloatTip();
+        return;
+      }
+      showMcpFloatTip(target.text, event.clientX, event.clientY);
+    });
+
+    els.panel.addEventListener("mousemove", (event) => {
+      const target = tipTargetForEvent(event);
+      if (!target) {
+        if (tipActive) {
+          hideMcpFloatTip();
+        }
+        return;
+      }
+      if (!tipActive || tip.hidden) {
+        showMcpFloatTip(target.text, event.clientX, event.clientY);
+        return;
+      }
+      positionMcpFloatTipAtPointer(event.clientX, event.clientY);
+    });
+
+    els.panel.addEventListener("mouseleave", hideMcpFloatTip);
+    els.panel.addEventListener("scroll", hideMcpFloatTip, true);
+    window.addEventListener("blur", hideMcpFloatTip);
+    window.addEventListener("scroll", hideMcpFloatTip, true);
+    window.addEventListener("resize", hideMcpFloatTip);
+  }
+
+  initMcpFloatTips();
+
+  async function isEnvironmentConnected() {
+    if (typeof window.catalogTool?.isEnvironmentConnected === "function") {
+      return window.catalogTool.isEnvironmentConnected();
+    }
+    try {
+      const payload = await fetch("/api/session").then((response) => response.json());
+      return Boolean(payload.logged_in);
+    } catch {
+      return false;
+    }
+  }
+
+  async function updateRunButtonState() {
+    if (!els.runBtn) {
+      return;
+    }
+
+    state.environmentConnected = await isEnvironmentConnected();
+    const blocked = !state.environmentConnected;
+    els.runBtn.disabled = blocked || state.runningTool;
+
+    if (els.runWrap) {
+      if (blocked) {
+        els.runWrap.dataset.tipDesc = RUN_TOOL_BLOCKED_TIP;
+        els.runWrap.classList.add("is-blocked");
+        els.runBtn.setAttribute("aria-describedby", "mcpFloatTip");
+      } else {
+        delete els.runWrap.dataset.tipDesc;
+        els.runWrap.classList.remove("is-blocked");
+        els.runBtn.removeAttribute("aria-describedby");
+      }
+    }
   }
 
   function setStatus(message, tone = "loading") {
@@ -358,17 +491,11 @@
     if (els.detail) {
       els.detail.hidden = false;
     }
-    if (els.detailName) {
-      els.detailName.textContent = tool.name;
-    }
-    if (els.detailCategory) {
-      els.detailCategory.textContent = categorizeTool(tool.name);
-    }
     if (els.detailTitle) {
       els.detailTitle.textContent = tool.title || tool.name;
     }
-    if (els.detailDesc) {
-      els.detailDesc.textContent = tool.description || "";
+    if (els.detailCategory) {
+      els.detailCategory.textContent = categorizeTool(tool.name);
     }
     if (els.rawToggle) {
       els.rawToggle.checked = false;
@@ -390,6 +517,7 @@
     }
 
     renderToolForm(tool);
+    updateRunButtonState();
 
     const exampleArgs = {};
     for (const [name, schema] of Object.entries(tool.inputSchema?.properties || {})) {
@@ -474,7 +602,13 @@
       return;
     }
 
-    els.runBtn.disabled = true;
+    if (!state.environmentConnected) {
+      await updateRunButtonState();
+      return;
+    }
+
+    state.runningTool = true;
+    await updateRunButtonState();
     if (els.resultCard) {
       els.resultCard.hidden = true;
     }
@@ -508,7 +642,8 @@
         els.resultCard.hidden = false;
       }
     } finally {
-      els.runBtn.disabled = false;
+      state.runningTool = false;
+      await updateRunButtonState();
     }
   }
 
@@ -556,12 +691,15 @@
       renderToolList();
       if (state.tools.length && !state.selectedToolName) {
         selectTool(state.tools[0].name);
+      } else {
+        await updateRunButtonState();
       }
     } catch (error) {
       setStatus(error.message, "error");
       showListEmptyMessage(error.message);
     } finally {
       state.loading = false;
+      await updateRunButtonState();
     }
   }
 
@@ -579,6 +717,11 @@
 
   loadTools();
 
+  window.addEventListener("catalogTool:environments-changed", () => {
+    updateRunButtonState();
+  });
+
   window.catalogTool = window.catalogTool || {};
   window.catalogTool.reloadMcpTools = loadTools;
+  window.catalogTool.refreshMcpRunState = updateRunButtonState;
 })();

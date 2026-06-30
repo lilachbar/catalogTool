@@ -8,3 +8,4 @@ data/environments/
 data/catalog-baseline/
 data/catalog-pr/
 catalog_tool/web/static/chat.bundle.js
+.catalog-tool/

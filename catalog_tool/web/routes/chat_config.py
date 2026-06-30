@@ -15,6 +15,7 @@ from catalog_tool.env_file import (
     PROVIDER_MODEL_VARS,
     collect_provider_config,
     existing_api_key_for_provider,
+    normalize_chat_mode,
     normalize_chat_provider,
     read_env_file,
     upsert_env_vars,
@@ -115,6 +116,46 @@ def needs_chat_reconfigure(
         if model_var and model.strip() != (env_values.get(model_var) or "").strip():
             return True
     return False
+
+
+def configure_agentic_disabled() -> tuple[dict, int]:
+    """Persist agentic-off state in .env and reload the chat server."""
+    env_values = read_env_file()
+    current = (env_values.get("CHAT_PROVIDER") or "").strip().lower()
+    unchanged = current == "none"
+
+    if not unchanged:
+        upsert_env_vars({"CHAT_PROVIDER": "none"})
+        _reload_python_env()
+        os.environ["CHAT_PROVIDER"] = "none"
+
+    node_reload = _reload_node_env()
+    if not node_reload.get("ok"):
+        return {
+            "error": "Saved to .env but could not reload the chat server. Restart ./run_web.sh.",
+            "nodeReload": node_reload,
+        }, 503
+
+    return {
+        "ok": True,
+        "provider": "none",
+        "chatReady": False,
+        "unchanged": unchanged,
+    }, 200
+
+
+def apply_agentic_selection(
+    provider: str | None,
+    api_key: str | None = None,
+    model: str | None = None,
+) -> tuple[dict | None, int | None]:
+    """Persist agentic provider choice, including None to disable assistant."""
+    normalized = str(provider or "none").strip().lower()
+    if normalized in {"", "none"}:
+        payload, status = configure_agentic_disabled()
+        return payload, status
+
+    return apply_chat_login_config(normalized, api_key, model)
 
 
 def apply_chat_login_config(
@@ -244,6 +285,29 @@ def apply_chat_model_selection(
     return {"ok": True, "model": resolved, "modelVar": model_var}, 200
 
 
+def apply_chat_mode_selection(mode: str | None) -> tuple[dict, int]:
+    """Persist the user's agent mode (agent/plan/ask) to .env."""
+    resolved = normalize_chat_mode(mode)
+    env_values = read_env_file()
+    current = normalize_chat_mode(env_values.get("CHAT_MODE"))
+
+    if resolved == current:
+        return {"ok": True, "mode": resolved, "unchanged": True}, 200
+
+    upsert_env_vars({"CHAT_MODE": resolved})
+    _reload_python_env()
+    os.environ["CHAT_MODE"] = resolved
+
+    node_reload = _reload_node_env()
+    if not node_reload.get("ok"):
+        return {
+            "error": "Saved to .env but could not reload the chat server. Restart ./run_web.sh.",
+            "nodeReload": node_reload,
+        }, 503
+
+    return {"ok": True, "mode": resolved}, 200
+
+
 def register(app: Flask) -> None:
     @app.get("/api/chat/providers")
     def api_chat_providers():
@@ -274,6 +338,13 @@ def register(app: Flask) -> None:
             return jsonify({"error": "API key is required."}), 400
 
         payload, status = configure_chat_provider(provider, api_key, model)
+        return jsonify(payload), status
+
+    @app.post("/api/chat/mode")
+    def api_chat_mode():
+        data = request.get_json(silent=True) or {}
+        mode = str(data.get("mode") or "").strip() or None
+        payload, status = apply_chat_mode_selection(mode)
         return jsonify(payload), status
 
     @app.post("/api/chat/model")

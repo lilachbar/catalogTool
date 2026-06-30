@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/static/styles.css?v=20260702app35">
+  <link rel="stylesheet" href="/static/styles.css?v=20260702app55">
   <script>
     (function () {
       var theme = localStorage.getItem("catalogTool.theme");
@@ -76,7 +76,7 @@
   </script>
   {% endif %}
 </head>
-<body class="app-page-body" data-ldap-auth-enabled="{{ 'true' if ldap_auth_enabled else 'false' }}">
+<body class="app-page-body" data-ldap-auth-enabled="{{ 'true' if ldap_auth_enabled else 'false' }}" data-use-agentic="{{ 'true' if use_agentic else 'false' }}">
   <div class="app-bg-shape" aria-hidden="true"></div>
 
   <div class="app-shell" id="appShell">
@@ -159,6 +159,7 @@
         <div id="mainConnectionHint" class="main-connection-hint main-connection-hint-disconnected" hidden role="status">
           <div class="main-connection-hint-text" id="mainConnectionHintText"></div>
           <div class="main-connection-bar-actions" aria-label="App controls">
+            <button type="button" id="agenticSettingsBtn" class="btn btn-ghost btn-sm main-connection-bar-btn" title="Change agentic assistant provider">Agentic settings</button>
             <button type="button" id="chatAttachBtn" class="icon-btn chat-attach-btn" hidden aria-label="Attach chat" title="Attach chat to main window">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
                 <rect x="3" y="3" width="18" height="18" rx="2"/><path d="M15 3v18"/>
@@ -569,7 +570,7 @@
                 <div class="mcp-tool-form-card">
                   <div class="mcp-tool-form-card-head">
                     <div class="mcp-tool-detail-meta">
-                      <code id="mcpToolDetailName" class="mcp-tool-name-chip"></code>
+                      <h3 id="mcpToolDetailTitle" class="mcp-tool-detail-title"></h3>
                       <span id="mcpToolDetailCategory" class="mcp-tool-category-badge"></span>
                     </div>
                     <div class="mcp-tool-form-card-actions">
@@ -577,16 +578,16 @@
                         <input type="checkbox" id="mcpToolRawToggle">
                         <span>Raw JSON</span>
                       </label>
-                      <button type="button" id="mcpToolRunBtn" class="btn btn-primary mcp-tool-run-btn">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                          <polygon points="5 3 19 12 5 21 5 3"/>
-                        </svg>
-                        Run tool
-                      </button>
+                      <span id="mcpToolRunWrap" class="mcp-tool-run-wrap is-blocked" data-tip-desc="Connect to a CatalogOne environment in the sidebar before running tools.">
+                        <button type="button" id="mcpToolRunBtn" class="btn btn-primary mcp-tool-run-btn" disabled>
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <polygon points="5 3 19 12 5 21 5 3"/>
+                          </svg>
+                          Run tool
+                        </button>
+                      </span>
                     </div>
                   </div>
-
-                  <h3 id="mcpToolDetailTitle" class="mcp-tool-detail-title"></h3>
 
                   <form class="mcp-tool-form" onsubmit="return false">
                     <div class="mcp-tool-fields-head">
@@ -603,8 +604,6 @@
                   </form>
                 </div>
 
-                <p id="mcpToolDetailDesc" class="mcp-tool-detail-desc"></p>
-
                 <div id="mcpToolResultCard" class="mcp-tool-result-card" hidden>
                   <div class="mcp-tool-result-card-head">
                     <h4 class="mcp-tool-result-heading">Result</h4>
@@ -616,6 +615,7 @@
               </div>
             </section>
           </div>
+          <div id="mcpFloatTip" class="sidebar-float-tip mcp-float-tip" role="tooltip" hidden></div>
           </div>
           </section>
           </div>
@@ -629,6 +629,58 @@
       </div>
     </div>
   </div>
+
+  <dialog id="agenticSettingsModal" class="connection-modal connection-modal--login agentic-settings-modal">
+    <form id="agenticSettingsForm" class="connection-modal-form" method="dialog">
+      <header class="connection-modal-head">
+        <div class="connection-modal-head-copy">
+          <p class="connection-modal-eyebrow">Catalog assistant</p>
+          <h2 id="agenticSettingsTitle">Agentic settings</h2>
+          <p class="connection-modal-desc">Choose a provider to enable the catalog assistant and MCP tools, or None to disable them.</p>
+        </div>
+        <button type="button" id="closeAgenticSettingsBtn" class="connection-modal-close" aria-label="Close">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+            <path d="M18 6 6 18M6 6l12 12"/>
+          </svg>
+        </button>
+      </header>
+
+      <div class="agentic-settings-body">
+        <label class="agentic-settings-field" for="agenticProviderSelect">
+          <span class="agentic-settings-label">Agentic assistant</span>
+          <span class="agentic-settings-select-wrap">
+            <select id="agenticProviderSelect" class="agentic-settings-select">
+              <option value="none">None</option>
+              <option value="cursor">Cursor</option>
+              <option value="openai">OpenAI</option>
+              <option value="claude">Claude (Anthropic)</option>
+            </select>
+          </span>
+        </label>
+
+        <label class="agentic-settings-field" for="agenticApiKeyInput" id="agenticApiKeyField">
+          <span class="agentic-settings-label">API key</span>
+          <input
+            type="text"
+            id="agenticApiKeyInput"
+            class="agentic-settings-input"
+            placeholder="API key"
+            autocomplete="off"
+            data-1p-ignore
+            data-lpignore="true"
+          >
+        </label>
+
+        <p class="agentic-settings-hint">Cursor reuses MCP servers from your local Cursor install. Choose <strong>None</strong> to hide the assistant and MCP tools action.</p>
+        <p id="agenticSettingsError" class="agentic-settings-error" hidden></p>
+      </div>
+
+      <div class="connection-modal-actions connection-modal-actions--login">
+        <button type="button" id="cancelAgenticSettingsBtn" class="connection-modal-ghost-btn">Cancel</button>
+        <button type="submit" id="saveAgenticSettingsBtn" class="connection-modal-save-btn">Save</button>
+      </div>
+    </form>
+  </dialog>
 
   <dialog id="connectionModal" class="connection-modal connection-modal--login">
     <form id="connectionForm" method="dialog" class="connection-modal-form">
@@ -763,8 +815,8 @@
 
   <script id="tablesConfig" type="application/json">{{ defaults.tables | tojson }}</script>
   <script id="defaultsConfig" type="application/json">{{ defaults | tojson }}</script>
-  <script src="/static/app.js?v=20260702app31"></script>
-  <script src="/static/mcp-tools.js?v=20260702app29"></script>
-  <script type="module" src="/static/chat.bundle.js"></script>
+  <script src="/static/app.js?v=20260702app55"></script>
+  <script src="/static/mcp-tools.js?v=20260702app55"></script>
+  <script type="module" src="/static/chat.bundle.js?v=20260702app56"></script>
 </body>
 </html>

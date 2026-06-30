@@ -64,6 +64,7 @@ const state = {
   mcpToolsOnline: false,
   mcpToolsAvailable: false,
   mcpToolsStatusMessage: "",
+  useAgentic: document.body?.dataset?.useAgentic !== "false",
   dgAnalyzeResult: null,
   dgImportCompleted: false,
   zipAnalyzeResult: null,
@@ -173,6 +174,17 @@ const els = {
   mcpToolsView: document.getElementById("mcpToolsView"),
   appNavItems: document.querySelectorAll(".app-nav-item"),
   navMcpToolsView: document.getElementById("navMcpToolsView"),
+  chatToggleBtn: document.getElementById("chatToggleBtn"),
+  chatAttachBtn: document.getElementById("chatAttachBtn"),
+  agenticSettingsBtn: document.getElementById("agenticSettingsBtn"),
+  agenticSettingsModal: document.getElementById("agenticSettingsModal"),
+  agenticSettingsForm: document.getElementById("agenticSettingsForm"),
+  agenticProviderSelect: document.getElementById("agenticProviderSelect"),
+  agenticApiKeyInput: document.getElementById("agenticApiKeyInput"),
+  agenticApiKeyField: document.getElementById("agenticApiKeyField"),
+  agenticSettingsError: document.getElementById("agenticSettingsError"),
+  closeAgenticSettingsBtn: document.getElementById("closeAgenticSettingsBtn"),
+  cancelAgenticSettingsBtn: document.getElementById("cancelAgenticSettingsBtn"),
   appShell: document.getElementById("appShell"),
   sidebarResizer: document.getElementById("sidebarResizer"),
 };
@@ -267,7 +279,7 @@ function initSidebarResize() {
 
 function setActiveView(view) {
   const nextView = VIEW_META[view] ? view : "push";
-  if (nextView === "mcp-tools" && !state.mcpToolsConfigured) {
+  if (nextView === "mcp-tools" && (!state.mcpToolsConfigured || !state.useAgentic)) {
     return;
   }
   state.activeView = nextView;
@@ -295,12 +307,12 @@ function connectionHintForView() {
     const label = escapeHtml(state.currentEnvironmentLabel || "Unknown");
     return {
       connected: true,
-      html: `The tool is connected to environment: ${label}`,
+      html: `The AI Catalog Tool is connected to environment: ${label}`,
     };
   }
   return {
     connected: false,
-    html: "The tool is not connected to any environment yet — connect to get started.",
+    html: "The AI Catalog Tool is not connected to any environment yet — connect to get started.",
   };
 }
 
@@ -341,9 +353,11 @@ function updateMcpToolsNav({ configured, online, message }) {
     return;
   }
 
-  button.disabled = !state.mcpToolsConfigured;
-  button.classList.toggle("is-disabled", !state.mcpToolsConfigured);
-  if (state.mcpToolsOnline) {
+  button.disabled = !state.mcpToolsConfigured || !state.useAgentic;
+  button.classList.toggle("is-disabled", !state.mcpToolsConfigured || !state.useAgentic);
+  if (!state.useAgentic) {
+    button.title = "Enable agentic assistant to use CatalogOne MCP tools";
+  } else if (state.mcpToolsOnline) {
     button.title = message
       ? `Browse and run CatalogOne MCP tools — ${message}`
       : "Browse and run CatalogOne MCP tools";
@@ -353,9 +367,185 @@ function updateMcpToolsNav({ configured, online, message }) {
     button.title = message || "catalogone MCP is not installed (see README)";
   }
 
-  if (!state.mcpToolsConfigured && state.activeView === "mcp-tools") {
+  if ((!state.mcpToolsConfigured || !state.useAgentic) && state.activeView === "mcp-tools") {
     setActiveView("push");
   }
+}
+
+function updateAgenticUi(enabled) {
+  state.useAgentic = Boolean(enabled);
+  window.catalogTool = window.catalogTool || {};
+  window.catalogTool.useAgentic = state.useAgentic;
+  if (document.body) {
+    document.body.dataset.useAgentic = state.useAgentic ? "true" : "false";
+  }
+
+  els.chatToggleBtn?.toggleAttribute("hidden", !state.useAgentic);
+  if (!state.useAgentic) {
+    els.chatAttachBtn?.setAttribute("hidden", "");
+    window.dispatchEvent(new CustomEvent("catalogTool:close-chat"));
+  }
+
+  updateMcpToolsNav({});
+  if (!state.useAgentic && state.activeView === "mcp-tools") {
+    setActiveView("push");
+  }
+
+  window.dispatchEvent(new CustomEvent("catalogTool:agentic-changed", {
+    detail: { enabled: state.useAgentic },
+  }));
+}
+
+async function loadAppUserSession() {
+  try {
+    const response = await fetch("/api/user/session");
+    if (!response.ok) {
+      updateAgenticUi(document.body?.dataset?.useAgentic !== "false");
+      return;
+    }
+    const data = await response.json();
+    updateAgenticUi(Boolean(data.use_agentic));
+  } catch {
+    updateAgenticUi(document.body?.dataset?.useAgentic !== "false");
+  }
+}
+
+const agenticProviderMeta = {
+  cursor: { placeholder: "crsr_…" },
+  openai: { placeholder: "sk-… or sk-proj-…" },
+  claude: { placeholder: "sk-ant-…" },
+};
+let agenticProviderDefaults = {};
+
+function isAgenticProvider(provider) {
+  return Boolean(provider) && provider !== "none";
+}
+
+function isMaskedAgenticKey(value) {
+  return /…/.test(value) || /•/.test(value);
+}
+
+function updateAgenticModalFields() {
+  if (!els.agenticProviderSelect || !els.agenticApiKeyInput || !els.agenticApiKeyField) {
+    return;
+  }
+
+  const provider = els.agenticProviderSelect.value;
+  const useAgentic = isAgenticProvider(provider);
+  els.agenticApiKeyInput.disabled = !useAgentic;
+  els.agenticApiKeyField.classList.toggle("is-disabled", !useAgentic);
+
+  if (!useAgentic) {
+    els.agenticApiKeyInput.required = false;
+    els.agenticApiKeyInput.value = "";
+    els.agenticApiKeyInput.placeholder = "Not required";
+    return;
+  }
+
+  const saved = agenticProviderDefaults[provider] || {};
+  const meta = agenticProviderMeta[provider] || {};
+  els.agenticApiKeyInput.placeholder = saved.configured ? saved.maskedApiKey : meta.placeholder;
+  els.agenticApiKeyInput.required = !saved.configured;
+  els.agenticApiKeyInput.value = "";
+}
+
+async function loadAgenticProviderDefaults() {
+  try {
+    const response = await fetch("/api/chat/config");
+    if (!response.ok) {
+      updateAgenticModalFields();
+      return;
+    }
+    const data = await response.json();
+    agenticProviderDefaults = data.providers || {};
+
+    if (data.provider === "none" || !state.useAgentic) {
+      els.agenticProviderSelect.value = "none";
+    } else {
+      const configuredProvider = data.provider && agenticProviderDefaults[data.provider]?.configured
+        ? data.provider
+        : null;
+      els.agenticProviderSelect.value = configuredProvider || data.provider || "cursor";
+    }
+  } catch {
+    els.agenticProviderSelect.value = state.useAgentic ? "cursor" : "none";
+  }
+  updateAgenticModalFields();
+}
+
+function openAgenticSettingsModal() {
+  if (!els.agenticSettingsModal) {
+    return;
+  }
+  if (els.agenticSettingsError) {
+    els.agenticSettingsError.hidden = true;
+    els.agenticSettingsError.textContent = "";
+  }
+  void loadAgenticProviderDefaults();
+  if (typeof els.agenticSettingsModal.showModal === "function") {
+    els.agenticSettingsModal.showModal();
+  }
+}
+
+function closeAgenticSettingsModal() {
+  els.agenticSettingsModal?.close();
+}
+
+function initAgenticSettings() {
+  els.agenticSettingsBtn?.addEventListener("click", openAgenticSettingsModal);
+  els.closeAgenticSettingsBtn?.addEventListener("click", closeAgenticSettingsModal);
+  els.cancelAgenticSettingsBtn?.addEventListener("click", closeAgenticSettingsModal);
+  els.agenticProviderSelect?.addEventListener("change", updateAgenticModalFields);
+
+  els.agenticSettingsForm?.addEventListener("submit", async (event) => {
+    event.preventDefault();
+
+    const provider = els.agenticProviderSelect?.value?.trim() || "none";
+    const payload = { chat_provider: provider };
+
+    if (isAgenticProvider(provider)) {
+      const apiKey = els.agenticApiKeyInput?.value?.trim() || "";
+      const saved = agenticProviderDefaults[provider] || {};
+      if (apiKey && !isMaskedAgenticKey(apiKey) && apiKey !== saved.maskedApiKey) {
+        payload.api_key = apiKey;
+      } else if (!saved.configured) {
+        if (els.agenticSettingsError) {
+          els.agenticSettingsError.hidden = false;
+          els.agenticSettingsError.textContent = "API key is required for the selected AI provider.";
+        }
+        return;
+      }
+    }
+
+    if (els.agenticSettingsError) {
+      els.agenticSettingsError.hidden = true;
+      els.agenticSettingsError.textContent = "";
+    }
+
+    try {
+      const response = await fetch("/api/user/agentic", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || "Could not update agentic settings.");
+      }
+      updateAgenticUi(Boolean(data.use_agentic));
+      closeAgenticSettingsModal();
+      if (data.use_agentic) {
+        void refreshMcpToolsNavStatus();
+      } else {
+        updateMcpToolsNav({ configured: state.mcpToolsConfigured, online: false });
+      }
+    } catch (error) {
+      if (els.agenticSettingsError) {
+        els.agenticSettingsError.hidden = false;
+        els.agenticSettingsError.textContent = error.message || "Could not update agentic settings.";
+      }
+    }
+  });
 }
 
 async function refreshMcpToolsNavStatus() {
@@ -2150,6 +2340,8 @@ function setLoggedIn(loggedIn, username = "", environmentLabel = "") {
   renderEnvironmentSidebar();
   updateMainConnectionHint();
   window.catalogTool?.reloadMcpTools?.();
+  window.catalogTool?.refreshMcpRunState?.();
+  window.catalogTool?.notifyEnvironmentsChanged?.();
 }
 
 async function disconnectSession() {
@@ -2980,8 +3172,11 @@ async function initApp() {
   initZipDropzone();
   updateZipValidateButton();
   initExcelDropzone();
+  initAgenticSettings();
+  updateAgenticUi(document.body?.dataset?.useAgentic !== "false");
 
   await resetCatalogOneConnectionOnLoad();
+  await loadAppUserSession();
 
   await loadEnvironmentsFromServer();
   restoreSelectedEnvironment();
@@ -3004,7 +3199,10 @@ initApp();
 
 window.catalogTool = window.catalogTool || {};
 window.catalogTool.refreshMcpNav = refreshMcpToolsNavStatus;
+window.catalogTool.updateAgenticUi = updateAgenticUi;
+window.catalogTool.openAgenticSettings = openAgenticSettingsModal;
 window.catalogTool.refreshEnvironments = refreshEnvironmentsFromServer;
+window.catalogTool.isEnvironmentConnected = () => Boolean(state.loggedIn && state.connectedEnvironmentId);
 window.catalogTool.notifyEnvironmentsChanged = () => {
   window.dispatchEvent(new CustomEvent("catalogTool:environments-changed"));
 };

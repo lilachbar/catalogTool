@@ -2,17 +2,36 @@
  * Catalog Tool chat via Cursor SDK (local agent + catalogone MCP).
  */
 import crypto from "crypto";
+import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
-import { Agent, CursorAgentError } from "@cursor/sdk";
+import { Agent, CursorAgentError, JsonlLocalAgentStore } from "@cursor/sdk";
 import { createUIMessageStream, pipeUIMessageStreamToResponse } from "ai";
 import { CATALOGONE_AGENT_PROMPT } from "./catalogone-prompt.js";
 import { getCatalogoneMcpStatus, listCatalogoneMcpTools } from "./catalogone-mcp-client.js";
 import { formatChatError } from "./errors.js";
-import { loadCatalogoneMcpServers } from "./mcp-config.js";
+import { modeSystemNote, normalizeChatMode, resolveCursorSdkMode } from "./chat-mode.js";
+import {
+  buildConversationTranscript,
+  extractLatestTurnImages,
+  extractTextFromUiMessage,
+  mergeAttachmentsIntoText,
+} from "./chat-history.js";
+import { loadAllCursorMcpServers } from "./mcp-config.js";
 import { fetchCatalogoneEnvFromSession } from "./mcp-session.js";
 
 const PROJECT_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const LOCAL_AGENT_STORE_DIR = path.join(PROJECT_ROOT, ".catalog-tool", "agent-store");
+
+let sharedLocalAgentStore = null;
+
+function getLocalAgentStore() {
+  if (!sharedLocalAgentStore) {
+    fs.mkdirSync(LOCAL_AGENT_STORE_DIR, { recursive: true });
+    sharedLocalAgentStore = new JsonlLocalAgentStore(LOCAL_AGENT_STORE_DIR);
+  }
+  return sharedLocalAgentStore;
+}
 
 const agentCache = new Map();
 
@@ -22,9 +41,7 @@ function agentCacheKey(mcpServers, modelId) {
 
 async function getAgentForMcpServers(mcpServers, modelId) {
   if (!mcpServers.catalogone) {
-    throw new Error(
-      "catalogone MCP is not configured. Add catalogone to ~/.cursor/mcp.json or set C1_* vars in .env.",
-    );
+    console.warn("[chat-server] Creating Cursor agent without catalogone MCP — install it in ~/.cursor/mcp.json for CatalogOne access.");
   }
 
   const cacheKey = agentCacheKey(mcpServers, modelId);
@@ -40,6 +57,7 @@ async function getAgentForMcpServers(mcpServers, modelId) {
     local: {
       cwd: PROJECT_ROOT,
       settingSources: [],
+      store: getLocalAgentStore(),
     },
     mcpServers,
   });
@@ -61,53 +79,117 @@ function extractLatestUserText(messages) {
     if (message.role !== "user") {
       continue;
     }
-    if (Array.isArray(message.parts)) {
-      const text = message.parts
-        .filter((part) => part.type === "text")
-        .map((part) => part.text)
-        .join("\n")
-        .trim();
-      if (text) {
-        return text;
-      }
-    }
-    if (typeof message.content === "string" && message.content.trim()) {
-      return message.content.trim();
+    const text = extractTextFromUiMessage(message);
+    if (text) {
+      return text;
     }
   }
   return "";
 }
 
-function buildPrompt(messages, latestText, sessionEnv) {
+function buildPrompt(messages, latestText, sessionEnv, mode = "agent", latestAttachments = []) {
   const userTurnCount = messages.filter((message) => message.role === "user").length;
   const connectedNote = sessionEnv?.environmentLabel
     ? `The user is already connected to CatalogOne environment "${sessionEnv.environmentLabel}" via the Catalog Tool sidebar. Use catalogone MCP tools with the pre-configured credentials — do NOT call login.`
     : "Use catalogone MCP tools for all CatalogOne data (call login first if needed). Do not guess catalog contents.";
 
+  const normalizedMode = normalizeChatMode(mode);
+  const modeNote = modeSystemNote(normalizedMode);
+  const modeBehavior = {
+    agent: "You may use CatalogOne MCP tools to inspect and modify the catalog when appropriate.",
+    plan: "Use Cursor Plan behavior: investigate with read-only MCP tools first, then present a numbered plan. Do not execute write/modify/publish actions until the user confirms.",
+    ask: "Answer the question only. Use read-only MCP tools (search, get, list, validate) when live data is needed. Never create, update, publish, share, or delete catalog data in Ask mode.",
+  };
+
+  const transcript = buildConversationTranscript(messages, latestAttachments);
+  const historyNote = userTurnCount > 1
+    ? "Read the full conversation history below, including earlier user attachments. Answer in context of the entire thread — do not treat the latest message in isolation."
+    : null;
+
+  const sections = [];
   if (userTurnCount <= 1) {
-    return `${CATALOGONE_AGENT_PROMPT}\n\n${connectedNote}\n\nUser message:\n${latestText}`;
+    sections.push(CATALOGONE_AGENT_PROMPT);
+  }
+  if (modeNote) {
+    sections.push(modeNote);
+  }
+  if (modeBehavior[normalizedMode]) {
+    sections.push(modeBehavior[normalizedMode]);
+  }
+  sections.push(connectedNote);
+  if (historyNote) {
+    sections.push(historyNote);
+  }
+  if (transcript) {
+    sections.push(`Conversation history:\n${transcript}`);
+  } else {
+    sections.push(`User message:\n${latestText || "See attached context."}`);
   }
 
-  return `${connectedNote}\n\nUser message:\n${latestText}`;
+  return sections.filter(Boolean).join("\n\n");
 }
 
-export async function handleCursorChat(req, res, messages, modelId = null) {
+function buildUserMessage(text, attachments = [], imageAttachments = []) {
+  const images = [
+    ...imageAttachments
+      .filter((attachment) => attachment?.data || attachment?.url)
+      .map((attachment) => {
+        if (attachment.data) {
+          return {
+            data: attachment.data,
+            mimeType: attachment.mimeType || "image/png",
+          };
+        }
+        const url = attachment.url || "";
+        const commaIndex = url.indexOf(",");
+        return {
+          data: commaIndex >= 0 ? url.slice(commaIndex + 1) : url,
+          mimeType: attachment.mimeType || "image/png",
+        };
+      }),
+    ...attachments
+      .filter((attachment) => attachment?.kind === "image" && attachment.data)
+      .map((attachment) => ({
+        data: attachment.data,
+        mimeType: attachment.mimeType || "image/png",
+      })),
+  ];
+
+  const mergedText = mergeAttachmentsIntoText(text, attachments.filter((entry) => entry?.kind === "file"));
+  if (images.length) {
+    return { text: mergedText, images };
+  }
+  return mergedText;
+}
+
+function resolveSdkMode(mode) {
+  return resolveCursorSdkMode(mode);
+}
+
+export async function handleCursorChat(req, res, messages, modelId = null, options = {}) {
+  const { mode: requestedMode = "agent", attachments = [] } = options;
+  const mode = normalizeChatMode(requestedMode);
   const resolvedModel = modelId || process.env.CURSOR_MODEL || "composer-2.5";
   const latestText = extractLatestUserText(messages);
-  if (!latestText) {
+  const safeAttachments = Array.isArray(attachments) ? attachments : [];
+  if (!latestText && safeAttachments.length === 0) {
     res.status(400).json({ error: "No user message found in request." });
     return;
   }
 
   const cookie = req.headers.cookie || "";
   const sessionEnv = await fetchCatalogoneEnvFromSession(cookie);
-  const mcpServers = loadCatalogoneMcpServers({
+  const mcpServers = loadAllCursorMcpServers({
     envOverride: sessionEnv?.catalogoneEnv || null,
   });
 
+  if (!mcpServers.catalogone) {
+    console.warn("[chat-server] catalogone MCP not found in Cursor MCP config; agent may have limited CatalogOne access.");
+  }
+
   if (sessionEnv?.environmentLabel) {
     console.log(
-      `[chat-server] Cursor agent using connected environment: ${sessionEnv.environmentLabel}`,
+      `[chat-server] Cursor agent using connected environment: ${sessionEnv.environmentLabel} (mode=${mode})`,
     );
   }
 
@@ -122,11 +204,19 @@ export async function handleCursorChat(req, res, messages, modelId = null) {
 
       try {
         const agent = await getAgentForMcpServers(mcpServers, resolvedModel);
-        const prompt = buildPrompt(messages, latestText, sessionEnv);
+        const prompt = buildPrompt(
+          messages,
+          latestText || "See attached context.",
+          sessionEnv,
+          mode,
+          safeAttachments,
+        );
+        const latestImages = extractLatestTurnImages(messages, safeAttachments);
+        const userMessage = buildUserMessage(prompt, [], latestImages);
         let streamedLength = 0;
 
-        const run = await agent.send(prompt, {
-          mode: "agent",
+        const run = await agent.send(userMessage, {
+          mode: resolveSdkMode(mode),
           mcpServers,
           onDelta: ({ update }) => {
             if (update?.type === "text-delta" && update.text) {

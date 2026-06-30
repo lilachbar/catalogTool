@@ -16,6 +16,37 @@ const CHAT_WIDTH_MAX = 900;
 const CHAT_WIDTH_DEFAULT = 420;
 const CHAT_DETACHED_HEIGHT_MIN = 320;
 const CHAT_APP_TOP_CHROME = 28;
+const CHAT_MODES = [
+  { id: "agent", label: "Agent", hint: "Use MCP tools to act on CatalogOne" },
+  { id: "plan", label: "Plan", hint: "Plan catalog changes before executing" },
+  { id: "ask", label: "Ask", hint: "Answer questions without running tools" },
+];
+const CONTEXT_TOKEN_BUDGET_DEFAULT = 128000;
+
+const MODEL_CONTEXT_BUDGETS = [
+  { match: /composer|gpt-4\.1|gpt-5|o3|o4/i, budget: 200000 },
+  { match: /sonnet|opus|haiku|claude/i, budget: 200000 },
+  { match: /gpt-4o/i, budget: 128000 },
+  { match: /mini|flash|haiku/i, budget: 128000 },
+];
+
+function resolveContextBudget(selectedModel, defaultModel) {
+  const modelId = selectedModel === "auto" ? defaultModel : selectedModel;
+  if (!modelId) {
+    return CONTEXT_TOKEN_BUDGET_DEFAULT;
+  }
+  for (const entry of MODEL_CONTEXT_BUDGETS) {
+    if (entry.match.test(modelId)) {
+      return entry.budget;
+    }
+  }
+  return CONTEXT_TOKEN_BUDGET_DEFAULT;
+}
+const MAX_ATTACHMENTS = 5;
+const MAX_ATTACHMENT_BYTES = 5 * 1024 * 1024;
+const ATTACHMENT_TEXT_EXTENSIONS = new Set([
+  ".txt", ".md", ".json", ".csv", ".xml", ".yaml", ".yml", ".log", ".py", ".js", ".ts", ".jsx", ".tsx",
+]);
 
 function clampChatWidth(width, viewportWidth = window.innerWidth) {
   const max = Math.min(CHAT_WIDTH_MAX, Math.max(CHAT_WIDTH_MIN, viewportWidth - 80));
@@ -119,6 +150,32 @@ async function persistChatModelSelection(model, defaultModel) {
   return payload;
 }
 
+async function persistChatModeSelection(mode) {
+  const response = await fetch("/api/chat/mode", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ mode }),
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(payload.error || "Could not save chat mode.");
+  }
+  return payload;
+}
+
+function composerPlaceholder(mode, chatBlocked) {
+  if (chatBlocked) {
+    return "Configure an AI API key at sign-in or in .env";
+  }
+  if (mode === "plan") {
+    return "Describe what you want to plan…";
+  }
+  if (mode === "ask") {
+    return "Ask a question…";
+  }
+  return "Add a follow-up";
+}
+
 function detachedWindowPlacement(outerWidth) {
   const left = Math.max(0, Math.round(window.screenX + window.outerWidth - outerWidth));
   const top = Math.max(0, Math.round(window.screenY));
@@ -163,6 +220,101 @@ function applyDetachedWindowLayout(layout) {
   };
 }
 
+function estimateTokenCount(text) {
+  if (!text) {
+    return 0;
+  }
+  return Math.ceil(String(text).length / 4);
+}
+
+function attachmentToFilePart(attachment) {
+  if (attachment.kind === "image") {
+    const url = attachment.previewUrl || `data:${attachment.mimeType || "image/png"};base64,${attachment.data || ""}`;
+    return {
+      type: "file",
+      mediaType: attachment.mimeType || "image/png",
+      filename: attachment.name,
+      url,
+    };
+  }
+
+  const text = attachment.text || "";
+  const encoded = typeof btoa !== "undefined"
+    ? btoa(unescape(encodeURIComponent(text)))
+    : "";
+  return {
+    type: "file",
+    mediaType: attachment.mimeType || "text/plain",
+    filename: attachment.name,
+    url: encoded ? `data:text/plain;base64,${encoded}` : `data:text/plain,${encodeURIComponent(text)}`,
+  };
+}
+
+function extractMessageFileParts(message) {
+  return (message.parts ?? []).filter((part) => part.type === "file");
+}
+
+function estimateMessagesTokens(messageList) {
+  return messageList.reduce((total, message) => {
+    let messageTokens = estimateTokenCount(extractMessageText(message));
+    for (const part of extractMessageFileParts(message)) {
+      if (part.mediaType?.startsWith("image/")) {
+        const base64Length = part.url?.includes(",") ? part.url.split(",")[1]?.length || 0 : 0;
+        messageTokens += Math.ceil(base64Length / 4);
+      } else if (part.url?.startsWith("data:text/plain;base64,")) {
+        messageTokens += Math.ceil((part.url.length - "data:text/plain;base64,".length) / 4);
+      } else {
+        messageTokens += estimateTokenCount(part.filename || "");
+      }
+    }
+    return total + messageTokens;
+  }, 0);
+}
+
+async function readAttachmentFile(file) {
+  if (file.size > MAX_ATTACHMENT_BYTES) {
+    throw new Error(`${file.name} is too large (max ${Math.round(MAX_ATTACHMENT_BYTES / (1024 * 1024))}MB).`);
+  }
+
+  if (file.type.startsWith("image/")) {
+    const dataUrl = await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result || ""));
+      reader.onerror = () => reject(new Error(`Could not read ${file.name}.`));
+      reader.readAsDataURL(file);
+    });
+    const commaIndex = dataUrl.indexOf(",");
+    return {
+      id: crypto.randomUUID(),
+      kind: "image",
+      name: file.name,
+      mimeType: file.type || "image/png",
+      data: commaIndex >= 0 ? dataUrl.slice(commaIndex + 1) : dataUrl,
+      previewUrl: dataUrl,
+    };
+  }
+
+  const extension = file.name.includes(".") ? file.name.slice(file.name.lastIndexOf(".")).toLowerCase() : "";
+  if (!ATTACHMENT_TEXT_EXTENSIONS.has(extension)) {
+    throw new Error(`${file.name} is not a supported attachment type.`);
+  }
+
+  const text = await new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ""));
+    reader.onerror = () => reject(new Error(`Could not read ${file.name}.`));
+    reader.readAsText(file);
+  });
+
+  return {
+    id: crypto.randomUUID(),
+    kind: "file",
+    name: file.name,
+    mimeType: file.type || "text/plain",
+    text,
+  };
+}
+
 function formatClientError(error) {
   if (!error) {
     return "";
@@ -194,6 +346,7 @@ function useChatHealth() {
     provider: null,
     defaultModel: null,
     models: [],
+    chatMode: "agent",
   });
 
   useEffect(() => {
@@ -225,6 +378,7 @@ function useChatHealth() {
           provider: data.chatProvider?.provider || data.models?.provider || null,
           defaultModel: data.models?.defaultModel || data.chatProvider?.model || null,
           models: Array.isArray(data.models?.models) ? data.models.models : [],
+          chatMode: CHAT_MODES.some((entry) => entry.id === data.chatMode) ? data.chatMode : "agent",
         });
       } catch {
         if (!cancelled) {
@@ -235,6 +389,7 @@ function useChatHealth() {
             provider: null,
             defaultModel: null,
             models: [],
+            chatMode: "agent",
           });
         }
       }
@@ -259,6 +414,12 @@ function useCatalogChatSession({ channelRef, windowRole }) {
   const windowId = useId();
   const savedSession = useRef(readChatSession()).current;
   const [selectedModel, setSelectedModel] = useState(savedSession?.selectedModel || "auto");
+  const [selectedMode, setSelectedMode] = useState(() => {
+    const saved = savedSession?.selectedMode;
+    return CHAT_MODES.some((entry) => entry.id === saved) ? saved : "agent";
+  });
+  const pendingSendExtrasRef = useRef({ attachments: [] });
+  const pendingTurnModeRef = useRef(null);
   const remoteBusyRef = useRef(false);
   const mainWasBusyOnOpen = useRef(
     windowRole === "popup"
@@ -273,10 +434,36 @@ function useCatalogChatSession({ channelRef, windowRole }) {
       api: "/api/chat",
       body: () => ({
         model: selectedModel === "auto" ? undefined : selectedModel,
+        mode: selectedMode,
+        attachments: pendingSendExtrasRef.current.attachments,
       }),
     }),
-    [selectedModel],
+    [selectedModel, selectedMode],
   );
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadConfiguredMode() {
+      try {
+        const response = await fetch("/api/chat/config");
+        const data = await response.json();
+        const configuredMode = data.chatMode;
+        if (!cancelled && CHAT_MODES.some((entry) => entry.id === configuredMode)) {
+          setSelectedMode(configuredMode);
+        }
+      } catch {
+        // Best-effort sync from .env on load.
+      }
+    }
+
+    loadConfiguredMode();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const [messageChatModes, setMessageChatModes] = useState(() => savedSession?.messageModes || {});
 
   const {
     messages,
@@ -292,16 +479,31 @@ function useCatalogChatSession({ channelRef, windowRole }) {
   const isBusy = status === "streaming" || status === "submitted";
 
   useEffect(() => {
-    writeChatSession({ messages, selectedModel, status });
+    setMessageChatModes((previous) => {
+      const next = buildMessageChatModes(messages, previous, pendingTurnModeRef);
+      return JSON.stringify(next) === JSON.stringify(previous) ? previous : next;
+    });
+  }, [messages]);
+
+  useEffect(() => {
+    writeChatSession({
+      messages,
+      selectedModel,
+      selectedMode,
+      status,
+      messageModes: messageChatModes,
+    });
     channelRef.current?.postMessage({
       type: "chat-sync",
       sender: windowId,
       messages,
       selectedModel,
+      selectedMode,
       status,
+      messageModes: messageChatModes,
       windowRole,
     });
-  }, [channelRef, messages, selectedModel, status, windowId, windowRole]);
+  }, [channelRef, messageChatModes, messages, selectedModel, selectedMode, status, windowId, windowRole]);
 
   useEffect(() => {
     channelRef.current?.postMessage({ type: "chat-busy", busy: isBusy, sender: windowId });
@@ -324,13 +526,22 @@ function useCatalogChatSession({ channelRef, windowRole }) {
           if (Array.isArray(data.messages)) {
             setMessages(data.messages);
           }
+          if (data.messageModes && typeof data.messageModes === "object") {
+            setMessageChatModes(data.messageModes);
+          }
           if (data.selectedModel) {
             setSelectedModel(data.selectedModel);
+          }
+          if (data.selectedMode) {
+            setSelectedMode(data.selectedMode);
           }
         }
         if (windowRole === "popup" && data.windowRole === "main" && isBusy) {
           if (Array.isArray(data.messages)) {
             setMessages(data.messages);
+          }
+          if (data.messageModes && typeof data.messageModes === "object") {
+            setMessageChatModes(data.messageModes);
           }
         }
       }
@@ -348,8 +559,14 @@ function useCatalogChatSession({ channelRef, windowRole }) {
         if (Array.isArray(data.messages)) {
           setMessages(data.messages);
         }
+        if (data.messageModes && typeof data.messageModes === "object") {
+          setMessageChatModes(data.messageModes);
+        }
         if (data.selectedModel) {
           setSelectedModel(data.selectedModel);
+        }
+        if (data.selectedMode) {
+          setSelectedMode(data.selectedMode);
         }
       }
     };
@@ -368,6 +585,14 @@ function useCatalogChatSession({ channelRef, windowRole }) {
     [sendBlocked, sendMessage],
   );
 
+  const setPendingAttachments = useCallback((attachments) => {
+    pendingSendExtrasRef.current.attachments = Array.isArray(attachments) ? attachments : [];
+  }, []);
+
+  const clearPendingAttachments = useCallback(() => {
+    pendingSendExtrasRef.current.attachments = [];
+  }, []);
+
   return {
     messages,
     setMessages,
@@ -377,8 +602,82 @@ function useCatalogChatSession({ channelRef, windowRole }) {
     isBusy,
     selectedModel,
     setSelectedModel,
+    selectedMode,
+    setSelectedMode,
+    setPendingAttachments,
+    clearPendingAttachments,
+    pendingTurnModeRef,
+    messageChatModes,
     sendBlocked,
   };
+}
+
+function formatChatModeLabel(modeId) {
+  const entry = CHAT_MODES.find((mode) => mode.id === modeId);
+  return (entry?.label || "Agent").toUpperCase();
+}
+
+function normalizeChatModeId(mode) {
+  if (mode && CHAT_MODES.some((entry) => entry.id === mode)) {
+    return mode;
+  }
+  return null;
+}
+
+function buildMessageChatModes(messages, previousModes = {}, pendingTurnModeRef = null) {
+  const modes = { ...previousModes };
+
+  for (const message of messages) {
+    if (message.role !== "user") {
+      continue;
+    }
+    const metaMode = normalizeChatModeId(message.metadata?.chatMode);
+    if (metaMode) {
+      modes[message.id] = metaMode;
+    }
+  }
+
+  const lastUser = [...messages].reverse().find((entry) => entry.role === "user");
+  if (lastUser) {
+    const pendingMode = normalizeChatModeId(pendingTurnModeRef?.current);
+    if (pendingMode && !modes[lastUser.id]) {
+      modes[lastUser.id] = pendingMode;
+    }
+    const metaMode = normalizeChatModeId(lastUser.metadata?.chatMode);
+    if (metaMode) {
+      modes[lastUser.id] = metaMode;
+      if (pendingTurnModeRef?.current === metaMode) {
+        pendingTurnModeRef.current = null;
+      }
+    }
+  }
+
+  for (let index = 0; index < messages.length; index += 1) {
+    const message = messages[index];
+    if (message.role !== "assistant") {
+      continue;
+    }
+
+    let turnMode = "agent";
+    for (let userIndex = index - 1; userIndex >= 0; userIndex -= 1) {
+      if (messages[userIndex].role !== "user") {
+        continue;
+      }
+      turnMode = modes[messages[userIndex].id]
+        || normalizeChatModeId(messages[userIndex].metadata?.chatMode)
+        || "agent";
+      break;
+    }
+    modes[message.id] = turnMode;
+  }
+
+  return modes;
+}
+
+function resolveMessageChatMode(message, messageChatModes) {
+  return messageChatModes[message.id]
+    || normalizeChatModeId(message.metadata?.chatMode)
+    || "agent";
 }
 
 function extractMessageText(message) {
@@ -428,6 +727,29 @@ function ChatIconButton({ label, title, onClick, disabled = false, children }) {
   );
 }
 
+function ChatModeSelect({ selectedMode, onChange, disabled }) {
+  const current = CHAT_MODES.find((mode) => mode.id === selectedMode) || CHAT_MODES[0];
+
+  return (
+    <label className="chat-composer-pill chat-composer-mode-pill" title={current.hint}>
+      <span className="chat-composer-pill-icon" aria-hidden="true">∞</span>
+      <span className="chat-composer-mode-label">{current.label}</span>
+      <select
+        className="chat-composer-select-overlay"
+        value={selectedMode}
+        onChange={(event) => onChange(event.target.value)}
+        disabled={disabled}
+        aria-label="Chat mode"
+      >
+        {CHAT_MODES.map((mode) => (
+          <option key={mode.id} value={mode.id}>{mode.label}</option>
+        ))}
+      </select>
+      <span className="chat-composer-chevron" aria-hidden="true">▾</span>
+    </label>
+  );
+}
+
 function ChatModelSelect({
   selectedModel,
   onChange,
@@ -435,34 +757,332 @@ function ChatModelSelect({
   defaultModel,
   disabled,
 }) {
-  const autoLabel = "Auto";
+  const resolvedModel = selectedModel === "auto"
+    ? (defaultModel || "Auto")
+    : (models.find((entry) => entry.id === selectedModel)?.label || selectedModel);
 
   return (
-    <label className="chat-composer-pill chat-composer-pill-select">
-      <span className="visually-hidden">Model</span>
+    <label
+      className="chat-composer-model"
+      title={defaultModel ? `Automatic uses ${defaultModel}` : "Select AI model"}
+    >
+      <span className="chat-composer-model-label">{selectedModel === "auto" ? "Auto" : resolvedModel}</span>
       <select
-        className="chat-model-select"
+        className="chat-composer-select-overlay"
         value={selectedModel}
         onChange={(event) => onChange(event.target.value)}
         disabled={disabled}
         aria-label="AI model"
-        title={defaultModel ? `Automatic uses ${defaultModel}` : "Select AI model"}
       >
-        <option value="auto">{autoLabel}</option>
+        <option value="auto">Auto</option>
         {models.map((entry) => (
           <option key={entry.id} value={entry.id}>{entry.label || entry.id}</option>
         ))}
       </select>
+      <span className="chat-composer-chevron" aria-hidden="true">▾</span>
     </label>
   );
 }
 
-function AgentModePill() {
+function ChatContextUsage({ usedTokens, budget }) {
+  const rawPercent = budget > 0 ? (usedTokens / budget) * 100 : 0;
+  const displayPercent = Math.min(100, Math.round(rawPercent));
+  const ringPercent = usedTokens > 0 ? Math.max(rawPercent, 3) : 0;
+  const radius = 7;
+  const circumference = 2 * Math.PI * radius;
+  const dash = (ringPercent / 100) * circumference;
+
   return (
-    <div className="chat-composer-pill chat-composer-pill-static" title="Catalog assistant with MCP tools">
-      <span className="chat-composer-pill-icon" aria-hidden="true">∞</span>
-      <span>Agent</span>
+    <div
+      className="chat-composer-icon-btn chat-context-ring"
+      title={`~${usedTokens.toLocaleString()} / ${budget.toLocaleString()} tokens (${displayPercent}% context used)`}
+      aria-label={`Context usage ${displayPercent} percent`}
+      role="img"
+    >
+      <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true">
+        <circle cx="9" cy="9" r={radius} fill="none" stroke="var(--chat-context-track)" strokeWidth="2" />
+        <circle
+          cx="9"
+          cy="9"
+          r={radius}
+          fill="none"
+          stroke="var(--chat-context-fill)"
+          strokeWidth="2"
+          strokeDasharray={`${dash} ${circumference}`}
+          transform="rotate(-90 9 9)"
+          strokeLinecap="round"
+        />
+      </svg>
     </div>
+  );
+}
+
+function PaperclipIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" />
+    </svg>
+  );
+}
+
+function ChatAttachmentChips({ attachments, onRemove }) {
+  if (!attachments.length) {
+    return null;
+  }
+
+  return (
+    <div className="chat-attachment-list">
+      {attachments.map((attachment) => (
+        <div key={attachment.id} className="chat-attachment-chip">
+          {attachment.kind === "image" && attachment.previewUrl ? (
+            <img src={attachment.previewUrl} alt="" className="chat-attachment-thumb" />
+          ) : (
+            <span className="chat-attachment-file-icon" aria-hidden="true">📄</span>
+          )}
+          <span className="chat-attachment-name" title={attachment.name}>{attachment.name}</span>
+          <button
+            type="button"
+            className="chat-attachment-remove"
+            onClick={() => onRemove(attachment.id)}
+            aria-label={`Remove ${attachment.name}`}
+          >
+            ×
+          </button>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function decodeBase64Utf8(base64) {
+  const binary = atob(base64);
+  const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0));
+  return new TextDecoder("utf-8").decode(bytes);
+}
+
+function isTextLikeFilePart(part) {
+  const mediaType = part.mediaType || "";
+  if (mediaType.startsWith("text/")) {
+    return true;
+  }
+  if (mediaType.includes("json") || mediaType.includes("xml") || mediaType.includes("javascript")) {
+    return true;
+  }
+  const filename = part.filename || "";
+  return /\.(txt|md|json|csv|xml|yaml|yml|log|py|js|ts|jsx|tsx)$/i.test(filename);
+}
+
+function decodeFilePartContent(part) {
+  const url = part.url || "";
+  if (!url.startsWith("data:")) {
+    return null;
+  }
+
+  const commaIndex = url.indexOf(",");
+  if (commaIndex < 0) {
+    return null;
+  }
+
+  const metadata = url.slice(5, commaIndex);
+  const payload = url.slice(commaIndex + 1);
+
+  if (metadata.includes(";base64")) {
+    if (!isTextLikeFilePart(part)) {
+      return null;
+    }
+    try {
+      return decodeBase64Utf8(payload);
+    } catch {
+      try {
+        return atob(payload);
+      } catch {
+        return null;
+      }
+    }
+  }
+
+  try {
+    return decodeURIComponent(payload);
+  } catch {
+    return payload;
+  }
+}
+
+function openFilePartInNewTab(part) {
+  if (!part.url) {
+    return;
+  }
+  window.open(part.url, "_blank", "noopener,noreferrer");
+}
+
+function ChatAttachmentPreviewDialog({ preview, onClose }) {
+  const dialogRef = useRef(null);
+
+  useEffect(() => {
+    const dialog = dialogRef.current;
+    if (!dialog) {
+      return undefined;
+    }
+    if (preview) {
+      dialog.showModal();
+    } else {
+      dialog.close();
+    }
+    return undefined;
+  }, [preview]);
+
+  if (!preview) {
+    return null;
+  }
+
+  const downloadUrl = preview.downloadUrl || preview.blobUrl;
+
+  return (
+    <dialog
+      ref={dialogRef}
+      className="chat-attachment-preview-dialog"
+      onCancel={(event) => {
+        event.preventDefault();
+        onClose();
+      }}
+      onClick={(event) => {
+        if (event.target === dialogRef.current) {
+          onClose();
+        }
+      }}
+    >
+      <div className="chat-attachment-preview-panel">
+        <header className="chat-attachment-preview-head">
+          <h3 className="chat-attachment-preview-title">{preview.filename || "Attached file"}</h3>
+          <div className="chat-attachment-preview-actions">
+            {downloadUrl ? (
+              <a
+                className="btn btn-ghost btn-sm"
+                href={downloadUrl}
+                download={preview.filename || "attachment"}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                Download
+              </a>
+            ) : null}
+            <button type="button" className="btn btn-ghost btn-sm" onClick={onClose} aria-label="Close preview">
+              Close
+            </button>
+          </div>
+        </header>
+        {preview.kind === "image" ? (
+          <div className="chat-attachment-preview-image-wrap">
+            <img src={preview.url} alt={preview.filename || "Attached image"} className="chat-attachment-preview-image" />
+          </div>
+        ) : (
+          <pre className="chat-attachment-preview-content">{preview.content || ""}</pre>
+        )}
+      </div>
+    </dialog>
+  );
+}
+
+function ChatMessageAttachments({ parts }) {
+  const [preview, setPreview] = useState(null);
+
+  useEffect(() => () => {
+    if (preview?.blobUrl) {
+      URL.revokeObjectURL(preview.blobUrl);
+    }
+  }, [preview]);
+
+  const closePreview = useCallback(() => {
+    setPreview((current) => {
+      if (current?.blobUrl) {
+        URL.revokeObjectURL(current.blobUrl);
+      }
+      return null;
+    });
+  }, []);
+
+  const openPart = useCallback((part) => {
+    if (part.mediaType?.startsWith("image/")) {
+      setPreview((current) => {
+        if (current?.blobUrl) {
+          URL.revokeObjectURL(current.blobUrl);
+        }
+        return {
+          kind: "image",
+          filename: part.filename,
+          url: part.url,
+          downloadUrl: part.url,
+        };
+      });
+      return;
+    }
+
+    const textContent = decodeFilePartContent(part);
+    if (textContent != null) {
+      const blob = new Blob([textContent], { type: part.mediaType || "text/plain" });
+      const blobUrl = URL.createObjectURL(blob);
+      setPreview((current) => {
+        if (current?.blobUrl) {
+          URL.revokeObjectURL(current.blobUrl);
+        }
+        return {
+          kind: "text",
+          filename: part.filename,
+          content: textContent,
+          blobUrl,
+          downloadUrl: blobUrl,
+        };
+      });
+      return;
+    }
+
+    openFilePartInNewTab(part);
+  }, []);
+
+  if (!parts.length) {
+    return null;
+  }
+
+  return (
+    <>
+      <div className="chat-message-attachments">
+        {parts.map((part, index) => {
+          const key = `${part.filename || "file"}-${index}`;
+          const label = part.filename || (part.mediaType?.startsWith("image/") ? "Attached image" : "Attached file");
+
+          if (part.mediaType?.startsWith("image/")) {
+            return (
+              <button
+                key={key}
+                type="button"
+                className="chat-message-attachment chat-message-attachment-image chat-message-attachment-open"
+                onClick={() => openPart(part)}
+                title={`Open ${label}`}
+                aria-label={`Open ${label}`}
+              >
+                <img src={part.url} alt="" className="chat-message-attachment-img" />
+                <span className="chat-message-attachment-name">{label}</span>
+              </button>
+            );
+          }
+
+          return (
+            <button
+              key={key}
+              type="button"
+              className="chat-message-attachment chat-message-attachment-file chat-message-attachment-open"
+              onClick={() => openPart(part)}
+              title={`Open ${label}`}
+              aria-label={`Open ${label}`}
+            >
+              <span className="chat-message-attachment-icon" aria-hidden="true">📄</span>
+              <span className="chat-message-attachment-name">{label}</span>
+            </button>
+          );
+        })}
+      </div>
+      <ChatAttachmentPreviewDialog preview={preview} onClose={closePreview} />
+    </>
   );
 }
 
@@ -509,15 +1129,21 @@ function ChatMessageBody({ text, isUser }) {
   );
 }
 
-function ChatMessage({ message }) {
+function ChatMessage({ message, messageChatModes }) {
   const isUser = message.role === "user";
-  const text = extractMessageText(message);
+  const fileParts = extractMessageFileParts(message);
+  const rawText = extractMessageText(message);
+  const text = fileParts.length && /^(See attached files\.|See attached context\.)$/.test(rawText)
+    ? ""
+    : rawText;
+  const chatMode = resolveMessageChatMode(message, messageChatModes);
 
   return (
-    <div className={`chat-message chat-message-${isUser ? "user" : "assistant"}`}>
-      <div className="chat-message-role">{isUser ? "You" : "Agent"}</div>
+    <div className={`chat-message chat-message-${isUser ? "user" : "assistant"} chat-message-mode-${chatMode}`}>
+      <div className="chat-message-role">{formatChatModeLabel(chatMode)}</div>
       <div className="chat-message-body">
-        <ChatMessageBody text={text} isUser={isUser} />
+        <ChatMessageAttachments parts={fileParts} />
+        {(text || !fileParts.length) ? <ChatMessageBody text={text} isUser={isUser} /> : null}
       </div>
     </div>
   );
@@ -539,11 +1165,14 @@ function ChatPanel({
   const isPopup = mode === "popup";
   const detachedLayout = isPopup ? readDetachedLayout() : null;
   const [input, setInput] = useState("");
+  const [attachments, setAttachments] = useState([]);
+  const [attachError, setAttachError] = useState("");
   const [panelWidth, setPanelWidth] = useState(() => (
     isPopup ? (detachedLayout?.width ?? readSavedChatWidth()) : readSavedChatWidth()
   ));
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
+  const fileInputRef = useRef(null);
   const resizerRef = useRef(null);
   const widthDraggingRef = useRef(false);
 
@@ -555,6 +1184,12 @@ function ChatPanel({
     isBusy,
     selectedModel,
     setSelectedModel,
+    selectedMode,
+    setSelectedMode,
+    setPendingAttachments,
+    clearPendingAttachments,
+    pendingTurnModeRef,
+    messageChatModes,
   } = chatSession;
 
   const chatBlocked = !chatHealth.loading && !chatHealth.ready;
@@ -567,6 +1202,57 @@ function ChatPanel({
       console.error("Failed to persist model selection:", err);
     }
   }, [setSelectedModel, chatHealth.defaultModel]);
+
+  const handleModeChange = useCallback(async (mode) => {
+    if (!CHAT_MODES.some((entry) => entry.id === mode)) {
+      return;
+    }
+    setSelectedMode(mode);
+    try {
+      await persistChatModeSelection(mode);
+    } catch (err) {
+      console.error("Failed to persist chat mode:", err);
+    }
+  }, [setSelectedMode]);
+
+  const handleAttachFiles = useCallback(async (fileList) => {
+    const files = Array.from(fileList || []);
+    if (!files.length) {
+      return;
+    }
+
+    setAttachError("");
+    const remaining = MAX_ATTACHMENTS - attachments.length;
+    if (remaining <= 0) {
+      setAttachError(`You can attach up to ${MAX_ATTACHMENTS} files.`);
+      return;
+    }
+
+    const nextAttachments = [...attachments];
+    for (const file of files.slice(0, remaining)) {
+      try {
+        nextAttachments.push(await readAttachmentFile(file));
+      } catch (err) {
+        setAttachError(formatClientError(err));
+      }
+    }
+    setAttachments(nextAttachments);
+  }, [attachments]);
+
+  const removeAttachment = useCallback((attachmentId) => {
+    setAttachments((current) => current.filter((entry) => entry.id !== attachmentId));
+    setAttachError("");
+  }, []);
+
+  const attachmentTokens = attachments.reduce((total, attachment) => {
+    if (attachment.kind === "file") {
+      return total + estimateTokenCount(attachment.text);
+    }
+    return total + Math.ceil((attachment.data?.length || 0) / 4);
+  }, 0);
+  const contextBudget = resolveContextBudget(selectedModel, chatHealth.defaultModel);
+  const contextUsedTokens = estimateMessagesTokens(messages) + estimateTokenCount(input) + attachmentTokens;
+  const canSend = Boolean(input.trim() || attachments.length) && !isBusy && !chatBlocked && !sendBlocked;
 
   const persistPanelWidth = useCallback((width) => {
     const next = clampChatWidth(width);
@@ -646,13 +1332,47 @@ function ChatPanel({
     async (event) => {
       event.preventDefault();
       const text = input.trim();
-      if (!text || isBusy) {
+      if ((!text && !attachments.length) || isBusy) {
         return;
       }
+
+      const outgoingAttachments = attachments.map(({ id, kind, name, mimeType, data, text: fileText, previewUrl }) => ({
+        id,
+        kind,
+        name,
+        mimeType,
+        data,
+        text: fileText,
+        previewUrl,
+      }));
+      const fileParts = outgoingAttachments.map(attachmentToFilePart);
+
       setInput("");
-      await sendMessage({ text });
+      setAttachments([]);
+      setAttachError("");
+      setPendingAttachments(outgoingAttachments);
+      pendingTurnModeRef.current = selectedMode;
+
+      try {
+        await sendMessage({
+          text: text || (outgoingAttachments.length ? "See attached files." : ""),
+          files: fileParts,
+          metadata: { chatMode: selectedMode },
+        });
+      } finally {
+        clearPendingAttachments();
+      }
     },
-    [input, isBusy, sendMessage],
+    [
+      attachments,
+      clearPendingAttachments,
+      input,
+      isBusy,
+      sendMessage,
+      selectedMode,
+      pendingTurnModeRef,
+      setPendingAttachments,
+    ],
   );
 
   if (!open && !isPopup) {
@@ -731,16 +1451,21 @@ function ChatPanel({
         ) : null}
         {!chatBlocked && messages.length === 0 ? (
           <div className="chat-empty">
-            <p>Ask about CatalogOne tables, business requests, or how to use this app.</p>
+            <p>
+              Use Agent, Plan, or Ask mode to get help with Upload, Review &amp; Publish,
+              DG Import, CatalogOne MCP tools, or your connected environment.
+            </p>
             <ul>
-              <li>What tables can I merge?</li>
-              <li>How do I create a business request?</li>
-              <li>Am I connected to CatalogOne?</li>
+              <li>How do I upload a zip and review changes before publishing?</li>
+              <li>How does DG Import load Actions and Reasons from Excel?</li>
+              <li>Am I connected to CatalogOne, and which MCP tools are available?</li>
             </ul>
           </div>
         ) : null}
         {!chatBlocked
-          ? messages.map((message) => <ChatMessage key={message.id} message={message} />)
+          ? messages.map((message) => (
+            <ChatMessage key={message.id} message={message} messageChatModes={messageChatModes} />
+          ))
           : null}
         {isBusy ? <div className="chat-typing">Thinking…</div> : null}
         {sendBlocked && !isBusy ? (
@@ -752,11 +1477,12 @@ function ChatPanel({
 
       <form className="chat-composer" onSubmit={onSubmit}>
         <div className="chat-composer-box">
+          <ChatAttachmentChips attachments={attachments} onRemove={removeAttachment} />
           <textarea
             ref={inputRef}
             className="chat-input"
             rows={2}
-            placeholder={chatBlocked ? "Configure an AI API key at sign-in or in .env" : "Add a follow-up"}
+            placeholder={composerPlaceholder(selectedMode, chatBlocked)}
             value={input}
             onChange={(event) => setInput(event.target.value)}
             onKeyDown={(event) => {
@@ -769,7 +1495,11 @@ function ChatPanel({
           />
           <div className="chat-composer-toolbar">
             <div className="chat-composer-toolbar-left">
-              <AgentModePill />
+              <ChatModeSelect
+                selectedMode={selectedMode}
+                onChange={handleModeChange}
+                disabled={isBusy || chatBlocked}
+              />
               <ChatModelSelect
                 selectedModel={selectedModel}
                 onChange={handleModelChange}
@@ -778,18 +1508,43 @@ function ChatPanel({
                 disabled={isBusy || chatBlocked}
               />
             </div>
-            <button
-              type="submit"
-              className="chat-composer-send"
-              disabled={isBusy || chatBlocked || sendBlocked || !input.trim()}
-              aria-label="Send message"
-              title="Send message"
-            >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.25" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <path d="m5 12 7-7 7 7" /><path d="M12 19V5" />
-              </svg>
-            </button>
+            <div className="chat-composer-toolbar-right">
+              <ChatContextUsage usedTokens={contextUsedTokens} budget={contextBudget} />
+              <input
+                ref={fileInputRef}
+                type="file"
+                className="visually-hidden"
+                multiple
+                accept="image/*,.txt,.md,.json,.csv,.xml,.yaml,.yml,.log,.py,.js,.ts,.jsx,.tsx"
+                onChange={(event) => {
+                  handleAttachFiles(event.target.files);
+                  event.target.value = "";
+                }}
+              />
+              <button
+                type="button"
+                className="chat-composer-icon-btn"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={isBusy || chatBlocked || attachments.length >= MAX_ATTACHMENTS}
+                aria-label="Attach file or image"
+                title="Attach file or image"
+              >
+                <PaperclipIcon />
+              </button>
+              <button
+                type="submit"
+                className={`chat-composer-send${canSend ? " is-ready" : ""}`}
+                disabled={!canSend}
+                aria-label="Send message"
+                title="Send message"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.25" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="m5 12 7-7 7 7" /><path d="M12 19V5" />
+                </svg>
+              </button>
+            </div>
           </div>
+          {attachError ? <div className="chat-attachment-error">{attachError}</div> : null}
         </div>
       </form>
     </aside>
@@ -864,6 +1619,12 @@ function ChatApp() {
   }, []);
 
   useEffect(() => {
+    const onCloseChat = () => setOpen(false);
+    window.addEventListener("catalogTool:close-chat", onCloseChat);
+    return () => window.removeEventListener("catalogTool:close-chat", onCloseChat);
+  }, []);
+
+  useEffect(() => {
     channelRef.current = new BroadcastChannel(CHAT_POPUP_CHANNEL);
     const channel = channelRef.current;
     channel.onmessage = (event) => {
@@ -899,6 +1660,7 @@ function ChatApp() {
           type: "chat-handoff",
           messages: chatSession.messages,
           selectedModel: chatSession.selectedModel,
+          selectedMode: chatSession.selectedMode,
         });
         channelRef.current?.postMessage({ type: "chat-handoff-complete" });
         setKeepAliveBusy(false);
@@ -906,7 +1668,7 @@ function ChatApp() {
     }, 300);
 
     return () => window.clearInterval(intervalId);
-  }, [popupActive, chatSession.isBusy, chatSession.messages, chatSession.selectedModel]);
+  }, [popupActive, chatSession.isBusy, chatSession.messages, chatSession.selectedModel, chatSession.selectedMode]);
 
   useEffect(() => {
     const closeDetachedOnExit = () => {
@@ -950,6 +1712,8 @@ function ChatApp() {
     writeChatSession({
       messages: chatSession.messages,
       selectedModel: chatSession.selectedModel,
+      selectedMode: chatSession.selectedMode,
+      messageModes: chatSession.messageChatModes,
     });
 
     const sessionId = String(Date.now());
@@ -979,7 +1743,9 @@ function ChatApp() {
             type: "chat-sync",
             messages: chatSession.messages,
             selectedModel: chatSession.selectedModel,
+            selectedMode: chatSession.selectedMode,
             status: chatSession.status,
+            messageModes: chatSession.messageChatModes,
             windowRole: "main",
           });
           return;
@@ -1002,7 +1768,9 @@ function ChatApp() {
       type: "chat-sync",
       messages: chatSession.messages,
       selectedModel: chatSession.selectedModel,
+      selectedMode: chatSession.selectedMode,
       status: chatSession.status,
+      messageModes: chatSession.messageChatModes,
       windowRole: "main",
     });
   }, [chatSession, popupActive]);
@@ -1058,6 +1826,48 @@ function ChatApp() {
     }
     toggleBtn.classList.toggle("is-active", open || popupActive);
     toggleBtn.setAttribute("aria-pressed", open || popupActive ? "true" : "false");
+  }, [open, popupActive]);
+
+  useEffect(() => {
+    if (!open || popupActive) {
+      return undefined;
+    }
+
+    const onPointerDown = (event) => {
+      const panel = document.querySelector("aside.chat-panel:not(.chat-panel-popup):not(.chat-panel-hidden)");
+      if (!panel) {
+        return;
+      }
+
+      const target = event.target;
+      if (!(target instanceof Node)) {
+        return;
+      }
+
+      if (panel.contains(target)) {
+        return;
+      }
+
+      const toggleBtn = document.getElementById("chatToggleBtn");
+      if (toggleBtn?.contains(target)) {
+        return;
+      }
+
+      const attachBtn = document.getElementById("chatAttachBtn");
+      if (attachBtn?.contains(target)) {
+        return;
+      }
+
+      const openDialog = document.querySelector("dialog[open]");
+      if (openDialog?.contains(target)) {
+        return;
+      }
+
+      setOpen(false);
+    };
+
+    document.addEventListener("pointerdown", onPointerDown);
+    return () => document.removeEventListener("pointerdown", onPointerDown);
   }, [open, popupActive]);
 
   const showDockedPanel = open || (popupActive && keepAliveBusy);
@@ -1152,5 +1962,32 @@ function ChatPopupApp() {
 const mount = document.getElementById("chatRoot");
 if (mount) {
   const mode = mount.dataset.chatMode || "embedded";
-  createRoot(mount).render(mode === "popup" ? <ChatPopupApp /> : <ChatApp />);
+
+  function isAgenticEnabled() {
+    return window.catalogTool?.useAgentic !== false
+      && document.body?.dataset?.useAgentic !== "false";
+  }
+
+  let chatRoot = null;
+
+  function mountChatApp() {
+    if (!isAgenticEnabled()) {
+      mount.hidden = true;
+      return;
+    }
+    mount.hidden = false;
+    if (!chatRoot) {
+      chatRoot = createRoot(mount);
+      chatRoot.render(mode === "popup" ? <ChatPopupApp /> : <ChatApp />);
+    }
+  }
+
+  mountChatApp();
+  window.addEventListener("catalogTool:agentic-changed", (event) => {
+    if (event.detail?.enabled) {
+      mountChatApp();
+      return;
+    }
+    mount.hidden = true;
+  });
 }

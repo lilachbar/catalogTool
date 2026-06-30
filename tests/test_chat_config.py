@@ -8,6 +8,7 @@ from unittest.mock import patch
 from catalog_tool.web.routes.chat_config import (
     _normalize_api_key,
     _provider_env_updates,
+    apply_chat_mode_selection,
     apply_chat_model_selection,
 )
 
@@ -135,6 +136,41 @@ class ChatModelSelectionTests(unittest.TestCase):
         }
 
         payload, status = apply_chat_model_selection("claude-sonnet-4-5")
+
+        self.assertEqual(status, 200)
+        self.assertTrue(payload.get("unchanged"))
+        mock_upsert.assert_not_called()
+
+
+class ChatModeSelectionTests(unittest.TestCase):
+    @patch("catalog_tool.web.routes.chat_config._reload_node_env")
+    @patch("catalog_tool.web.routes.chat_config._reload_python_env")
+    @patch("catalog_tool.web.routes.chat_config.upsert_env_vars")
+    @patch("catalog_tool.web.routes.chat_config.read_env_file")
+    def test_persists_mode_to_env(
+        self,
+        mock_read_env,
+        mock_upsert,
+        mock_reload_python,
+        mock_reload_node,
+    ) -> None:
+        mock_read_env.return_value = {"CHAT_MODE": "agent"}
+        mock_reload_node.return_value = {"ok": True}
+
+        payload, status = apply_chat_mode_selection("plan")
+
+        self.assertEqual(status, 200)
+        self.assertEqual(payload["mode"], "plan")
+        mock_upsert.assert_called_once_with({"CHAT_MODE": "plan"})
+        mock_reload_python.assert_called_once()
+        mock_reload_node.assert_called_once()
+
+    @patch("catalog_tool.web.routes.chat_config.upsert_env_vars")
+    @patch("catalog_tool.web.routes.chat_config.read_env_file")
+    def test_skips_mode_write_when_unchanged(self, mock_read_env, mock_upsert) -> None:
+        mock_read_env.return_value = {"CHAT_MODE": "ask"}
+
+        payload, status = apply_chat_mode_selection("ask")
 
         self.assertEqual(status, 200)
         self.assertTrue(payload.get("unchanged"))

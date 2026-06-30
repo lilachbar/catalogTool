@@ -8,6 +8,7 @@ import {
   callCatalogoneMcpTool,
   listCatalogoneMcpTools,
 } from "./catalogone-mcp-client.js";
+import { modeAllowsWriteTools, READ_ONLY_CATALOGONE_TOOLS } from "./chat-mode.js";
 import { fetchCatalogoneEnvFromSession, callInternalApi } from "./mcp-session.js";
 
 function zodFromJsonSchema(inputSchema) {
@@ -50,7 +51,7 @@ function zodFromJsonSchema(inputSchema) {
   return z.object(shape).passthrough();
 }
 
-async function buildCatalogoneMcpTools(envOverride = null) {
+async function buildCatalogoneMcpTools(envOverride = null, mode = "agent") {
   let mcpTools = [];
   try {
     mcpTools = await listCatalogoneMcpTools({ envOverride });
@@ -61,8 +62,12 @@ async function buildCatalogoneMcpTools(envOverride = null) {
 
   const byName = new Map(mcpTools.map((entry) => [entry.name, entry]));
   const wrapped = {};
+  const allowWrite = modeAllowsWriteTools(mode);
 
   for (const name of PRIORITY_CATALOGONE_TOOLS) {
+    if (!allowWrite && !READ_ONLY_CATALOGONE_TOOLS.has(name)) {
+      continue;
+    }
     const meta = byName.get(name);
     if (!meta) {
       continue;
@@ -75,8 +80,9 @@ async function buildCatalogoneMcpTools(envOverride = null) {
   }
 
   wrapped.call_catalogone_mcp = tool({
-    description:
-      "Call any catalogone MCP tool by name. Use for tools not exposed directly. Prefer dedicated tools when available.",
+    description: allowWrite
+      ? "Call any catalogone MCP tool by name. Use for tools not exposed directly. Prefer dedicated tools when available."
+      : "Call a read-only catalogone MCP tool by name (search/get/list/validate only). Do not invoke create/update/publish/delete tools in this mode.",
     inputSchema: z.object({
       toolName: z.string().describe("MCP tool name, e.g. search_catalog"),
       arguments: z
@@ -84,8 +90,14 @@ async function buildCatalogoneMcpTools(envOverride = null) {
         .optional()
         .describe("Tool arguments object"),
     }),
-    execute: async ({ toolName, arguments: toolArgs }) =>
-      callCatalogoneMcpTool(toolName, toolArgs || {}, { envOverride }),
+    execute: async ({ toolName, arguments: toolArgs }) => {
+      if (!allowWrite && !READ_ONLY_CATALOGONE_TOOLS.has(toolName)) {
+        return {
+          error: `Tool "${toolName}" is not allowed in ${mode} mode. Switch to Agent mode to run write actions.`,
+        };
+      }
+      return callCatalogoneMcpTool(toolName, toolArgs || {}, { envOverride });
+    },
   });
 
   wrapped.list_catalogone_mcp_tools = tool({
@@ -103,11 +115,11 @@ async function buildCatalogoneMcpTools(envOverride = null) {
   return wrapped;
 }
 
-export async function createChatTools(requestHeaders = {}) {
+export async function createChatTools(requestHeaders = {}, { mode = "agent" } = {}) {
   const cookie = requestHeaders.cookie || "";
   const sessionEnv = await fetchCatalogoneEnvFromSession(cookie);
   const envOverride = sessionEnv?.catalogoneEnv || null;
-  const mcpTools = await buildCatalogoneMcpTools(envOverride);
+  const mcpTools = await buildCatalogoneMcpTools(envOverride, mode);
 
   return {
     ...mcpTools,
