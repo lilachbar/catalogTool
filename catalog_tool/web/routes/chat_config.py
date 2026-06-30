@@ -27,18 +27,23 @@ def _looks_like_masked_key(value: str) -> bool:
     return "…" in value or "•" in value
 
 
-def resolve_chat_api_key(provider: str, api_key: str | None = None) -> str:
+def resolve_chat_api_key(
+    provider: str,
+    api_key: str | None = None,
+    env_values: dict[str, str] | None = None,
+) -> str:
     trimmed = _normalize_api_key(api_key or "")
-    if _looks_like_masked_key(trimmed):
-        trimmed = ""
     if trimmed:
         return trimmed
-    return existing_api_key_for_provider(provider)
+    return existing_api_key_for_provider(provider, env_values)
 
 
 def _normalize_api_key(value: str) -> str:
     cleaned = (value or "").strip().lstrip("\ufeff").strip().strip('"').strip("'")
-    return "".join(cleaned.split())
+    normalized = "".join(cleaned.split())
+    if _looks_like_masked_key(normalized):
+        return ""
+    return normalized
 
 
 def _provider_env_updates(
@@ -51,21 +56,21 @@ def _provider_env_updates(
     env_values = env_values if env_values is not None else read_env_file()
     normalized = normalize_chat_provider(provider) or provider
     updates: dict[str, str] = {"CHAT_PROVIDER": normalized}
-    resolved_key = _normalize_api_key(api_key)
+    resolved_key = resolve_chat_api_key(normalized, api_key, env_values)
 
     if normalized == "cursor":
-        if resolved_key != existing_api_key_for_provider("cursor", env_values):
+        if resolved_key and resolved_key != existing_api_key_for_provider("cursor", env_values):
             updates["CURSOR_API_KEY"] = resolved_key
         if model and model.strip() != (env_values.get("CURSOR_MODEL") or "").strip():
             updates["CURSOR_MODEL"] = model.strip()
     elif normalized == "openai":
-        if resolved_key != existing_api_key_for_provider("openai", env_values):
+        if resolved_key and resolved_key != existing_api_key_for_provider("openai", env_values):
             updates["OPENAI_API_KEY"] = resolved_key
         if model and model.strip() != (env_values.get("OPENAI_MODEL") or "").strip():
             updates["OPENAI_MODEL"] = model.strip()
     elif normalized in {"claude", "anthropic"}:
         updates["CHAT_PROVIDER"] = "claude"
-        if resolved_key != existing_api_key_for_provider("claude", env_values):
+        if resolved_key and resolved_key != existing_api_key_for_provider("claude", env_values):
             updates["ANTHROPIC_API_KEY"] = resolved_key
         if model and model.strip() != (env_values.get("ANTHROPIC_MODEL") or "").strip():
             updates["ANTHROPIC_MODEL"] = model.strip()
@@ -100,7 +105,7 @@ def needs_chat_reconfigure(
     if target_provider != current_provider:
         return True
     if api_key:
-        submitted = resolve_chat_api_key(target_provider or "", api_key)
+        submitted = resolve_chat_api_key(target_provider or "", api_key, env_values)
         if submitted and submitted != existing_api_key_for_provider(
             target_provider or "", env_values
         ):
@@ -122,12 +127,12 @@ def apply_chat_login_config(
     if not normalized:
         return None, None
 
-    resolved_key = resolve_chat_api_key(normalized, api_key)
+    env_values = read_env_file()
+    resolved_key = resolve_chat_api_key(normalized, api_key, env_values)
     if not resolved_key:
         return {"error": f"API key is required for {normalized}."}, 400
 
     if not needs_chat_reconfigure(normalized, api_key, model):
-        env_values = read_env_file()
         current_provider = normalize_chat_provider(env_values.get("CHAT_PROVIDER"))
         if normalized != current_provider:
             return configure_chat_provider(normalized, resolved_key, model)
@@ -263,7 +268,9 @@ def register(app: Flask) -> None:
 
         if not provider:
             return jsonify({"error": "AI provider is required."}), 400
-        if not api_key:
+
+        resolved_key = resolve_chat_api_key(provider, api_key)
+        if not resolved_key:
             return jsonify({"error": "API key is required."}), 400
 
         payload, status = configure_chat_provider(provider, api_key, model)

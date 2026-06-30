@@ -191,14 +191,19 @@
       ul.className = "mcp-tools-category-list";
       for (const tool of items) {
         const li = document.createElement("li");
+        li.className = "mcp-tool-card";
         const btn = document.createElement("button");
         btn.type = "button";
-        btn.className = "mcp-tools-list-item";
+        btn.className = "mcp-tool-card-inner";
         if (tool.name === state.selectedToolName) {
           btn.classList.add("is-active");
         }
         btn.dataset.toolName = tool.name;
-        btn.innerHTML = `<span class="mcp-tools-list-name">${tool.name}</span><span class="mcp-tools-list-title">${tool.title || ""}</span>`;
+        const tipParts = [tool.title, tool.description].filter(Boolean);
+        if (tipParts.length) {
+          btn.dataset.tipDesc = tipParts.join(" — ");
+        }
+        btn.innerHTML = `<span class="mcp-tool-card-name">${tool.name}</span>`;
         btn.addEventListener("click", () => selectTool(tool.name));
         li.appendChild(btn);
         ul.appendChild(li);
@@ -396,7 +401,7 @@
       els.rawJson.value = JSON.stringify(exampleArgs, null, 2);
     }
 
-    els.detail?.closest(".mcp-tools-main")?.scrollTo({ top: 0, behavior: "smooth" });
+    els.detail?.closest(".mcp-tools-main-scroll")?.scrollTo({ top: 0, behavior: "auto" });
   }
 
   function collectFormArguments(tool) {

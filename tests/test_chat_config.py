@@ -6,6 +6,7 @@ import unittest
 from unittest.mock import patch
 
 from catalog_tool.web.routes.chat_config import (
+    _normalize_api_key,
     _provider_env_updates,
     apply_chat_model_selection,
 )
@@ -51,6 +52,28 @@ class ChatConfigUpdatesTests(unittest.TestCase):
             },
         )
         self.assertNotIn("CURSOR_API_KEY", updates)
+
+    def test_masked_api_key_is_not_written_to_env_updates(self) -> None:
+        env_values = {
+            "CHAT_PROVIDER": "cursor",
+            "CURSOR_API_KEY": "crsr_saved_cursor_key_value",
+        }
+        masked = "crsr…7890"
+
+        updates = _provider_env_updates(
+            "cursor",
+            masked,
+            None,
+            env_values=env_values,
+        )
+
+        self.assertEqual(updates, {"CHAT_PROVIDER": "cursor"})
+        self.assertNotIn("CURSOR_API_KEY", updates)
+
+    def test_normalize_api_key_rejects_masked_values(self) -> None:
+        self.assertEqual(_normalize_api_key("crsr…7890"), "")
+        self.assertEqual(_normalize_api_key("••••"), "")
+        self.assertEqual(_normalize_api_key("sk-p…key"), "")
 
 
 class ChatModelSelectionTests(unittest.TestCase):
