@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport } from "ai";
@@ -7,6 +7,7 @@ import remarkGfm from "remark-gfm";
 
 const CHAT_WIDTH_STORAGE_KEY = "catalogTool.chatPanelWidth";
 const CHAT_DETACHED_LAYOUT_KEY = "catalogTool.detachedLayout";
+const CHAT_SESSION_STORAGE_KEY = "catalogTool.chatSession";
 const CHAT_POPUP_CHANNEL = "catalog-tool-chat";
 const CHAT_POPUP_NAME = "catalogToolChatPopup";
 const DETACHED_CHAT_WINDOW_TITLE = "Catalog Tool · Chat";
@@ -35,7 +36,7 @@ function readSavedChatWidth() {
 }
 
 function readCurrentChatPanelWidth() {
-  const panel = document.querySelector("aside.chat-panel:not(.chat-panel-popup)");
+  const panel = document.querySelector("aside.chat-panel:not(.chat-panel-popup):not(.chat-panel-hidden)");
   if (panel?.offsetWidth) {
     return panel.offsetWidth;
   }
@@ -56,6 +57,22 @@ function readDetachedLayout() {
   } catch {
     return null;
   }
+}
+
+function readChatSession() {
+  try {
+    const raw = sessionStorage.getItem(CHAT_SESSION_STORAGE_KEY);
+    if (!raw) {
+      return null;
+    }
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+
+function writeChatSession(session) {
+  sessionStorage.setItem(CHAT_SESSION_STORAGE_KEY, JSON.stringify(session));
 }
 
 function readDetachedChatSize() {
@@ -158,6 +175,9 @@ function useChatHealth() {
     loading: true,
     ready: false,
     message: "",
+    provider: null,
+    defaultModel: null,
+    models: [],
   });
 
   useEffect(() => {
@@ -186,6 +206,9 @@ function useChatHealth() {
           loading: false,
           ready: Boolean(data.chatReady),
           message,
+          provider: data.chatProvider?.provider || data.models?.provider || null,
+          defaultModel: data.models?.defaultModel || data.chatProvider?.model || null,
+          models: Array.isArray(data.models?.models) ? data.models.models : [],
         });
       } catch {
         if (!cancelled) {
@@ -193,6 +216,9 @@ function useChatHealth() {
             loading: false,
             ready: false,
             message: "Could not reach the chat server. Restart with ./run_web.sh",
+            provider: null,
+            defaultModel: null,
+            models: [],
           });
         }
       }
@@ -211,6 +237,132 @@ function useChatHealth() {
   }, []);
 
   return health;
+}
+
+function useCatalogChatSession({ channelRef, windowRole }) {
+  const windowId = useId();
+  const savedSession = useRef(readChatSession()).current;
+  const [selectedModel, setSelectedModel] = useState(savedSession?.selectedModel || "auto");
+  const remoteBusyRef = useRef(false);
+  const mainWasBusyOnOpen = useRef(
+    windowRole === "popup"
+    && (savedSession?.status === "streaming" || savedSession?.status === "submitted"),
+  );
+  const [sendBlocked, setSendBlocked] = useState(
+    windowRole === "popup" && mainWasBusyOnOpen.current,
+  );
+
+  const transport = useMemo(
+    () => new DefaultChatTransport({
+      api: "/api/chat",
+      body: () => ({
+        model: selectedModel === "auto" ? undefined : selectedModel,
+      }),
+    }),
+    [selectedModel],
+  );
+
+  const {
+    messages,
+    setMessages,
+    sendMessage,
+    status,
+    error,
+  } = useChat({
+    transport,
+    initialMessages: savedSession?.messages ?? [],
+  });
+
+  const isBusy = status === "streaming" || status === "submitted";
+
+  useEffect(() => {
+    writeChatSession({ messages, selectedModel, status });
+    channelRef.current?.postMessage({
+      type: "chat-sync",
+      sender: windowId,
+      messages,
+      selectedModel,
+      status,
+      windowRole,
+    });
+  }, [channelRef, messages, selectedModel, status, windowId, windowRole]);
+
+  useEffect(() => {
+    channelRef.current?.postMessage({ type: "chat-busy", busy: isBusy, sender: windowId });
+  }, [channelRef, isBusy, windowId]);
+
+  useEffect(() => {
+    const channel = channelRef.current;
+    if (!channel) {
+      return undefined;
+    }
+
+    const onMessage = (event) => {
+      const data = event.data;
+      if (!data || data.sender === windowId) {
+        return;
+      }
+
+      if (data.type === "chat-sync") {
+        if (windowRole === "mirror" || (windowRole === "main" && data.windowRole === "popup")) {
+          if (Array.isArray(data.messages)) {
+            setMessages(data.messages);
+          }
+          if (data.selectedModel) {
+            setSelectedModel(data.selectedModel);
+          }
+        }
+        if (windowRole === "popup" && data.windowRole === "main" && isBusy) {
+          if (Array.isArray(data.messages)) {
+            setMessages(data.messages);
+          }
+        }
+      }
+
+      if (data.type === "chat-busy") {
+        remoteBusyRef.current = Boolean(data.busy);
+        if (windowRole === "popup") {
+          setSendBlocked(Boolean(data.busy) || mainWasBusyOnOpen.current);
+        }
+      }
+
+      if (data.type === "chat-handoff" && windowRole === "popup") {
+        mainWasBusyOnOpen.current = false;
+        setSendBlocked(false);
+        if (Array.isArray(data.messages)) {
+          setMessages(data.messages);
+        }
+        if (data.selectedModel) {
+          setSelectedModel(data.selectedModel);
+        }
+      }
+    };
+
+    channel.addEventListener("message", onMessage);
+    return () => channel.removeEventListener("message", onMessage);
+  }, [channelRef, isBusy, setMessages, windowId, windowRole]);
+
+  const guardedSendMessage = useCallback(
+    async (payload) => {
+      if (sendBlocked) {
+        return;
+      }
+      await sendMessage(payload);
+    },
+    [sendBlocked, sendMessage],
+  );
+
+  return {
+    messages,
+    setMessages,
+    sendMessage: guardedSendMessage,
+    status,
+    error,
+    isBusy,
+    selectedModel,
+    setSelectedModel,
+    sendBlocked,
+  };
 }
 
 function extractMessageText(message) {
@@ -257,6 +409,35 @@ function ChatIconButton({ label, title, onClick, disabled = false, children }) {
     >
       {children}
     </button>
+  );
+}
+
+function ChatModelSelect({
+  selectedModel,
+  onChange,
+  models,
+  defaultModel,
+  disabled,
+}) {
+  const autoLabel = defaultModel ? `Automatic (${defaultModel})` : "Automatic";
+
+  return (
+    <label className="chat-model-select-wrap">
+      <span className="visually-hidden">Model</span>
+      <select
+        className="chat-model-select"
+        value={selectedModel}
+        onChange={(event) => onChange(event.target.value)}
+        disabled={disabled}
+        aria-label="AI model"
+        title="Select AI model"
+      >
+        <option value="auto">{autoLabel}</option>
+        {models.map((entry) => (
+          <option key={entry.id} value={entry.id}>{entry.label || entry.id}</option>
+        ))}
+      </select>
+    </label>
   );
 }
 
@@ -324,7 +505,11 @@ function ChatPanel({
   onPopOut,
   onAttach,
   popupActive = false,
-  chatHealth = { loading: false, ready: true, message: "" },
+  visuallyHidden = false,
+  chatHealth = { loading: false, ready: true, message: "", models: [], defaultModel: null },
+  chatSession,
+  onBusyChange,
+  sendBlocked = false,
 }) {
   const isPopup = mode === "popup";
   const detachedLayout = isPopup ? readDetachedLayout() : null;
@@ -337,11 +522,16 @@ function ChatPanel({
   const resizerRef = useRef(null);
   const widthDraggingRef = useRef(false);
 
-  const { messages, sendMessage, status, error } = useChat({
-    transport: new DefaultChatTransport({ api: "/api/chat" }),
-  });
+  const {
+    messages,
+    sendMessage,
+    status,
+    error,
+    isBusy,
+    selectedModel,
+    setSelectedModel,
+  } = chatSession;
 
-  const isBusy = status === "streaming" || status === "submitted";
   const chatBlocked = !chatHealth.loading && !chatHealth.ready;
 
   const persistPanelWidth = useCallback((width) => {
@@ -349,6 +539,10 @@ function ChatPanel({
     setPanelWidth(next);
     localStorage.setItem(CHAT_WIDTH_STORAGE_KEY, String(next));
   }, []);
+
+  useEffect(() => {
+    onBusyChange?.(isBusy);
+  }, [isBusy, onBusyChange]);
 
   useEffect(() => {
     const onWindowResize = () => {
@@ -405,10 +599,10 @@ function ChatPanel({
   }, [open, isPopup, persistPanelWidth]);
 
   useEffect(() => {
-    if (open) {
+    if (open && !visuallyHidden) {
       inputRef.current?.focus();
     }
-  }, [open]);
+  }, [open, visuallyHidden]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -431,7 +625,11 @@ function ChatPanel({
     return null;
   }
 
-  const panelClassName = ["chat-panel", isPopup ? "chat-panel-popup" : ""].filter(Boolean).join(" ");
+  const panelClassName = [
+    "chat-panel",
+    isPopup ? "chat-panel-popup" : "",
+    visuallyHidden ? "chat-panel-hidden" : "",
+  ].filter(Boolean).join(" ");
   const panelStyle = { "--chat-panel-width": `${panelWidth}px` };
 
   return (
@@ -464,6 +662,13 @@ function ChatPanel({
           </div>
         )}
         <div className="chat-panel-actions">
+          <ChatModelSelect
+            selectedModel={selectedModel}
+            onChange={setSelectedModel}
+            models={chatHealth.models}
+            defaultModel={chatHealth.defaultModel}
+            disabled={isBusy}
+          />
           {isPopup ? (
             <ChatIconButton label="Attach chat" title="Attach to main window" onClick={onAttach}>
               <AttachIcon />
@@ -511,6 +716,9 @@ function ChatPanel({
           ? messages.map((message) => <ChatMessage key={message.id} message={message} />)
           : null}
         {isBusy ? <div className="chat-typing">Thinking…</div> : null}
+        {sendBlocked && !isBusy ? (
+          <div className="chat-typing chat-handoff-notice">Waiting for the current agent run to finish…</div>
+        ) : null}
         {error ? <div className="chat-error">{formatClientError(error)}</div> : null}
         <div ref={messagesEndRef} />
       </div>
@@ -520,7 +728,7 @@ function ChatPanel({
           ref={inputRef}
           className="chat-input"
           rows={2}
-          placeholder={chatBlocked ? "Configure CURSOR_API_KEY in .env to use chat" : "Ask the catalog assistant…"}
+          placeholder={chatBlocked ? "Configure an AI API key at sign-in or in .env" : "Ask the catalog assistant…"}
           value={input}
           onChange={(event) => setInput(event.target.value)}
           onKeyDown={(event) => {
@@ -529,9 +737,9 @@ function ChatPanel({
               onSubmit(event);
             }
           }}
-          disabled={isBusy || chatBlocked}
+          disabled={isBusy || chatBlocked || sendBlocked}
         />
-        <button type="submit" className="btn btn-primary" disabled={isBusy || chatBlocked || !input.trim()}>
+        <button type="submit" className="btn btn-primary" disabled={isBusy || chatBlocked || sendBlocked || !input.trim()}>
           Send
         </button>
       </form>
@@ -558,17 +766,45 @@ function openChatPopup(outerWidth, outerHeight, left, top, sessionId) {
   return window.open(`/chat?s=${sessionId}`, CHAT_POPUP_NAME, features);
 }
 
+function useAgentCloseGuard({ localBusyRef, remoteBusyRef }) {
+  useEffect(() => {
+    const warnBeforeClose = (event) => {
+      if (!localBusyRef.current && !remoteBusyRef.current) {
+        return;
+      }
+      event.preventDefault();
+      event.returnValue = "An agent is still working. Close this page anyway?";
+      return event.returnValue;
+    };
+
+    window.addEventListener("beforeunload", warnBeforeClose);
+    return () => window.removeEventListener("beforeunload", warnBeforeClose);
+  }, [localBusyRef, remoteBusyRef]);
+}
+
 function ChatApp() {
   const chatHealth = useChatHealth();
   const [open, setOpen] = useState(false);
   const [popupActive, setPopupActive] = useState(false);
+  const [keepAliveBusy, setKeepAliveBusy] = useState(false);
   const popupRef = useRef(null);
   const channelRef = useRef(null);
   const popupActiveRef = useRef(false);
+  const localBusyRef = useRef(false);
+  const remoteBusyRef = useRef(false);
+
+  const chatSession = useCatalogChatSession({ channelRef, windowRole: "main" });
 
   useEffect(() => {
     popupActiveRef.current = popupActive;
   }, [popupActive]);
+
+  useEffect(() => {
+    localBusyRef.current = chatSession.isBusy;
+    setKeepAliveBusy(chatSession.isBusy);
+  }, [chatSession.isBusy]);
+
+  useAgentCloseGuard({ localBusyRef, remoteBusyRef });
 
   const attachDetachedChat = useCallback(() => {
     channelRef.current?.postMessage({ type: "popup-attach" });
@@ -593,9 +829,35 @@ function ChatApp() {
       if (event.data?.type === "popup-attach") {
         attachDetachedChat();
       }
+      if (event.data?.type === "chat-busy" && event.data.sender) {
+        remoteBusyRef.current = Boolean(event.data.busy);
+      }
+      if (event.data?.type === "chat-handoff-complete") {
+        setKeepAliveBusy(false);
+      }
     };
     return () => channel.close();
   }, [attachDetachedChat]);
+
+  useEffect(() => {
+    if (!popupActive || !chatSession.isBusy) {
+      return undefined;
+    }
+
+    const intervalId = window.setInterval(() => {
+      if (!chatSession.isBusy && popupActive) {
+        channelRef.current?.postMessage({
+          type: "chat-handoff",
+          messages: chatSession.messages,
+          selectedModel: chatSession.selectedModel,
+        });
+        channelRef.current?.postMessage({ type: "chat-handoff-complete" });
+        setKeepAliveBusy(false);
+      }
+    }, 300);
+
+    return () => window.clearInterval(intervalId);
+  }, [popupActive, chatSession.isBusy, chatSession.messages, chatSession.selectedModel]);
 
   useEffect(() => {
     const closeDetachedOnExit = () => {
@@ -610,12 +872,8 @@ function ChatApp() {
       channelRef.current?.postMessage({ type: "main-closed" });
     };
 
-    window.addEventListener("beforeunload", closeDetachedOnExit);
     window.addEventListener("pagehide", closeDetachedOnExit);
-    return () => {
-      window.removeEventListener("beforeunload", closeDetachedOnExit);
-      window.removeEventListener("pagehide", closeDetachedOnExit);
-    };
+    return () => window.removeEventListener("pagehide", closeDetachedOnExit);
   }, []);
 
   useEffect(() => {
@@ -635,10 +893,15 @@ function ChatApp() {
       existing.focus();
       return;
     }
-    if (popupActive) {
+    if (popupActive && !chatSession.isBusy) {
       channelRef.current?.postMessage({ type: "focus-request" });
       return;
     }
+
+    writeChatSession({
+      messages: chatSession.messages,
+      selectedModel: chatSession.selectedModel,
+    });
 
     const sessionId = String(Date.now());
     const { width, outerWidth, outerHeight } = readDetachedChatSize();
@@ -663,6 +926,13 @@ function ChatApp() {
           setPopupActive(true);
           setOpen(false);
           channelRef.current?.postMessage({ type: "popup-opened" });
+          channelRef.current?.postMessage({
+            type: "chat-sync",
+            messages: chatSession.messages,
+            selectedModel: chatSession.selectedModel,
+            status: chatSession.status,
+            windowRole: "main",
+          });
           return;
         }
       }
@@ -679,7 +949,14 @@ function ChatApp() {
     setPopupActive(true);
     setOpen(false);
     channelRef.current?.postMessage({ type: "popup-opened" });
-  }, [popupActive]);
+    channelRef.current?.postMessage({
+      type: "chat-sync",
+      messages: chatSession.messages,
+      selectedModel: chatSession.selectedModel,
+      status: chatSession.status,
+      windowRole: "main",
+    });
+  }, [chatSession, popupActive]);
 
   const handleAttachFromMain = useCallback(() => {
     if (!popupActive) {
@@ -687,6 +964,11 @@ function ChatApp() {
     }
     attachDetachedChat();
   }, [attachDetachedChat, popupActive]);
+
+  const handleBusyChange = useCallback((busy) => {
+    setKeepAliveBusy(busy);
+    localBusyRef.current = busy;
+  }, []);
 
   useEffect(() => {
     const attachBtn = document.getElementById("chatAttachBtn");
@@ -718,7 +1000,7 @@ function ChatApp() {
     };
     toggleBtn.addEventListener("click", onToggle);
     return () => toggleBtn.removeEventListener("click", onToggle);
-  }, []);
+  }, [popupActive]);
 
   useEffect(() => {
     const toggleBtn = document.getElementById("chatToggleBtn");
@@ -729,14 +1011,20 @@ function ChatApp() {
     toggleBtn.setAttribute("aria-pressed", open || popupActive ? "true" : "false");
   }, [open, popupActive]);
 
+  const showDockedPanel = open || (popupActive && keepAliveBusy);
+
   return (
     <ChatPanel
-      open={open}
+      open={showDockedPanel}
+      visuallyHidden={popupActive}
       onClose={() => setOpen(false)}
       mode="docked"
       onPopOut={handlePopOut}
       popupActive={popupActive}
       chatHealth={chatHealth}
+      chatSession={chatSession}
+      onBusyChange={handleBusyChange}
+      sendBlocked={chatSession.sendBlocked}
     />
   );
 }
@@ -744,6 +1032,16 @@ function ChatApp() {
 function ChatPopupApp() {
   const chatHealth = useChatHealth();
   const channelRef = useRef(null);
+  const localBusyRef = useRef(false);
+  const remoteBusyRef = useRef(false);
+
+  const chatSession = useCatalogChatSession({ channelRef, windowRole: "popup" });
+
+  useAgentCloseGuard({ localBusyRef, remoteBusyRef });
+
+  useEffect(() => {
+    localBusyRef.current = chatSession.isBusy;
+  }, [chatSession.isBusy]);
 
   useEffect(() => {
     document.title = DETACHED_CHAT_WINDOW_TITLE;
@@ -762,6 +1060,9 @@ function ChatPopupApp() {
       if (event.data?.type === "main-closed") {
         window.close();
       }
+      if (event.data?.type === "chat-busy") {
+        remoteBusyRef.current = Boolean(event.data.busy);
+      }
     };
     channel.postMessage({ type: "popup-opened" });
     const onUnload = () => {
@@ -774,11 +1075,15 @@ function ChatPopupApp() {
       channel.postMessage({ type: "popup-closed" });
       channel.close();
     };
-  }, []);
+  }, [chatSession]);
 
   const handleAttach = useCallback(() => {
     channelRef.current?.postMessage({ type: "popup-attach" });
     window.close();
+  }, []);
+
+  const handleBusyChange = useCallback((busy) => {
+    localBusyRef.current = busy;
   }, []);
 
   return (
@@ -788,6 +1093,9 @@ function ChatPopupApp() {
       onClose={() => window.close()}
       onAttach={handleAttach}
       chatHealth={chatHealth}
+      chatSession={chatSession}
+      onBusyChange={handleBusyChange}
+      sendBlocked={chatSession.sendBlocked}
     />
   );
 }

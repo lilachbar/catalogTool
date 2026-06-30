@@ -17,6 +17,11 @@
       }
     })();
   </script>
+  <script>
+    (function () {
+      sessionStorage.removeItem("catalogTool.appTabActive");
+    })();
+  </script>
 </head>
 <body class="login-page-body">
   <div class="ambient" aria-hidden="true"></div>
@@ -34,6 +39,10 @@
       {% if not ldap_enabled %}
       <div class="login-notice">
         LDAP authentication is disabled. Set <code>LDAP_AUTH_ENABLED=true</code> and <code>LDAP_URI</code> in <code>.env</code>.
+      </div>
+      {% elif relogin_reason == 'refresh' %}
+      <div class="login-notice">
+        Your session ended because the page was refreshed. Please sign in again to continue.
       </div>
       {% endif %}
 
@@ -68,6 +77,38 @@
           >
         </label>
 
+        <div class="login-section-divider" aria-hidden="true"></div>
+
+        <fieldset class="login-ai-fieldset">
+          <legend class="login-ai-legend">AI assistant (catalog agent)</legend>
+          <p class="login-ai-intro" id="aiConfigIntro">Choose an AI provider and API key for the catalog assistant. Existing keys from <code>.env</code> are pre-filled and can be changed.</p>
+
+          <label class="field">
+            <span class="field-label">AI provider</span>
+            <select id="chatProviderSelect" class="input" aria-describedby="aiConfigIntro">
+              <option value="">Skip — configure later in .env</option>
+              <option value="cursor">Cursor</option>
+              <option value="openai">OpenAI</option>
+              <option value="claude">Claude (Anthropic)</option>
+            </select>
+          </label>
+
+          <label class="field" id="apiKeyField" hidden>
+            <span class="field-label" id="apiKeyLabel">API key</span>
+            <input
+              type="password"
+              id="apiKeyInput"
+              class="input"
+              placeholder=""
+              autocomplete="off"
+              spellcheck="false"
+            >
+            <span class="field-hint" id="apiKeyHint"></span>
+          </label>
+
+          <p id="existingAiConfig" class="login-ai-status" hidden></p>
+        </fieldset>
+
         <p id="loginError" class="login-error" hidden></p>
 
         <button type="submit" class="btn btn-primary btn-lg login-submit" id="loginSubmitBtn">
@@ -77,6 +118,7 @@
 
       <p class="login-footnote">
         Uses Amdocs LDAP / Active Directory. CatalogOne environment connection is configured after sign-in.
+        AI keys are saved to the local <code>.env</code> file and validated before you enter the app.
       </p>
     </div>
   </main>
@@ -86,12 +128,99 @@
       const form = document.getElementById("loginForm");
       const errorEl = document.getElementById("loginError");
       const submitBtn = document.getElementById("loginSubmitBtn");
+      const providerSelect = document.getElementById("chatProviderSelect");
+      const apiKeyField = document.getElementById("apiKeyField");
+      const apiKeyInput = document.getElementById("apiKeyInput");
+      const apiKeyHint = document.getElementById("apiKeyHint");
+      const existingAiConfig = document.getElementById("existingAiConfig");
       const nextUrl = {{ next_url | tojson }};
+
+      const providerMeta = {
+        cursor: {
+          label: "Cursor API key",
+          hint: "crsr_… from cursor.com/dashboard/integrations",
+          placeholder: "crsr_…",
+        },
+        openai: {
+          label: "OpenAI API key",
+          hint: "sk-… from platform.openai.com/api-keys",
+          placeholder: "sk-…",
+        },
+        claude: {
+          label: "Anthropic API key",
+          hint: "sk-ant-… from console.anthropic.com/settings/keys",
+          placeholder: "sk-ant-…",
+        },
+      };
+
+      let providerDefaults = {};
 
       function showError(message) {
         errorEl.hidden = false;
         errorEl.textContent = message;
       }
+
+      function configuredProvidersSummary(providers) {
+        return Object.entries(providers || {})
+          .filter(([, info]) => info.configured)
+          .map(([name, info]) => `${name}${info.maskedApiKey ? ` (${info.maskedApiKey})` : ""}`)
+          .join(", ");
+      }
+
+      function updateProviderFields() {
+        const provider = providerSelect.value;
+        if (!provider || !providerMeta[provider]) {
+          apiKeyField.hidden = true;
+          apiKeyInput.required = false;
+          apiKeyInput.value = "";
+          return;
+        }
+        const meta = providerMeta[provider];
+        const saved = providerDefaults[provider] || {};
+        apiKeyField.hidden = false;
+        document.getElementById("apiKeyLabel").textContent = meta.label;
+        apiKeyHint.textContent = saved.configured
+          ? `${meta.hint} Leave blank to keep the saved key (${saved.maskedApiKey}).`
+          : meta.hint;
+        apiKeyInput.placeholder = saved.configured
+          ? saved.maskedApiKey || meta.placeholder
+          : meta.placeholder;
+        apiKeyInput.required = !saved.configured;
+        apiKeyInput.value = "";
+      }
+
+      providerSelect.addEventListener("change", updateProviderFields);
+
+      async function loadExistingConfig() {
+        try {
+          const response = await fetch("/api/chat/config");
+          if (!response.ok) {
+            return;
+          }
+          const data = await response.json();
+          providerDefaults = data.providers || {};
+
+          if (data.provider && providerMeta[data.provider]) {
+            providerSelect.value = data.provider;
+          }
+
+          const savedSummary = configuredProvidersSummary(providerDefaults);
+          if (savedSummary) {
+            existingAiConfig.hidden = false;
+            existingAiConfig.textContent = data.configured
+              ? `Saved in .env: ${savedSummary}. Change provider or enter a new key below to update after sign-in.`
+              : `Saved API keys in .env: ${savedSummary}. Select a provider to activate one.`;
+          } else if (data.configured) {
+            existingAiConfig.hidden = false;
+            existingAiConfig.textContent = `Current AI provider: ${data.provider}${data.maskedApiKey ? ` (${data.maskedApiKey})` : ""}.`;
+          }
+          updateProviderFields();
+        } catch {
+          // Non-fatal — login still works.
+        }
+      }
+
+      loadExistingConfig();
 
       form.addEventListener("submit", async (event) => {
         event.preventDefault();
@@ -99,15 +228,32 @@
         submitBtn.disabled = true;
         submitBtn.textContent = "Signing in…";
 
+        const payload = {
+          username: document.getElementById("usernameInput").value.trim(),
+          password: document.getElementById("passwordInput").value,
+          next: nextUrl,
+        };
+
+        const provider = providerSelect.value.trim();
+        const apiKey = apiKeyInput.value.trim();
+        if (provider) {
+          payload.chat_provider = provider;
+          const saved = providerDefaults[provider] || {};
+          if (apiKey) {
+            payload.api_key = apiKey;
+          } else if (!saved.configured) {
+            showError("API key is required for the selected AI provider.");
+            submitBtn.disabled = false;
+            submitBtn.textContent = "Sign in";
+            return;
+          }
+        }
+
         try {
           const response = await fetch("/api/user/login", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              username: document.getElementById("usernameInput").value.trim(),
-              password: document.getElementById("passwordInput").value,
-              next: nextUrl,
-            }),
+            body: JSON.stringify(payload),
           });
           const data = await response.json();
           if (!response.ok) {

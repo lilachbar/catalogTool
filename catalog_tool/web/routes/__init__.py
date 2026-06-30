@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from flask import Flask
 
-from catalog_tool.web.routes import auth, catalog, chat, environments, excel_import, pages, user_auth, zip_import
+from catalog_tool.web.routes import auth, catalog, chat, chat_config, environments, excel_import, pages, user_auth, zip_import
 
 
 def register_routes(app: Flask) -> None:
@@ -16,3 +16,4 @@ def register_routes(app: Flask) -> None:
     zip_import.register(app)
     excel_import.register(app)
     chat.register(app)
+    chat_config.register(app)

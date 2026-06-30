@@ -2,6 +2,7 @@ README.md
 pyproject.toml
 catalog_tool/__init__.py
 catalog_tool/br_compare.py
+catalog_tool/env_file.py
 catalog_tool/settings.py
 catalog_tool/tables.py
 catalog_tool.egg-info/PKG-INFO
@@ -42,6 +43,7 @@ catalog_tool/web/routes/__init__.py
 catalog_tool/web/routes/auth.py
 catalog_tool/web/routes/catalog.py
 catalog_tool/web/routes/chat.py
+catalog_tool/web/routes/chat_config.py
 catalog_tool/web/routes/environments.py
 catalog_tool/web/routes/excel_import.py
 catalog_tool/web/routes/pages.py
@@ -56,6 +58,7 @@ catalog_tool/zip_catalog/validate.py
 tests/test_br_compare.py
 tests/test_catalog_one_client.py
 tests/test_entity_api.py
+tests/test_env_file.py
 tests/test_environment_store.py
 tests/test_excel_dg.py
 tests/test_import_context.py

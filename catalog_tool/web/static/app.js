@@ -3,7 +3,7 @@ const THEME_STORAGE_KEY = "catalogTool.theme";
 const TABLES = JSON.parse(document.getElementById("tablesConfig")?.textContent || "[]");
 const DEFAULTS = JSON.parse(document.getElementById("defaultsConfig")?.textContent || "{}");
 
-/** In-memory cache synced to data/environments.json via the server. */
+/** In-memory cache synced to data/environments/{username}.json via the server. */
 let environmentStore = { activeEnvironmentId: null, environments: [] };
 
 const TABLE_DEFAULT_ROWS = {
@@ -283,6 +283,12 @@ function setActiveView(view) {
   updateMainConnectionHint();
 }
 
+function connectionStatusLabel(connected) {
+  const klass = connected ? "connection-status-connected" : "connection-status-disconnected";
+  const text = connected ? "Connected" : "Not connected";
+  return `<span class="connection-status-label ${klass}">${text}</span>`;
+}
+
 function connectionHintForView() {
   const onMcpTools = state.activeView === "mcp-tools";
   const onDgImport = state.activeView === "dg-import";
@@ -292,7 +298,7 @@ function connectionHintForView() {
     if (onDgImport) {
       return {
         connected: true,
-        html: `Connected to <strong>${label}</strong>. Analyze the DG Excel to preview the import plan — connect before executing.`,
+        html: `${connectionStatusLabel(true)} to <strong>${label}</strong>. Analyze the DG Excel to preview the import plan.`,
       };
     }
     if (onMcpTools) {
@@ -303,12 +309,12 @@ function connectionHintForView() {
           : "";
       return {
         connected: true,
-        html: `Connected to <strong>${label}</strong>. Browse and run CatalogOne MCP tools — search catalog, manage business requests, create entities, and more.${toolsNote}`,
+        html: `${connectionStatusLabel(true)} to <strong>${label}</strong>. Browse and run CatalogOne MCP tools — search catalog, manage business requests, create entities, and more.${toolsNote}`,
       };
     }
     return {
       connected: true,
-      html: `Connected to <strong>${label}</strong>. You can merge data and publish.`,
+      html: `${connectionStatusLabel(true)} to <strong>${label}</strong>. You can merge data and publish.`,
     };
   }
 
@@ -317,39 +323,39 @@ function connectionHintForView() {
     if (!state.mcpToolsConfigured) {
       return {
         connected: false,
-        html: state.mcpToolsStatusMessage
+        html: `${connectionStatusLabel(false)} ${state.mcpToolsStatusMessage
           ? `<span class="connection-error-text">${escapeHtml(state.mcpToolsStatusMessage)}</span>`
-          : "catalogone MCP is not installed. See README — configure ~/.cursor/mcp.json and run npm run preflight.",
+          : "catalogone MCP is not installed. See README — configure ~/.cursor/mcp.json and run npm run preflight."}`,
       };
     }
     if (!state.mcpToolsOnline) {
       const starting = state.mcpToolsStatusMessage || "Starting catalogone MCP server (first launch can take ~15s)…";
       return {
         connected: false,
-        html: `MCP is configured (${escapeHtml(state.mcpToolsStatusMessage || "from ~/.cursor/mcp.json")}). ${escapeHtml(starting)}`,
+        html: `${connectionStatusLabel(false)} MCP is configured (${escapeHtml(state.mcpToolsStatusMessage || "from ~/.cursor/mcp.json")}). ${escapeHtml(starting)} Connect an environment in the sidebar to use merge workflows.`,
       };
     }
     if (store.environments.length === 0) {
       return {
         connected: false,
-        html: 'CatalogOne MCP is online. Add an environment with <strong>+ Add</strong> to connect for merge workflows.',
+        html: `${connectionStatusLabel(false)} CatalogOne MCP is online. Add an environment with <strong>+ Add</strong>, then click <strong>Connect</strong>.`,
       };
     }
     return {
       connected: false,
-      html: "CatalogOne MCP is online. Connect an environment in the sidebar for merge/publish, or run tools below.",
+      html: `${connectionStatusLabel(false)} Connect an environment in the sidebar to use merge/publish workflows, or run MCP tools below with default credentials.`,
     };
   }
 
   if (store.environments.length === 0) {
     return {
       connected: false,
-      html: 'No environments yet. Click <strong>+ Add</strong> in the sidebar to create one.',
+      html: `${connectionStatusLabel(false)} No environments yet. Click <strong>+ Add</strong> in the sidebar, then <strong>Connect</strong> to work with CatalogOne.`,
     };
   }
   return {
     connected: false,
-    html: "Select an environment in the sidebar and click <strong>Connect</strong>, or add a new one.",
+    html: `${connectionStatusLabel(false)} Select an environment in the sidebar and click <strong>Connect</strong> to start working with CatalogOne.`,
   };
 }
 
@@ -362,7 +368,7 @@ function updateMainConnectionHint() {
   els.mainConnectionHint.hidden = false;
   els.mainConnectionHint.className = hint.connected
     ? "main-connection-hint main-connection-hint-connected"
-    : "main-connection-hint";
+    : "main-connection-hint main-connection-hint-disconnected";
   els.mainConnectionHint.innerHTML = hint.html;
 }
 
@@ -1322,11 +1328,21 @@ async function persistEnvironmentStore(store) {
   });
 }
 
-function saveEnvironmentStore(store) {
+async function saveEnvironmentStore(store) {
   environmentStore = store;
-  persistEnvironmentStore(store).catch((error) => {
+  try {
+    await persistEnvironmentStore(store);
+  } catch (error) {
     console.error("Failed to save environments:", error);
-  });
+    if (els.mainConnectionHint) {
+      els.mainConnectionHint.hidden = false;
+      els.mainConnectionHint.className = "main-connection-hint main-connection-hint-disconnected";
+      els.mainConnectionHint.innerHTML =
+        `<span class="connection-status-label connection-status-disconnected">Not connected</span> `
+        + `<span class="connection-error-text">Could not save environments: ${escapeHtml(error.message)}</span>`;
+    }
+    throw error;
+  }
 }
 
 async function loadEnvironmentsFromServer() {
@@ -1472,6 +1488,7 @@ async function connectEnvironment(environmentId) {
   state.connectedEnvironmentId = saved.id;
   state.activeEnvironmentId = saved.id;
   setLoggedIn(true, result.username, getEnvironmentDisplayName(saved));
+  renderEnvironmentSidebar();
   return saved;
 }
 
@@ -1521,7 +1538,7 @@ function upsertEnvironment(profile) {
   ].slice(0, 12);
 
   store.activeEnvironmentId = next.id;
-  saveEnvironmentStore(store);
+  void saveEnvironmentStore(store);
   state.activeEnvironmentId = next.id;
   state.currentEnvironmentLabel = getEnvironmentDisplayName(next);
   renderEnvironmentSidebar();
@@ -1538,16 +1555,25 @@ function removeEnvironment(environmentId) {
   if (state.connectedEnvironmentId === environmentId) {
     state.connectedEnvironmentId = null;
   }
-  saveEnvironmentStore(store);
+  void saveEnvironmentStore(store);
   renderEnvironmentSidebar();
   updateMainConnectionHint();
 }
 
+function sortEnvironmentsForSidebar(environments) {
+  return [...environments].sort((a, b) => {
+    const aConnected = state.loggedIn && state.connectedEnvironmentId === a.id;
+    const bConnected = state.loggedIn && state.connectedEnvironmentId === b.id;
+    if (aConnected !== bConnected) {
+      return aConnected ? -1 : 1;
+    }
+    return (b.last_used_at || 0) - (a.last_used_at || 0);
+  });
+}
+
 function renderEnvironmentSidebar() {
   const store = loadEnvironmentStore();
-  const environments = [...store.environments].sort(
-    (a, b) => (b.last_used_at || 0) - (a.last_used_at || 0)
-  );
+  const environments = sortEnvironmentsForSidebar(store.environments);
 
   if (els.envSidebarEmpty) {
     els.envSidebarEmpty.hidden = environments.length > 0;
@@ -1567,9 +1593,14 @@ function renderEnvironmentSidebar() {
 
     item.dataset.environmentId = environment.id;
     item.classList.toggle("env-card-connected", isConnected);
+    item.classList.toggle("env-card-disconnected", !isConnected);
     item.classList.toggle("env-card-selected", isSelected && !isConnected);
 
     item.querySelector(".env-card-name").textContent = displayName;
+    const stateEl = item.querySelector(".env-card-state");
+    if (stateEl) {
+      stateEl.textContent = isConnected ? "Connected" : "Not connected";
+    }
     item.querySelector(".env-card-meta").textContent = `${environment.username} · ${environment.label}`;
 
     const connectBtn = item.querySelector(".env-action-connect");
@@ -1596,9 +1627,9 @@ function renderEnvironmentSidebar() {
         }
         if (els.mainConnectionHint) {
           els.mainConnectionHint.hidden = false;
-          els.mainConnectionHint.className = "main-connection-hint";
+          els.mainConnectionHint.className = "main-connection-hint main-connection-hint-disconnected";
           els.mainConnectionHint.innerHTML =
-            `<span class="connection-error-text">${escapeHtml(error.message)}</span>`;
+            `<span class="connection-status-label connection-status-disconnected">Not connected</span> <span class="connection-error-text">${escapeHtml(error.message)}</span>`;
         }
       }
     });
@@ -1964,9 +1995,9 @@ async function handleSessionExpired(message) {
   setLoggedIn(false);
   if (els.mainConnectionHint) {
     els.mainConnectionHint.hidden = false;
-    els.mainConnectionHint.className = "main-connection-hint";
+    els.mainConnectionHint.className = "main-connection-hint main-connection-hint-disconnected";
     els.mainConnectionHint.innerHTML =
-      `<span class="connection-error-text">${escapeHtml(message || "CatalogOne session expired — connect again.")}</span>`;
+      `<span class="connection-status-label connection-status-disconnected">Not connected</span> <span class="connection-error-text">${escapeHtml(message || "CatalogOne session expired — connect again.")}</span>`;
   }
 }
 
@@ -2046,6 +2077,7 @@ els.logoutBtn.addEventListener("click", () => {
 });
 
 els.appLogoutBtn?.addEventListener("click", async () => {
+  sessionStorage.removeItem(APP_TAB_SESSION_KEY);
   try {
     await api("/api/user/logout", { method: "POST", body: "{}" });
   } catch {
@@ -2607,7 +2639,64 @@ async function resetCatalogOneConnectionOnLoad() {
     // still show disconnected if logout fails
   }
   state.connectedEnvironmentId = null;
+  state.activeEnvironmentId = null;
   setLoggedIn(false);
+}
+
+const APP_TAB_SESSION_KEY = "catalogTool.appTabActive";
+
+function isPageReload() {
+  try {
+    const [nav] = performance.getEntriesByType("navigation");
+    if (nav?.type === "reload") {
+      return true;
+    }
+  } catch {
+    // ignore
+  }
+  return performance.navigation?.type === 1;
+}
+
+function shouldForceRelogin() {
+  if (sessionStorage.getItem(APP_TAB_SESSION_KEY) === "1") {
+    return true;
+  }
+  return isPageReload();
+}
+
+function markAppTabActive() {
+  sessionStorage.setItem(APP_TAB_SESSION_KEY, "1");
+}
+
+async function logoutAppUserOnReload() {
+  if (window.__catalogToolReloadLogout) {
+    return true;
+  }
+
+  if (document.body?.dataset.ldapAuthEnabled !== "true") {
+    return false;
+  }
+
+  if (!shouldForceRelogin()) {
+    return false;
+  }
+
+  window.__catalogToolReloadLogout = true;
+  sessionStorage.removeItem(APP_TAB_SESSION_KEY);
+
+  try {
+    await fetch("/api/user/logout", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: "{}",
+    });
+  } catch {
+    // still redirect on failure
+  }
+
+  const next = `${window.location.pathname}${window.location.search}`;
+  window.location.replace(`/login?reason=refresh&next=${encodeURIComponent(next)}`);
+  return true;
 }
 
 els.businessRequestId?.addEventListener("change", syncBusinessRequestFields);
@@ -2664,11 +2753,16 @@ els.brCompareProductionBtn?.addEventListener("click", () => {
 });
 
 async function initApp() {
+  if (window.__catalogToolReloadLogout || await logoutAppUserOnReload()) {
+    return;
+  }
+
   initSidebarResize();
   initZipDropzone();
   updateZipValidateButton();
   initExcelDropzone();
-  setLoggedIn(false);
+
+  await resetCatalogOneConnectionOnLoad();
 
   await loadEnvironmentsFromServer();
   restoreSelectedEnvironment();
@@ -2682,12 +2776,13 @@ async function initApp() {
     }
   });
   startMcpStatusPolling();
-
-  await resetCatalogOneConnectionOnLoad();
   updateMainConnectionHint();
+  window.__catalogToolMarkAppTabActive?.();
+  markAppTabActive();
 }
 
 initApp();
 
 window.catalogTool = window.catalogTool || {};
+window.catalogTool.refreshMcpNav = refreshMcpToolsNavStatus;
 window.catalogTool.refreshMcpNav = refreshMcpToolsNavStatus;

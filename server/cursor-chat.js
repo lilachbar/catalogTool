@@ -16,18 +16,18 @@ const PROJECT_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), 
 
 const agentCache = new Map();
 
-function agentCacheKey(mcpServers) {
-  return JSON.stringify(mcpServers);
+function agentCacheKey(mcpServers, modelId) {
+  return JSON.stringify({ mcpServers, modelId });
 }
 
-async function getAgentForMcpServers(mcpServers) {
+async function getAgentForMcpServers(mcpServers, modelId) {
   if (!mcpServers.catalogone) {
     throw new Error(
       "catalogone MCP is not configured. Add catalogone to ~/.cursor/mcp.json or set C1_* vars in .env.",
     );
   }
 
-  const cacheKey = agentCacheKey(mcpServers);
+  const cacheKey = agentCacheKey(mcpServers, modelId);
   const cached = agentCache.get(cacheKey);
   if (cached) {
     return cached;
@@ -35,7 +35,7 @@ async function getAgentForMcpServers(mcpServers) {
 
   const agent = await Agent.create({
     apiKey: process.env.CURSOR_API_KEY,
-    model: { id: process.env.CURSOR_MODEL || "composer-2.5" },
+    model: { id: modelId },
     name: "Catalog Tool Assistant",
     local: {
       cwd: PROJECT_ROOT,
@@ -91,7 +91,8 @@ function buildPrompt(messages, latestText, sessionEnv) {
   return `${connectedNote}\n\nUser message:\n${latestText}`;
 }
 
-export async function handleCursorChat(req, res, messages) {
+export async function handleCursorChat(req, res, messages, modelId = null) {
+  const resolvedModel = modelId || process.env.CURSOR_MODEL || "composer-2.5";
   const latestText = extractLatestUserText(messages);
   if (!latestText) {
     res.status(400).json({ error: "No user message found in request." });
@@ -120,7 +121,7 @@ export async function handleCursorChat(req, res, messages) {
       writer.write({ type: "text-start", id: textId });
 
       try {
-        const agent = await getAgentForMcpServers(mcpServers);
+        const agent = await getAgentForMcpServers(mcpServers, resolvedModel);
         const prompt = buildPrompt(messages, latestText, sessionEnv);
         let streamedLength = 0;
 

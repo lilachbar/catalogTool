@@ -74,6 +74,19 @@ class UserEnvironmentStoreTests(unittest.TestCase):
             second = load_user_store("bob")
             self.assertEqual(second["environments"], [])
 
+    def test_empty_user_file_imports_legacy_store(self) -> None:
+        with self._store_patches():
+            empty_path = user_store_path("alice")
+            empty_path.parent.mkdir(parents=True, exist_ok=True)
+            empty_path.write_text(
+                json.dumps({"activeEnvironmentId": None, "environments": []}),
+                encoding="utf-8",
+            )
+
+            store = load_user_store("alice")
+            self.assertEqual(len(store["environments"]), 1)
+            self.assertTrue(self.legacy_marker.exists())
+
     def test_user_store_path_sanitizes_username(self) -> None:
         with self._store_patches():
             path = user_store_path("CORP\\Alice.User")

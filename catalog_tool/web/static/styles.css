@@ -21,6 +21,8 @@
 
   --ok: #22c55e;
   --ok-muted: rgba(34, 197, 94, 0.12);
+  --warn: #f59e0b;
+  --warn-muted: rgba(245, 158, 11, 0.14);
   --err: #ef4444;
   --err-muted: rgba(239, 68, 68, 0.12);
 
@@ -52,6 +54,7 @@
   --accent-glow: rgba(59, 130, 246, 0.15);
 
   --ok-muted: rgba(34, 197, 94, 0.1);
+  --warn-muted: rgba(245, 158, 11, 0.12);
   --err-muted: rgba(239, 68, 68, 0.08);
 
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04);
@@ -390,9 +393,11 @@ body.is-resizing-sidebar * {
   gap: 0.5rem;
   padding: 0.5rem 0.5rem 0.5rem 0.625rem;
   border: 1px solid var(--border);
+  border-left-width: 3px;
+  border-left-color: var(--border);
   border-radius: var(--radius-sm);
   background: var(--bg-elevated);
-  transition: border-color var(--transition), box-shadow var(--transition);
+  transition: border-color var(--transition), box-shadow var(--transition), background var(--transition);
 }
 
 .env-card:hover .env-card-inner {
@@ -400,33 +405,48 @@ body.is-resizing-sidebar * {
 }
 
 .env-card-selected .env-card-inner {
-  border-color: rgba(59, 130, 246, 0.35);
+  border-color: rgba(59, 130, 246, 0.45);
+  border-left-color: var(--accent);
   box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.12);
 }
 
 .env-card-connected .env-card-inner {
-  border-color: rgba(34, 197, 94, 0.35);
-  box-shadow: 0 0 0 1px rgba(34, 197, 94, 0.1);
+  border-color: rgba(34, 197, 94, 0.45);
+  border-left-color: var(--ok);
+  background: var(--ok-muted);
+  box-shadow: 0 0 0 1px rgba(34, 197, 94, 0.14);
+}
+
+.env-card-disconnected .env-card-inner {
+  border-left-color: var(--warn);
 }
 
 .env-card-status {
   flex-shrink: 0;
-  width: 7px;
-  height: 7px;
+  width: 10px;
+  height: 10px;
   border-radius: 50%;
-  background: var(--text-tertiary);
-  opacity: 0.35;
+  background: var(--warn);
+  opacity: 0.85;
+  box-shadow: 0 0 0 3px var(--warn-muted);
 }
 
 .env-card-connected .env-card-status {
   background: var(--ok);
   opacity: 1;
-  box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.15);
+  box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.22);
 }
 
 .env-card-selected:not(.env-card-connected) .env-card-status {
   background: var(--accent);
   opacity: 1;
+  box-shadow: 0 0 0 3px var(--accent-muted);
+}
+
+.env-card-disconnected:not(.env-card-selected) .env-card-status {
+  background: var(--warn);
+  opacity: 1;
+  box-shadow: 0 0 0 3px var(--warn-muted);
 }
 
 .env-card-body {
@@ -450,6 +470,28 @@ body.is-resizing-sidebar * {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.env-card-state {
+  display: inline-block;
+  margin-top: 0.125rem;
+  padding: 0.0625rem 0.375rem;
+  border-radius: var(--radius-full);
+  font-size: 0.625rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  line-height: 1.4;
+}
+
+.env-card-connected .env-card-state {
+  color: var(--ok);
+  background: rgba(34, 197, 94, 0.16);
+}
+
+.env-card-disconnected .env-card-state {
+  color: var(--warn);
+  background: var(--warn-muted);
 }
 
 .env-card-meta {
@@ -517,21 +559,52 @@ body.is-resizing-sidebar * {
   margin: -0.5rem 0 1.25rem;
   padding: 0.875rem 1rem;
   border: 1px solid var(--border);
+  border-left-width: 4px;
+  border-left-color: var(--warn);
   border-radius: var(--radius);
-  background: var(--surface-inset);
+  background: var(--warn-muted);
   font-size: 0.875rem;
   color: var(--text-secondary);
   line-height: 1.5;
 }
 
+.main-connection-hint-disconnected {
+  background: var(--warn-muted);
+  border-color: rgba(245, 158, 11, 0.35);
+  border-left-color: var(--warn);
+}
+
 .main-connection-hint-connected {
   background: var(--ok-muted);
-  border-color: rgba(34, 197, 94, 0.22);
+  border-color: rgba(34, 197, 94, 0.35);
+  border-left-color: var(--ok);
   color: var(--text-secondary);
 }
 
 .main-connection-hint-connected strong {
   color: var(--ok);
+}
+
+.connection-status-label {
+  display: inline-block;
+  margin-right: 0.35rem;
+  padding: 0.125rem 0.5rem;
+  border-radius: var(--radius-full);
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  vertical-align: middle;
+}
+
+.connection-status-connected {
+  color: var(--ok);
+  background: rgba(34, 197, 94, 0.18);
+}
+
+.connection-status-disconnected {
+  color: var(--warn);
+  background: rgba(245, 158, 11, 0.2);
 }
 
 .connection-error-text {
@@ -2160,6 +2233,10 @@ body.is-resizing-chat-panel.is-moving-chat-panel * {
 }
 
 /* ── LDAP login page ───────────────────────────────────────────── */
+html.session-resetting body {
+  visibility: hidden;
+}
+
 .login-page-body {
   display: flex;
   align-items: center;
@@ -2170,7 +2247,7 @@ body.is-resizing-chat-panel.is-moving-chat-panel * {
 
 .login-page {
   width: 100%;
-  max-width: 420px;
+  max-width: 460px;
   position: relative;
   z-index: 1;
 }
@@ -2237,6 +2314,91 @@ body.is-resizing-chat-panel.is-moving-chat-panel * {
   color: var(--text-tertiary);
   font-size: 0.8125rem;
   line-height: 1.45;
+}
+
+.login-section-divider {
+  height: 1px;
+  background: var(--border);
+  margin: 0.25rem 0;
+}
+
+.login-ai-fieldset {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  margin: 0;
+  padding: 0.875rem 1rem 1rem;
+}
+
+.login-ai-legend {
+  padding: 0 0.35rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.login-ai-intro {
+  margin: 0 0 0.75rem;
+  font-size: 0.8125rem;
+  color: var(--text-secondary);
+  line-height: 1.45;
+}
+
+.login-ai-status {
+  margin: 0;
+  font-size: 0.8125rem;
+  color: var(--text-secondary);
+  padding: 0.625rem 0.75rem;
+  border-radius: var(--radius-sm);
+  background: var(--accent-muted);
+}
+
+.chat-panel-hidden {
+  position: fixed !important;
+  width: 0 !important;
+  min-width: 0 !important;
+  max-width: 0 !important;
+  overflow: hidden !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+  border: none !important;
+}
+
+.chat-model-select-wrap {
+  display: inline-flex;
+  align-items: center;
+}
+
+.chat-model-select {
+  max-width: 11rem;
+  padding: 0.3rem 1.5rem 0.3rem 0.5rem;
+  font-size: 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text-primary);
+  cursor: pointer;
+}
+
+.chat-model-select:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.chat-handoff-notice {
+  color: var(--text-secondary);
+  font-style: italic;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 
 .zip-import-block {

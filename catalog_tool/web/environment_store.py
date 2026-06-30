@@ -62,6 +62,8 @@ def load_user_store(username: str | None) -> dict[str, Any]:
     path = user_store_path(username)
     if not path.exists():
         _bootstrap_user_store(username, path)
+    else:
+        _maybe_migrate_legacy_into_user_store(username, path)
     return load_store(path, bootstrap_fixture=False)
 
 
@@ -71,21 +73,42 @@ def save_user_store(username: str | None, store: dict[str, Any]) -> dict[str, An
     return save_store(store, path=path)
 
 
+def _legacy_store_claimed_by(username: str | None) -> bool:
+    """Return True when this user may import the legacy shared environments file."""
+    safe = safe_username(username)
+    if not ENVIRONMENTS_FILE.exists() or not ENVIRONMENTS_FILE.is_file():
+        return False
+    if not LDAP_AUTH_ENABLED:
+        return safe == "local"
+    if not LEGACY_CLAIM_MARKER.exists():
+        return True
+    return LEGACY_CLAIM_MARKER.read_text(encoding="utf-8").strip() == safe
+
+
+def _import_legacy_store(username: str | None, path: Path) -> bool:
+    """Copy the legacy shared store into a user file when allowed."""
+    if not _legacy_store_claimed_by(username):
+        return False
+    shutil.copy(ENVIRONMENTS_FILE, path)
+    if LDAP_AUTH_ENABLED and not LEGACY_CLAIM_MARKER.exists():
+        LEGACY_CLAIM_MARKER.write_text(safe_username(username), encoding="utf-8")
+    return True
+
+
 def _bootstrap_user_store(username: str | None, path: Path) -> None:
     """Create a new user store, optionally migrating a legacy shared file once."""
     path.parent.mkdir(parents=True, exist_ok=True)
-    safe = safe_username(username)
-
-    if ENVIRONMENTS_FILE.exists() and ENVIRONMENTS_FILE.is_file():
-        if not LDAP_AUTH_ENABLED and safe == "local":
-            shutil.copy(ENVIRONMENTS_FILE, path)
-            return
-        if LDAP_AUTH_ENABLED and not LEGACY_CLAIM_MARKER.exists():
-            shutil.copy(ENVIRONMENTS_FILE, path)
-            LEGACY_CLAIM_MARKER.write_text(safe, encoding="utf-8")
-            return
-
+    if _import_legacy_store(username, path):
+        return
     save_store(_empty_store(), path=path)
+
+
+def _maybe_migrate_legacy_into_user_store(username: str | None, path: Path) -> None:
+    """If the user file exists but is empty, import legacy shared data once."""
+    store = load_store(path, bootstrap_fixture=False)
+    if store.get("environments"):
+        return
+    _import_legacy_store(username, path)
 
 
 def ensure_store_file(path: Path, *, bootstrap_fixture: bool = True) -> Path:

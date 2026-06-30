@@ -55,6 +55,8 @@ def register_auth_guard(app: Flask) -> None:
             return None
         if path in {"/login", "/api/user/login"}:
             return None
+        if path in {"/api/chat/config", "/api/chat/providers"}:
+            return None
         if path == "/api/user/session":
             return None
 

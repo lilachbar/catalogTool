@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/static/styles.css?v=20260702c">
+  <link rel="stylesheet" href="/static/styles.css?v=20260702d">
   <script>
     (function () {
       var theme = localStorage.getItem("catalogTool.theme");
@@ -18,8 +18,67 @@
       }
     })();
   </script>
+  {% if ldap_auth_enabled %}
+  <style>html.session-resetting body { visibility: hidden; }</style>
+  <script>
+    (function () {
+      var APP_TAB_KEY = "catalogTool.appTabActive";
+
+      function isPageReload() {
+        try {
+          var nav = performance.getEntriesByType("navigation")[0];
+          if (nav && nav.type === "reload") {
+            return true;
+          }
+        } catch (error) {
+          // ignore
+        }
+        return performance.navigation && performance.navigation.type === 1;
+      }
+
+      function shouldForceRelogin() {
+        if (sessionStorage.getItem(APP_TAB_KEY) === "1") {
+          return true;
+        }
+        return isPageReload();
+      }
+
+      function forceRelogin() {
+        if (window.__catalogToolReloadLogout) {
+          return;
+        }
+
+        window.__catalogToolReloadLogout = true;
+        document.documentElement.classList.add("session-resetting");
+        sessionStorage.removeItem(APP_TAB_KEY);
+
+        fetch("/api/user/logout", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: "{}",
+          keepalive: true,
+        }).catch(function () {
+          // still redirect on failure
+        });
+
+        var next = window.location.pathname + window.location.search;
+        window.location.replace(
+          "/login?reason=refresh&next=" + encodeURIComponent(next)
+        );
+      }
+
+      window.__catalogToolMarkAppTabActive = function () {
+        sessionStorage.setItem(APP_TAB_KEY, "1");
+      };
+
+      if (shouldForceRelogin()) {
+        forceRelogin();
+      }
+    })();
+  </script>
+  {% endif %}
 </head>
-<body>
+<body data-ldap-auth-enabled="{{ 'true' if ldap_auth_enabled else 'false' }}">
   <div class="ambient" aria-hidden="true"></div>
 
   <div class="app-shell" id="appShell">
@@ -119,8 +178,9 @@
           </div>
         </header>
 
-        <div id="mainConnectionHint" class="main-connection-hint">
-          Select an environment in the sidebar and click <strong>Connect</strong>, or add a new one.
+        <div id="mainConnectionHint" class="main-connection-hint main-connection-hint-disconnected">
+          <span class="connection-status-label connection-status-disconnected">Not connected</span>
+          Select an environment in the sidebar and click <strong>Connect</strong> to start working with CatalogOne.
         </div>
 
         <div id="pushView" class="app-view app-view-fill">
@@ -639,6 +699,7 @@
         <span class="env-card-status" aria-hidden="true"></span>
         <button type="button" class="env-card-body">
           <span class="env-card-name"></span>
+          <span class="env-card-state"></span>
           <span class="env-card-meta"></span>
         </button>
         <div class="env-card-actions">
@@ -672,7 +733,7 @@
 
   <script id="tablesConfig" type="application/json">{{ defaults.tables | tojson }}</script>
   <script id="defaultsConfig" type="application/json">{{ defaults | tojson }}</script>
-  <script src="/static/app.js?v=20260702l"></script>
+  <script src="/static/app.js?v=20260702o"></script>
   <script src="/static/mcp-tools.js?v=20260701b"></script>
   <script type="module" src="/static/chat.bundle.js"></script>
 </body>
