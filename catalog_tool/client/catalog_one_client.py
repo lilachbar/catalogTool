@@ -77,6 +77,41 @@ def derive_environment_label(apigw_url: str) -> str:
     return apigw_url.rstrip("/")
 
 
+def keycloak_matches_apigw(
+    apigw_url: str,
+    keycloak_url: str,
+    keycloak_realm: str = "",
+) -> bool:
+    """Return True when Keycloak settings belong to the same cluster as the APIGW URL."""
+    env_label = derive_environment_label(apigw_url)
+    env_core = env_label.replace("-authoring", "").lower()
+    if not env_core:
+        return True
+    url = (keycloak_url or "").lower()
+    realm = (keycloak_realm or "").lower()
+    return env_core in url or env_core in realm
+
+
+def resolve_keycloak_config(
+    apigw_url: str,
+    keycloak_url: str = "",
+    keycloak_realm: str = "",
+) -> tuple[str, str]:
+    """Derive Keycloak URL/realm from APIGW when missing or pointing at another cluster."""
+    apigw_url = normalize_apigw_url(apigw_url)
+    url = (keycloak_url or "").strip()
+    realm = (keycloak_realm or "").strip()
+
+    if not re.search(r"amd-apigw-([^.]+)\.apps\.", apigw_url):
+        return url, realm
+
+    derived_url = derive_keycloak_url(apigw_url)
+    derived_realm = derive_keycloak_realm(apigw_url)
+    if not url or not keycloak_matches_apigw(apigw_url, url, realm):
+        return derived_url, derived_realm
+    return url, realm or derived_realm
+
+
 def _ssl_context() -> ssl.SSLContext:
     ctx = ssl.create_default_context()
     ctx.check_hostname = False

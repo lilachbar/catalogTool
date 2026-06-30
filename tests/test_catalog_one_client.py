@@ -10,6 +10,8 @@ from catalog_tool.client.catalog_one_client import (
     CatalogOneConnectionConfig,
     _format_http_error,
     derive_keycloak_url,
+    keycloak_matches_apigw,
+    resolve_keycloak_config,
 )
 
 
@@ -80,3 +82,26 @@ def test_connection_uses_stored_keycloak_url():
     client = CatalogOneClient(config)
     assert "prt-in10-env25-runtime" in client.keycloak_url()
     assert client.keycloak_realm() == "stack-service-prt-in10-env25-authoring"
+
+
+def test_resolve_keycloak_config_replaces_mismatched_cluster():
+    apigw = (
+        "https://amd-apigw-amo-il18-rel292-authoring"
+        ".apps.ildelocpamo418.ocpd.corp.amdocs.com"
+    )
+    wrong_url = (
+        "https://keycloak-amo-il41-rel285-runtime"
+        ".apps.ildelocpamo441.ocpd.corp.amdocs.com"
+    )
+    assert not keycloak_matches_apigw(apigw, wrong_url, "amo-il41-rel285-authoring")
+
+    url, realm = resolve_keycloak_config(
+        apigw,
+        wrong_url,
+        "amo-il41-rel285-authoring",
+    )
+    assert url == (
+        "https://keycloak-amo-il18-rel292-runtime"
+        ".apps.ildelocpamo418.ocpd.corp.amdocs.com"
+    )
+    assert realm == "amo-il18-rel292-authoring"

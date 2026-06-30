@@ -34,6 +34,96 @@ class EnvironmentStoreTests(unittest.TestCase):
             reloaded = load_store(temp_path)
             self.assertEqual(reloaded["environments"][0]["display_name"], "Updated label")
 
+    def test_load_store_fixes_mismatched_display_name(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir) / "environments.json"
+            temp_path.write_text(
+                json.dumps(
+                    {
+                        "activeEnvironmentId": "env-il18",
+                        "environments": [
+                            {
+                                "id": "env-il18",
+                                "display_name": "il41-rel285 (test fixture)",
+                                "label": "amo-il18-rel292-authoring",
+                                "apigw_url": "https://amd-apigw-amo-il18-rel292-authoring.apps.example.com",
+                                "keycloak_url": "https://keycloak-amo-il18-rel292-runtime.apps.example.com",
+                                "keycloak_realm": "amo-il18-rel292-authoring",
+                                "username": "k8k_runtimeapp",
+                                "password": "",
+                                "last_used_at": 0,
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            store = load_store(temp_path, bootstrap_fixture=False)
+            self.assertEqual(store["environments"][0]["display_name"], "il18-rel292")
+
+    def test_load_store_fixes_mismatched_keycloak(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir) / "environments.json"
+            temp_path.write_text(
+                json.dumps(
+                    {
+                        "activeEnvironmentId": "env-il18",
+                        "environments": [
+                            {
+                                "id": "env-il18",
+                                "display_name": "il18-rel292",
+                                "label": "amo-il18-rel292-authoring",
+                                "apigw_url": "https://amd-apigw-amo-il18-rel292-authoring.apps.ildelocpamo418.ocpd.corp.amdocs.com",
+                                "keycloak_url": "https://keycloak-amo-il41-rel285-runtime.apps.ildelocpamo441.ocpd.corp.amdocs.com",
+                                "keycloak_realm": "amo-il41-rel285-authoring",
+                                "username": "k8k_runtimeapp",
+                                "password": "",
+                                "last_used_at": 0,
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            store = load_store(temp_path, bootstrap_fixture=False)
+            env = store["environments"][0]
+            self.assertEqual(
+                env["keycloak_url"],
+                "https://keycloak-amo-il18-rel292-runtime.apps.ildelocpamo418.ocpd.corp.amdocs.com",
+            )
+            self.assertEqual(env["keycloak_realm"], "amo-il18-rel292-authoring")
+
+    def test_load_store_repairs_stale_label_from_apigw(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir) / "environments.json"
+            temp_path.write_text(
+                json.dumps(
+                    {
+                        "activeEnvironmentId": "env-il41",
+                        "environments": [
+                            {
+                                "id": "env-il41",
+                                "display_name": "il41-rel285",
+                                "label": "amo-il18-rel292-authoring",
+                                "apigw_url": "https://amd-apigw-amo-il41-rel285-authoring.apps.ildelocpamo441.ocpd.corp.amdocs.com",
+                                "keycloak_url": "https://keycloak-amo-il41-rel285-runtime.apps.ildelocpamo441.ocpd.corp.amdocs.com",
+                                "keycloak_realm": "amo-il41-rel285-authoring",
+                                "username": "k8k_runtimeapp",
+                                "password": "",
+                                "last_used_at": 0,
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            store = load_store(temp_path, bootstrap_fixture=False)
+            self.assertEqual(store["environments"][0]["label"], "amo-il41-rel285-authoring")
+            self.assertEqual(store["environments"][0]["display_name"], "il41-rel285")
+
     def test_validate_store_rejects_invalid_payload(self) -> None:
         with self.assertRaises(ValueError):
             validate_store({"environments": "not-a-list"})

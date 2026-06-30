@@ -1663,12 +1663,38 @@ function resetMergeBelowStep1() {
   syncBusinessRequestFields();
 }
 
+const COMPARE_STAT_DEFS = [
+  ["identical", "Identical", "ok"],
+  ["changed", "Changed", "warn"],
+  ["new_in_br", "New in BR", "accent"],
+  ["missing_in_br", "Missing in BR", "muted"],
+  ["errors", "Errors", "warn"],
+];
+
+function buildBrCompareStatGrid(summary, ui = state.brCompareTableUi) {
+  return `<div class="analyze-stat-grid br-compare-stat-grid">
+    ${COMPARE_STAT_DEFS.map(([key, label, tone]) => {
+    const value = summary[key] ?? 0;
+    const active = ui.status === key ? " is-active" : "";
+    return `<button
+        type="button"
+        class="analyze-stat is-${tone} br-compare-stat-btn${active}"
+        data-compare-status="${key}"
+        title="Filter table to ${label}"
+      >
+        <span class="analyze-stat-value">${escapeHtml(value)}</span>
+        <span class="analyze-stat-label">${escapeHtml(label)}</span>
+      </button>`;
+  }).join("")}
+  </div>`;
+}
+
 const COMPARE_STATUS_ORDER = {
-  identical: 0,
-  changed: 1,
-  new_in_br: 2,
-  missing_in_br: 3,
-  errors: 4,
+  changed: 0,
+  new_in_br: 1,
+  missing_in_br: 2,
+  errors: 3,
+  identical: 4,
 };
 
 function resetBrCompareTableUi() {
@@ -1704,6 +1730,12 @@ function entityMatchesCompareFilter(entity, ui) {
     entity.entity_id,
     entity.summary,
     entity.error,
+    ...(entity.field_changes || []).flatMap((change) => [
+      change.change,
+      change.path,
+      change.baseline,
+      change.current,
+    ]),
   ]
     .filter(Boolean)
     .join(" ")
@@ -1751,13 +1783,46 @@ function filterAndSortCompareEntities(entities, ui = state.brCompareTableUi) {
   );
 }
 
-function buildBrCompareEntityRow(entity) {
+function flattenCompareEntityRows(entities) {
+  const rows = [];
+  for (const entity of entities) {
+    const changes = entity.field_changes || [];
+    if (!changes.length) {
+      rows.push({ entity, change: null });
+      continue;
+    }
+    for (const change of changes) {
+      rows.push({ entity, change });
+    }
+  }
+  return rows;
+}
+
+function buildBrCompareUnifiedRow({ entity, change }, { showSummary = false } = {}) {
+  const summaryText = showSummary
+    ? `${entity.summary || ""}${entity.error ? ` — ${entity.error}` : ""}`.trim()
+    : "";
   return `<tr>
     <td><span class="analyze-badge is-${compareStatusTone(entity.status)}">${escapeHtml(compareStatusLabel(entity.status))}</span></td>
     <td>${escapeHtml(entity.entity_type)}</td>
     <td>${escapeHtml(entity.title || entity.entity_id)}</td>
-    <td>${escapeHtml(entity.summary || "")}${entity.error ? `<br><span class="analyze-step-note">${escapeHtml(entity.error)}</span>` : ""}</td>
+    <td>${change ? escapeHtml(change.change) : "—"}</td>
+    <td>${change ? escapeHtml(change.path) : "—"}</td>
+    <td>${change ? escapeHtml(change.baseline ?? "—") : "—"}</td>
+    <td>${change ? escapeHtml(change.current ?? "—") : "—"}</td>
+    <td>${summaryText ? escapeHtml(summaryText) : ""}</td>
   </tr>`;
+}
+
+function buildBrCompareUnifiedRowsHtml(entities) {
+  const rows = [];
+  for (const entity of entities) {
+    const flat = flattenCompareEntityRows([entity]);
+    flat.forEach((row, index) => {
+      rows.push(buildBrCompareUnifiedRow(row, { showSummary: index === 0 }));
+    });
+  }
+  return rows.join("");
 }
 
 function buildBrCompareSortButton(sortKey, label, ui) {
@@ -1797,7 +1862,7 @@ function buildBrCompareEntitiesSection(body, ui = state.brCompareTableUi) {
           type="search"
           id="brCompareFilterQuery"
           class="br-compare-filter-input"
-          placeholder="Filter by name, type, status, summary…"
+          placeholder="Filter by name, type, status, field, summary…"
           value="${escapeHtml(ui.query)}"
           autocomplete="off"
         >
@@ -1815,9 +1880,9 @@ function buildBrCompareEntitiesSection(body, ui = state.brCompareTableUi) {
           ${entityTypes.map((type) => `<option value="${escapeHtml(type)}"${ui.entityType === type ? " selected" : ""}>${escapeHtml(type)}</option>`).join("")}
         </select>
       </label>
-      <p id="brCompareFilterCount" class="br-compare-filter-count">Showing ${filtered.length} of ${entities.length}</p>
+      <p id="brCompareFilterCount" class="br-compare-filter-count">Showing ${filtered.length} of ${entities.length} entities</p>
     </div>
-    <h5 class="analyze-section-title">Entities (<span id="brCompareEntityCount">${filtered.length}</span>)</h5>
+    <h5 class="analyze-section-title">Compare results (<span id="brCompareEntityCount">${filtered.length}</span> entities)</h5>
     <div class="analyze-table-wrap br-compare-table-wrap">
       <table class="analyze-table br-compare-table">
         <thead>
@@ -1825,63 +1890,21 @@ function buildBrCompareEntitiesSection(body, ui = state.brCompareTableUi) {
             <th>${buildBrCompareSortButton("status", "Status", ui)}</th>
             <th>${buildBrCompareSortButton("type", "Type", ui)}</th>
             <th>${buildBrCompareSortButton("entity", "Entity", ui)}</th>
+            <th>Change</th>
+            <th>Field</th>
+            <th>Production</th>
+            <th>BR (local)</th>
             <th>${buildBrCompareSortButton("summary", "Summary", ui)}</th>
           </tr>
         </thead>
         <tbody id="brCompareEntitiesTbody">
           ${filtered.length
-    ? filtered.map((entity) => buildBrCompareEntityRow(entity)).join("")
-    : `<tr><td colspan="4" class="br-compare-empty-row">No entities match the current filters.</td></tr>`}
+    ? buildBrCompareUnifiedRowsHtml(filtered)
+    : `<tr><td colspan="8" class="br-compare-empty-row">No entities match the current filters.</td></tr>`}
         </tbody>
       </table>
     </div>
-  </section>
-  <div id="brCompareChangedDetails">${buildBrCompareChangedDetails(filtered)}</div>`;
-}
-
-function buildBrCompareChangedDetails(entities) {
-  const changedEntities = entities.filter(
-    (entity) => entity.field_changes?.length || entity.audit_versions?.length > 1,
-  );
-  if (!changedEntities.length) {
-    return "";
-  }
-
-  let html = "";
-  for (const entity of changedEntities.slice(0, 6)) {
-    html += `<section>
-      <h5 class="analyze-section-title">${escapeHtml(entity.title || entity.entity_id)}</h5>`;
-    if (entity.audit_versions?.length) {
-      html += `<ul class="analyze-meta-list">
-        ${entity.audit_versions.slice(0, 4).map((version) => `
-          <li><strong>${escapeHtml(version.published_at || "—")}</strong> · ${escapeHtml(version.operation || "")} · ${escapeHtml(version.business_request_name || version.id || "")}</li>
-        `).join("")}
-      </ul>`;
-    }
-    if (entity.field_changes?.length) {
-      html += `<div class="analyze-table-wrap">
-        <table class="analyze-table">
-          <thead><tr><th>Change</th><th>Field</th><th>Production</th><th>BR (local)</th></tr></thead>
-          <tbody>
-            ${entity.field_changes.slice(0, 12).map((change) => `<tr>
-              <td>${escapeHtml(change.change)}</td>
-              <td>${escapeHtml(change.path)}</td>
-              <td>${escapeHtml(change.baseline ?? "—")}</td>
-              <td>${escapeHtml(change.current ?? "—")}</td>
-            </tr>`).join("")}
-          </tbody>
-        </table>
-      </div>`;
-      if (entity.field_changes.length > 12) {
-        html += `<p class="analyze-step-note">…and ${entity.field_changes.length - 12} more field changes (see raw JSON).</p>`;
-      }
-    }
-    html += `</section>`;
-  }
-  if (changedEntities.length > 6) {
-    html += `<p class="analyze-step-note">Showing details for 6 of ${changedEntities.length} changed entities in the filtered set.</p>`;
-  }
-  return html;
+  </section>`;
 }
 
 function updateBrCompareSortButtons(ui = state.brCompareTableUi) {
@@ -1919,13 +1942,13 @@ function refreshBrCompareEntitiesTable() {
   const tbody = els.brCompareReport.querySelector("#brCompareEntitiesTbody");
   if (tbody) {
     tbody.innerHTML = filtered.length
-      ? filtered.map((entity) => buildBrCompareEntityRow(entity)).join("")
-      : `<tr><td colspan="4" class="br-compare-empty-row">No entities match the current filters.</td></tr>`;
+      ? buildBrCompareUnifiedRowsHtml(filtered)
+      : `<tr><td colspan="8" class="br-compare-empty-row">No entities match the current filters.</td></tr>`;
   }
 
   const countEl = els.brCompareReport.querySelector("#brCompareFilterCount");
   if (countEl) {
-    countEl.textContent = `Showing ${filtered.length} of ${entities.length}`;
+    countEl.textContent = `Showing ${filtered.length} of ${entities.length} entities`;
   }
   const entityCountEl = els.brCompareReport.querySelector("#brCompareEntityCount");
   if (entityCountEl) {
@@ -1934,10 +1957,11 @@ function refreshBrCompareEntitiesTable() {
 
   updateBrCompareSortButtons();
 
-  const details = els.brCompareReport.querySelector("#brCompareChangedDetails");
-  if (details) {
-    details.innerHTML = buildBrCompareChangedDetails(filtered);
+  const statGrid = els.brCompareReport.querySelector(".br-compare-stat-grid");
+  if (statGrid) {
+    statGrid.outerHTML = buildBrCompareStatGrid(state.brCompareData.summary || {}, state.brCompareTableUi);
   }
+
   syncComparePanelLayout();
 }
 
@@ -1968,6 +1992,18 @@ function wireBrCompareTableInteractions() {
   });
 
   els.brCompareReport.addEventListener("click", (event) => {
+    const statBtn = event.target.closest("[data-compare-status]");
+    if (statBtn) {
+      const status = statBtn.dataset.compareStatus;
+      state.brCompareTableUi.status = state.brCompareTableUi.status === status ? "all" : status;
+      const statusSelect = els.brCompareReport.querySelector("#brCompareFilterStatus");
+      if (statusSelect) {
+        statusSelect.value = state.brCompareTableUi.status;
+      }
+      refreshBrCompareEntitiesTable();
+      return;
+    }
+
     const sortBtn = event.target.closest("[data-compare-sort]");
     if (!sortBtn) {
       return;
@@ -1993,6 +2029,9 @@ function compareStatusTone(status) {
   if (status === "new_in_br") {
     return "accent";
   }
+  if (status === "errors") {
+    return "warn";
+  }
   return "muted";
 }
 
@@ -2010,15 +2049,9 @@ function compareStatusLabel(status) {
 function buildBrComparePanel(body) {
   const summary = body.summary || {};
   const entities = body.entities || [];
-  const compareLabel = body.compare_type === "audit" ? "Audit" : "Production";
 
-  let html = `<div class="analyze-stat-grid br-compare-stat-grid">
-    ${analyzeStatCard("Identical", summary.identical ?? 0, summary.identical ? "ok" : "")}
-    ${analyzeStatCard("Changed", summary.changed ?? 0, summary.changed ? "warn" : "")}
-    ${analyzeStatCard("New in BR", summary.new_in_br ?? 0, summary.new_in_br ? "accent" : "")}
-    ${analyzeStatCard("Missing in BR", summary.missing_in_br ?? 0, summary.missing_in_br ? "muted" : "")}
-    ${analyzeStatCard("Errors", summary.errors ?? 0, summary.errors ? "warn" : "")}
-  </div>`;
+  let html = buildBrCompareStatGrid(summary);
+  html += `<p class="br-compare-stat-hint analyze-step-note">Click a result type above to filter. Use search to narrow rows.</p>`;
 
   html += `<div class="analyze-badge-row">
     <span class="analyze-badge is-accent">${body.compare_type === "audit" ? "Compared with audit history" : "BR (local import) vs production (environment)"}</span>
@@ -2260,12 +2293,96 @@ function deriveCatalogUiUrl(apigwUrl) {
   return normalizeApigwUrl(apigwUrl).replace("amd-apigw-", "c1-web-ui-");
 }
 
-function getEnvironmentDisplayName(environment) {
-  const custom = (environment?.display_name || "").trim();
-  if (custom) {
+function friendlyEnvironmentLabel(technicalLabel) {
+  const value = (technicalLabel || "").trim();
+  const match = value.match(/^amo-(il\d+-rel\d+)-authoring$/i);
+  if (match) {
+    return match[1];
+  }
+  return value.replace(/-authoring$/, "") || value;
+}
+
+function displayNameMatchesEnvironment(displayName, apigwUrl, technicalLabel) {
+  const custom = (displayName || "").trim();
+  const derived = (technicalLabel || deriveEnvironmentLabel(apigwUrl || "")).trim();
+  if (!custom) {
+    return false;
+  }
+  if (!derived) {
+    return true;
+  }
+  const dn = custom.toLowerCase();
+  const core = derived.replace(/-authoring$/, "").toLowerCase();
+  if (core && dn.includes(core)) {
+    return true;
+  }
+  return core
+    .split("-")
+    .filter((part) => part.length > 2)
+    .some((part) => dn.includes(part));
+}
+
+function displayNameLooksMismatched(displayName, apigwUrl, technicalLabel) {
+  const custom = (displayName || "").trim();
+  if (!custom) {
+    return false;
+  }
+  if (displayNameMatchesEnvironment(custom, apigwUrl, technicalLabel)) {
+    return false;
+  }
+  const derived = (technicalLabel || deriveEnvironmentLabel(apigwUrl || "")).trim();
+  const core = derived.replace(/-authoring$/, "").toLowerCase();
+  const foreignClusters = custom.match(/il\d+-rel\d+/gi) || [];
+  if (!foreignClusters.length) {
+    return false;
+  }
+  return foreignClusters.some((cluster) => !core.includes(cluster.toLowerCase()));
+}
+
+function environmentTechnicalLabel(environment) {
+  return deriveEnvironmentLabel(environment?.apigw_url || "") || environment?.label || "";
+}
+
+function resolveEnvironmentDisplayName(profile, existing = null) {
+  const apigwUrl = profile.apigw_url || existing?.apigw_url || "";
+  const technicalLabel = deriveEnvironmentLabel(apigwUrl) || existing?.label || "";
+  const friendly = friendlyEnvironmentLabel(technicalLabel);
+  const custom = (profile.display_name ?? "").trim();
+  if (custom && !displayNameLooksMismatched(custom, apigwUrl, technicalLabel)) {
     return custom;
   }
-  return environment?.label || deriveEnvironmentLabel(environment?.apigw_url || "");
+  const existingCustom = (existing?.display_name ?? "").trim();
+  if (
+    existingCustom
+    && !displayNameLooksMismatched(existingCustom, apigwUrl, technicalLabel)
+  ) {
+    return existingCustom;
+  }
+  return friendly || technicalLabel;
+}
+
+function getEnvironmentDisplayName(environment) {
+  const technicalLabel = environmentTechnicalLabel(environment);
+  const custom = (environment?.display_name || "").trim();
+  if (custom && !displayNameLooksMismatched(custom, environment?.apigw_url, technicalLabel)) {
+    return custom;
+  }
+  return friendlyEnvironmentLabel(technicalLabel) || technicalLabel;
+}
+
+function getEnvironmentSidebarLabel(environment, environments) {
+  const base = getEnvironmentDisplayName(environment);
+  const duplicates = (environments || []).filter(
+    (item) => getEnvironmentDisplayName(item) === base,
+  );
+  if (duplicates.length <= 1) {
+    return base;
+  }
+  const cluster = friendlyEnvironmentLabel(environmentTechnicalLabel(environment));
+  if (cluster && cluster !== base) {
+    return `${base} · ${cluster}`;
+  }
+  return `${base} · ${environment.id}`;
 }
 
 
@@ -2455,13 +2572,28 @@ function saveEnvironmentFromForm() {
   }
 
   const suggestedLabel = deriveEnvironmentLabel(payload.apigw_url);
-  const displayName = payload.display_name || existing?.display_name || suggestedLabel;
+  const displayName = resolveEnvironmentDisplayName(
+    { ...payload, display_name: payload.display_name || suggestedLabel },
+    existing,
+  );
 
   return upsertEnvironment({
     ...payload,
     id: existing?.id || state.editingEnvironmentId || undefined,
     display_name: displayName,
   });
+}
+
+async function ensureConnectionFieldsMatchApigw() {
+  const apigwUrl = normalizeApigwUrl(els.apigwUrlInput.value);
+  if (!apigwUrl) {
+    throw new Error("API gateway URL is required.");
+  }
+  const data = await api(`/api/derive-urls?apigw_url=${encodeURIComponent(apigwUrl)}`);
+  els.apigwUrlInput.value = data.apigw_url;
+  els.keycloakUrlInput.value = data.keycloak_url;
+  els.keycloakRealmInput.value = data.environment_label;
+  return data;
 }
 
 async function connectEnvironment(environmentId) {
@@ -2475,6 +2607,7 @@ async function connectEnvironment(environmentId) {
 
   applyConnectionFields(environment);
   state.activeEnvironmentId = environmentId;
+  await ensureConnectionFieldsMatchApigw();
 
   await api("/api/logout", { method: "POST", body: "{}" }).catch(() => null);
   setLoggedIn(false);
@@ -2525,12 +2658,15 @@ async function deleteEnvironment(environmentId) {
 function upsertEnvironment(profile) {
   const store = loadEnvironmentStore();
   const key = environmentKey(profile);
-  const existing = profile.id
-    ? store.environments.find((item) => item.id === profile.id)
-    : store.environments.find((item) => environmentKey(item) === key);
+  let existing = null;
+  if (profile.id) {
+    existing = store.environments.find((item) => item.id === profile.id) || null;
+  } else {
+    existing = store.environments.find((item) => environmentKey(item) === key) || null;
+  }
   const now = Date.now();
   const technicalLabel = deriveEnvironmentLabel(profile.apigw_url);
-  const displayName = (profile.display_name ?? "").trim() || existing?.display_name || "";
+  const displayName = resolveEnvironmentDisplayName(profile, existing);
   const next = {
     id: existing?.id || profile.id || newEnvironmentId(),
     display_name: displayName,
@@ -2629,7 +2765,7 @@ function renderEnvironmentSidebar() {
   for (const environment of environments) {
     const node = els.environmentItemTemplate.content.cloneNode(true);
     const item = node.querySelector(".env-card");
-    const displayName = getEnvironmentDisplayName(environment);
+    const displayName = getEnvironmentSidebarLabel(environment, environments);
     const isConnected = state.loggedIn && state.connectedEnvironmentId === environment.id;
     const isSelected = state.activeEnvironmentId === environment.id;
 
@@ -3148,6 +3284,14 @@ async function syncKeycloakFromGateway() {
     els.apigwUrlInput.value = data.apigw_url;
     els.keycloakUrlInput.value = data.keycloak_url;
     els.keycloakRealmInput.value = data.environment_label;
+    const currentDisplayName = els.environmentDisplayNameInput.value.trim();
+    const nextLabel = data.environment_label || deriveEnvironmentLabel(data.apigw_url);
+    if (
+      !currentDisplayName
+      || displayNameLooksMismatched(currentDisplayName, data.apigw_url, nextLabel)
+    ) {
+      els.environmentDisplayNameInput.value = friendlyEnvironmentLabel(nextLabel) || nextLabel;
+    }
   } catch (error) {
     showResult(
       els.loginResult,
@@ -3525,8 +3669,18 @@ els.createBrBtn?.addEventListener("click", async () => {
   } catch (error) {
     state.zipImportCompleted = false;
     const message = error.message || "";
-    if (/401|unauthorized|expired|invalid token/i.test(message)) {
+    if (/log in first|session expired|not logged in/i.test(message)) {
       void handleSessionExpired("CatalogOne session expired — connect again in the sidebar.");
+    } else if (/401|unauthorized/i.test(message) && /kid|keycloak|valid key/i.test(message)) {
+      showBrCreateResult(
+        "Authentication failed: Keycloak settings do not match the selected API gateway. "
+          + "Edit the environment, click Sync next to APIGW, save, and connect again.",
+        { isError: true },
+      );
+      if (error?.body?.business_request_id) {
+        applyBusinessRequestIdFromResult(error.body);
+      }
+      return;
     }
     if (error?.body?.business_request_id) {
       applyBusinessRequestIdFromResult(error.body);

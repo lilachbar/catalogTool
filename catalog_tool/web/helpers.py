@@ -16,6 +16,7 @@ from catalog_tool.client.catalog_one_client import (
     derive_keycloak_realm,
     derive_keycloak_url,
     normalize_apigw_url,
+    resolve_keycloak_config,
 )
 from catalog_tool.settings import CATALOG_GATEWAY_URL, CATALOG_UI_URL, KEYCLOAK_REALM, KEYCLOAK_URL
 from catalog_tool.tables import CATALOG_TABLES, DEFAULT_TABLE_KEY, GenericElementTable, get_catalog_table
@@ -43,18 +44,16 @@ def tables_payload() -> list[dict[str, str]]:
 
 def connection_from_request(data: dict) -> CatalogOneConnectionConfig:
     apigw_url = normalize_apigw_url(data.get("apigw_url", CATALOG_GATEWAY_URL))
-    keycloak_url = data.get("keycloak_url", KEYCLOAK_URL)
-    try:
-        derived_keycloak_url = derive_keycloak_url(apigw_url)
-        if not keycloak_url or "-authoring-runtime" in keycloak_url:
-            keycloak_url = derived_keycloak_url
-    except ValueError:
-        pass
+    keycloak_url, keycloak_realm = resolve_keycloak_config(
+        apigw_url,
+        str(data.get("keycloak_url") or "").strip(),
+        str(data.get("keycloak_realm") or "").strip(),
+    )
 
     return CatalogOneConnectionConfig(
         apigw_url=apigw_url,
         keycloak_url=keycloak_url,
-        keycloak_realm=data.get("keycloak_realm", KEYCLOAK_REALM),
+        keycloak_realm=keycloak_realm,
         username=data.get("username", ""),
         password=data.get("password", ""),
     )
@@ -141,18 +140,17 @@ def catalogone_mcp_env_from_session() -> dict[str, str] | None:
         return None
 
     apigw_url = normalize_apigw_url(apigw_url)
-    keycloak_url = (conn.get("keycloak_url") or "").strip()
-    if not keycloak_url or "-authoring-runtime" in keycloak_url:
-        try:
-            keycloak_url = derive_keycloak_url(apigw_url)
-        except ValueError:
-            keycloak_url = KEYCLOAK_URL
+    keycloak_url, keycloak_realm = resolve_keycloak_config(
+        apigw_url,
+        str(conn.get("keycloak_url") or "").strip(),
+        str(conn.get("keycloak_realm") or "").strip(),
+    )
 
     return {
         "C1_APIGW_URL": apigw_url,
         "C1_WEB_UI_URL": derive_catalog_ui_url(apigw_url),
         "C1_KEYCLOAK_URL": keycloak_url,
-        "C1_KEYCLOAK_REALM": conn.get("keycloak_realm") or derive_keycloak_realm(apigw_url),
+        "C1_KEYCLOAK_REALM": keycloak_realm,
         "C1_USERNAME": conn.get("username", ""),
         "C1_PASSWORD": conn.get("password", ""),
         **(

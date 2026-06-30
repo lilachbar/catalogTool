@@ -86,10 +86,10 @@ def test_compare_css_does_not_use_dock_layout():
 
 
 @patch("catalog_tool.web.routes.catalog.compare_business_request")
-@patch("catalog_tool.web.routes.catalog.catalogone_mcp_env_from_session")
-def test_compare_api_returns_entity_table_data(mock_env, mock_compare):
+@patch("catalog_tool.web.routes.catalog.client_from_session")
+def test_compare_api_returns_entity_table_data(mock_client, mock_compare):
     with patch("catalog_tool.web.user_session.LDAP_AUTH_ENABLED", False):
-        mock_env.return_value = {"C1_APIGW_URL": "https://example.com", "C1_USERNAME": "user"}
+        mock_client.return_value = object()
         report = BrCompareReport(
             compare_type="production",
             business_request_id="br-123",
@@ -135,10 +135,10 @@ def test_compare_api_returns_entity_table_data(mock_env, mock_compare):
 
 
 @patch("catalog_tool.web.routes.catalog.compare_business_request")
-@patch("catalog_tool.web.routes.catalog.catalogone_mcp_env_from_session")
-def test_compare_api_accepts_client_entity_payload(mock_env, mock_compare):
+@patch("catalog_tool.web.routes.catalog.client_from_session")
+def test_compare_api_accepts_client_entity_payload(mock_client, mock_compare):
     with patch("catalog_tool.web.user_session.LDAP_AUTH_ENABLED", False):
-        mock_env.return_value = {"C1_APIGW_URL": "https://example.com", "C1_USERNAME": "user"}
+        mock_client.return_value = object()
         mock_compare.return_value = BrCompareReport(
             compare_type="production",
             business_request_id="br-123",

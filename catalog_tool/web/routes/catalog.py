@@ -17,6 +17,7 @@ from catalog_tool.web.helpers import (
     catalog_ui_launch_path,
     catalog_ui_url_for_request,
     catalogone_mcp_env_from_session,
+    client_from_session,
     derive_urls_payload,
     table_from_request,
     table_ui_url,
@@ -31,7 +32,6 @@ from catalog_tool.web.import_context import (
 )
 from catalog_tool.web.mcp_client import McpToolError, import_catalog_data_via_mcp
 from catalog_tool.web.mcp_catalog import (
-    McpCatalogAdapter,
     create_business_request_via_mcp,
     get_business_request_via_mcp,
 )
@@ -314,10 +314,9 @@ def register(app: Flask) -> None:
             ), 400
 
         try:
-            catalogone_env = _require_mcp_env()
-            mcp_client = McpCatalogAdapter(catalogone_env)
+            client = client_from_session(refresh=True)
             report = compare_business_request(
-                mcp_client,
+                client,
                 business_request_id=br_id,
                 compare_type=compare_type,
                 entities=entities,

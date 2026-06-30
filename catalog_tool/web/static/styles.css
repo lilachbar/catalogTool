@@ -5460,6 +5460,42 @@ html.session-resetting body {
   grid-template-columns: repeat(auto-fit, minmax(6.5rem, 1fr));
 }
 
+.br-compare-stat-btn {
+  cursor: pointer;
+  border: 1px solid transparent;
+  text-align: center;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.br-compare-stat-btn:hover {
+  border-color: var(--border-strong);
+}
+
+.br-compare-stat-btn.is-active {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+
+.br-compare-stat-hint {
+  margin-top: 0.35rem;
+}
+
+.br-compare-status-group + .br-compare-status-group {
+  margin-top: 1.25rem;
+}
+
+.br-compare-entity-detail {
+  margin-top: 0.75rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.br-compare-entity-detail-title {
+  margin: 0 0 0.35rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
 .merge-compare-section:not(.is-running) .br-compare-actions-bar .btn.is-busy {
   opacity: 1;
   cursor: pointer;

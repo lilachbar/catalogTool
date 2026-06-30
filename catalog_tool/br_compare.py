@@ -218,7 +218,7 @@ def _compare_entity_production(
             field_changes=[
                 FieldChange(path=path, baseline=None, current=value, change="added")
                 for path, value in sorted(changes.items())
-            ][:20],
+            ],
         )
 
     field_changes = _diff_entities(published, local)
