@@ -1,4 +1,0 @@
-flask<4,>=3.0
-python-dotenv<2,>=1.0
-ldap3<3,>=2.9
-openpyxl<4,>=3.1

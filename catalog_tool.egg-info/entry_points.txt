@@ -1,3 +1,0 @@
-[console_scripts]
-catalog-tool-generate-modify-reason-entry = catalog_tool.cli.generate_modify_reason_entry:main
-catalog-tool-web = catalog_tool.web.app:main

@@ -62,6 +62,8 @@ data/
 
 Both processes are started by `./run_web.sh`. API keys stay **server-side** only.
 
+For maintainer-focused structure, session model, and MCP vs REST paths, see **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)**.
+
 ### Environment alignment (important)
 
 | Consumer | CatalogOne target |
@@ -195,7 +197,7 @@ The script will:
 
 1. **Sign in** — Amdocs LDAP at `/login` (when `LDAP_AUTH_ENABLED=true`).
 2. **Environments** (sidebar) — Add an environment (+), enter APIGW / Keycloak / credentials, **Connect**. Up to 12 per user; stored in `data/environments/{username}.json` (passwords base64-encoded). Each signed-in user sees only their own environments.
-3. **Merge & Import** — Upload a CatalogOne export zip → **Analyze & preview** → create BR → publish when ready.
+3. **Merge & Import** — Upload a CatalogOne export zip → **Analyze & preview** → create BR → optional **Compare vs production** → publish when ready.
 4. **DG Import** — Upload WLS Actions & Reasons Excel → **Analyze & preview** → create BR → **Import entries to catalog** → publish when ready.
 5. **MCP Tools** — Browse tools from catalogone MCP (uses connected environment), fill arguments, run and inspect JSON results.
 6. **Catalog assistant** (chat icon) — Ask about tables, workflows, or CatalogOne; agent uses the same connected environment for MCP calls.
@@ -225,7 +227,8 @@ Three-step workflow:
 1. **Upload zip** — Drag & drop or browse. Selected files show a green checkmark state (filename, size, “click to replace”). Expects `promotion/<uuid>.json` inside the zip.
 2. **Analyze & preview** — Structured report: new/changed/unchanged counts, findings, PR file list, entity sample table, summary markdown. Toggle **Show raw JSON** for the full API response. Output is written under `data/catalog-pr/catalog-zip/`.
 3. **Business request** — Create a new BR or paste an existing ID.
-4. **Publish** — Explicit publish only (optional force publish). Zip analysis never publishes automatically.
+4. **Compare vs production** (optional) — After zip import, compare BR entities against production or audit baselines; review field-level diffs in the UI.
+5. **Publish** — Explicit publish only (optional force publish). Zip analysis never publishes automatically.
 
 ### DG Import
 
@@ -269,11 +272,14 @@ DG Import maps Excel reason codes to these tables. For Action-specific fields be
 ```
 catalogTool/
 ├── README.md
+├── docs/
+│   └── ARCHITECTURE.md       # Maintainer architecture overview
 ├── pyproject.toml
 ├── package.json              # Node deps; build:chat script
 ├── .env.example
 ├── run_web.sh                # → scripts/run_web.sh
 ├── run_web_network.sh
+├── archive_candidate/        # Unused files held before deletion
 ├── scripts/
 │   └── run_web.sh            # venv + npm + chat server + Flask
 ├── data/
@@ -292,11 +298,13 @@ catalogTool/
 │   ├── mcp-config.js
 │   ├── mcp-routes.js
 │   └── tools.js
-├── tests/
-│   └── test_excel_dg.py
+├── tests/                    # pytest suite (17 modules, 75+ tests)
+│   ├── fixtures/
+│   └── test_*.py
 └── catalog_tool/
     ├── settings.py
     ├── tables.py
+    ├── br_compare.py         # BR vs production/audit entity compare
     ├── zip_catalog/          # Zip parse, diff, validate, PR package
     ├── excel_dg/             # DG Excel parse, plan, analyze
     ├── auth/ldap.py
@@ -307,7 +315,9 @@ catalogTool/
         ├── app.py
         ├── chat_window.py
         ├── environment_store.py
+        ├── import_context.py # Upload + compare entity session cache
         ├── push_service.py
+        ├── mcp_catalog.py    # Catalog writes via MCP
         ├── helpers.py          # Session → MCP env mapping
         ├── routes/
         │   ├── auth.py         # CatalogOne login/logout
@@ -519,6 +529,9 @@ npm run chat-server
 
 # Tests
 pytest
+
+# Optional lint (requires: pip install ruff)
+ruff check catalog_tool tests
 
 # Node server (preflight, chat key validation)
 npm run test:server

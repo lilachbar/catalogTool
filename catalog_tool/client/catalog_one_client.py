@@ -216,6 +216,11 @@ class CatalogOneClient:
         request_type: str = "default",
         due_days: int = 30,
     ) -> str:
+        """Create a business request via direct REST.
+
+        Retained as a fallback/reference implementation. The web app uses
+        ``create_business_request_via_mcp`` in ``catalog_tool.web.mcp_catalog``.
+        """
         due_date = (datetime.now(timezone.utc) + timedelta(days=due_days)).strftime(
             "%Y-%m-%dT%H:%M:%S.000Z"
         )
@@ -237,6 +242,11 @@ class CatalogOneClient:
         entry: dict[str, Any],
         business_request_id: str,
     ) -> tuple[int, Any]:
+        """Push a genericElementEntry via direct REST.
+
+        Retained as a fallback/reference implementation. The web app uses
+        ``create_generic_element_entry_via_mcp`` in ``catalog_tool.web.mcp_catalog``.
+        """
         query = f"?businessRequestId={urllib.parse.quote(business_request_id)}"
         status, body = self._api_request(
             "POST",
@@ -251,6 +261,11 @@ class CatalogOneClient:
         return status, parsed
 
     def get_business_request(self, business_request_id: str) -> dict[str, Any]:
+        """Fetch a business request via direct REST.
+
+        Retained as a fallback/reference implementation. The web app uses
+        ``get_business_request_via_mcp`` in ``catalog_tool.web.mcp_catalog``.
+        """
         status, body = self._api_request(
             "GET",
             f"/catalogManagement/businessRequestManagement/v1/businessRequest/{business_request_id}",
@@ -398,6 +413,11 @@ class CatalogOneClient:
         force_publish: bool = False,
         publish_after: str | None = None,
     ) -> tuple[int, Any]:
+        """Publish a business request via direct REST.
+
+        Retained as a fallback/reference implementation. The web app uses
+        ``publish_business_request_via_mcp`` in ``catalog_tool.web.mcp_catalog``.
+        """
         params: dict[str, str] = {
             "businessRequestId": business_request_id,
             "forcePublish": "true" if force_publish else "false",

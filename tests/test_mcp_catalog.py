@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
+import pytest
 from unittest.mock import patch
-import unittest
 
 from catalog_tool.web.mcp_catalog import (
     McpCatalogAdapter,
@@ -45,9 +45,5 @@ def test_create_business_request_via_mcp_raises_without_id():
         "catalog_tool.web.mcp_catalog.call_mcp_tool",
         return_value={"status": "ok"},
     ):
-        with self.assertRaises(McpToolError):
+        with pytest.raises(McpToolError):
             create_business_request_via_mcp(name="Test BR", catalogone_env=env)
-
-
-if __name__ == "__main__":
-    unittest.main()
