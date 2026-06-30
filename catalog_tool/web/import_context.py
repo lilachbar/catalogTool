@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 import tempfile
 import zipfile
@@ -12,6 +13,7 @@ IMPORT_SESSION_KEY = "catalog_import_context"
 
 ZIP_EXTENSIONS = (".zip",)
 EXCEL_EXTENSIONS = (".xlsx", ".xlsm")
+ENTITIES_SIDECAR_SUFFIX = ".entities.json"
 
 
 def _extension(name: str) -> str:
@@ -26,12 +28,13 @@ def clear_import_context(session: dict[str, Any]) -> None:
     ctx = session.pop(IMPORT_SESSION_KEY, None)
     if not ctx:
         return
-    path = ctx.get("path")
-    if path and os.path.isfile(path):
-        try:
-            os.remove(path)
-        except OSError:
-            pass
+    for key in ("path", "entities_path"):
+        file_path = ctx.get(key)
+        if file_path and os.path.isfile(file_path):
+            try:
+                os.remove(file_path)
+            except OSError:
+                pass
 
 
 def store_import_file(
@@ -78,7 +81,41 @@ def store_import_file(
         "path": path,
     }
     session[IMPORT_SESSION_KEY] = ctx
+    session.modified = True
     return ctx
+
+
+def store_zip_analyze_entities(session: dict[str, Any], entities: list[dict[str, Any]]) -> None:
+    """Persist analyzed entity list beside the import file — not in the session cookie."""
+    ctx = get_import_context(session)
+    if not ctx:
+        return
+
+    entities_path = f"{ctx['path']}{ENTITIES_SIDECAR_SUFFIX}"
+    with open(entities_path, "w", encoding="utf-8") as handle:
+        json.dump(entities, handle, separators=(",", ":"))
+
+    ctx["entities_path"] = entities_path
+    session[IMPORT_SESSION_KEY] = ctx
+    session.modified = True
+
+
+def get_zip_analyze_entities(session: dict[str, Any]) -> list[dict[str, Any]] | None:
+    ctx = get_import_context(session)
+    if not ctx:
+        return None
+
+    entities_path = ctx.get("entities_path")
+    if not entities_path or not os.path.isfile(entities_path):
+        return None
+
+    try:
+        with open(entities_path, encoding="utf-8") as handle:
+            payload = json.load(handle)
+    except (OSError, json.JSONDecodeError):
+        return None
+
+    return payload if isinstance(payload, list) else None
 
 
 def get_import_context(session: dict[str, Any]) -> dict[str, str] | None:

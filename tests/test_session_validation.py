@@ -99,3 +99,47 @@ def test_clear_catalogone_login_removes_catalogone_fields():
         assert not session.get("logged_in")
         assert not session.get("access_token")
         assert not session.get("connection")
+
+
+@patch("catalog_tool.web.helpers.validate_catalogone_session")
+def test_client_from_session_refreshes_before_use(mock_validate):
+    app = create_app()
+    with app.test_request_context():
+        from flask import session
+
+        from catalog_tool.web.helpers import client_from_session
+
+        session.clear()
+        session["logged_in"] = True
+        session["connection"] = {
+            "apigw_url": "https://amd-apigw-eus1-dev01.runtime.internal.corp.amdocs.com",
+            "keycloak_url": "https://keycloak.example.com",
+            "keycloak_realm": "eus1-dev01",
+            "username": "user",
+            "password": "secret",
+        }
+        session["access_token"] = "fresh-token"
+        mock_validate.return_value = True
+
+        client = client_from_session()
+        mock_validate.assert_called_once_with(refresh=True)
+        assert client.access_token == "fresh-token"
+
+
+@patch("catalog_tool.web.helpers.validate_catalogone_session")
+def test_client_from_session_raises_when_refresh_fails(mock_validate):
+    app = create_app()
+    with app.test_request_context():
+        from flask import session
+
+        from catalog_tool.web.helpers import client_from_session
+
+        session.clear()
+        session["logged_in"] = True
+        mock_validate.return_value = False
+
+        try:
+            client_from_session()
+            raise AssertionError("expected RuntimeError")
+        except RuntimeError as exc:
+            assert "expired" in str(exc).lower()

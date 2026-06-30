@@ -75,6 +75,8 @@ const state = {
   importFilename: null,
 };
 
+let pushWorkflowNav = null;
+
 const els = {
   connectionForm: document.getElementById("connectionForm"),
   connectionModal: document.getElementById("connectionModal"),
@@ -96,8 +98,13 @@ const els = {
   pushBtn: document.getElementById("pushBtn"),
   publishBtn: document.getElementById("publishBtn"),
   pushResult: document.getElementById("pushResult"),
+  pushResultCard: document.getElementById("pushResultCard"),
+  pushWorkflowStatus: document.getElementById("pushWorkflowStatus"),
+  pushWorkflowStatusText: document.getElementById("pushWorkflowStatusText"),
+  pushStepNav: document.getElementById("pushStepNav"),
   catalogZipInput: document.getElementById("catalogZipInput"),
   analyzeZipBtn: document.getElementById("analyzeZipBtn"),
+  analyzeZipBtnLabel: document.getElementById("analyzeZipBtnLabel"),
   zipAnalyzeReport: document.getElementById("zipAnalyzeReport"),
   zipAnalyzeSummary: document.getElementById("zipAnalyzeSummary"),
   zipAnalyzePanel: document.getElementById("zipAnalyzePanel"),
@@ -126,10 +133,16 @@ const els = {
   dgImportEntriesBtn: document.getElementById("dgImportEntriesBtn"),
   dgImportEntriesHint: document.getElementById("dgImportEntriesHint"),
   dgImportResult: document.getElementById("dgImportResult"),
+  dgImportResultCard: document.getElementById("dgImportResultCard"),
   dgPublishBusinessRequestId: document.getElementById("dgPublishBusinessRequestId"),
   dgPublishBusinessRequestIdHint: document.getElementById("dgPublishBusinessRequestIdHint"),
   dgPublishBtn: document.getElementById("dgPublishBtn"),
   dgPublishResult: document.getElementById("dgPublishResult"),
+  dgPublishResultCard: document.getElementById("dgPublishResultCard"),
+  dgWorkflowStatus: document.getElementById("dgWorkflowStatus"),
+  dgWorkflowStatusText: document.getElementById("dgWorkflowStatusText"),
+  dgStepNav: document.getElementById("dgStepNav"),
+  dgBrCreateResultCard: document.getElementById("dgBrCreateResultCard"),
   rowTemplate: document.getElementById("rowTemplate"),
   rowsContainer: document.getElementById("rowsContainer"),
   addRowBtn: document.getElementById("addRowBtn"),
@@ -336,6 +349,7 @@ function updateMainConnectionHint() {
 
   const hint = connectionHintForView();
   setMainConnectionHintState(hint.connected, hint.html);
+  updateWorkflowStatusLines();
 }
 
 function updateMcpToolsNav({ configured, online, message }) {
@@ -989,10 +1003,142 @@ function toggleTheme() {
 }
 
 function showResult(el, data, isError = false) {
+  if (!el) {
+    return;
+  }
   el.hidden = false;
   el.classList.toggle("result-error", isError);
   el.classList.toggle("result-success", !isError);
   el.textContent = typeof data === "string" ? data : JSON.stringify(data, null, 2);
+  const card = el.closest(".mcp-tool-result-card");
+  if (card) {
+    card.hidden = false;
+  }
+}
+
+function hideResult(el) {
+  if (!el) {
+    return;
+  }
+  el.hidden = true;
+  const card = el.closest(".mcp-tool-result-card");
+  if (card) {
+    card.hidden = true;
+  }
+}
+
+function setWorkflowButtonBusy(button, labelEl, busy, { busyText, idleText } = {}) {
+  if (!button) {
+    return;
+  }
+  const idle = idleText || button.dataset.idleText || labelEl?.textContent || button.textContent?.trim() || "";
+  if (!button.dataset.idleText) {
+    button.dataset.idleText = idle;
+  }
+  button.classList.toggle("is-busy", busy);
+  if (labelEl) {
+    labelEl.textContent = busy ? busyText : button.dataset.idleText;
+    return;
+  }
+  button.textContent = busy ? busyText : button.dataset.idleText;
+}
+
+function initWorkflowStepNav(navEl, defaultStep = "upload") {
+  if (!navEl) {
+    return { showStep: () => {} };
+  }
+
+  const panelRoot = navEl.closest(".workflow-workbench");
+  const buttons = [...navEl.querySelectorAll("[data-workflow-step]")];
+  const scopedPanels = panelRoot
+    ? [...panelRoot.querySelectorAll(".workflow-step-panel")]
+    : [];
+
+  const showStep = (stepId) => {
+    buttons.forEach((button) => {
+      const active = button.dataset.workflowStep === stepId;
+      button.classList.toggle("is-active", active);
+      button.setAttribute("aria-selected", active ? "true" : "false");
+    });
+    scopedPanels.forEach((panel) => {
+      const active = panel.dataset.workflowStep === stepId;
+      panel.hidden = !active;
+      panel.classList.toggle("is-active", active);
+    });
+    panelRoot?.querySelector(".workflow-main-scroll")?.scrollTo({ top: 0, behavior: "auto" });
+  };
+
+  buttons.forEach((button) => {
+    button.addEventListener("click", () => showStep(button.dataset.workflowStep));
+  });
+
+  showStep(defaultStep);
+  return { showStep };
+}
+
+function getConnectedEnvironmentLabel() {
+  if (!state.loggedIn || !state.connectedEnvironmentId) {
+    return null;
+  }
+  const env = getEnvironmentById(state.connectedEnvironmentId);
+  return env ? getEnvironmentDisplayName(env) : "CatalogOne";
+}
+
+function updateWorkflowStatusLine(lineEl, textEl, workflowLabel) {
+  if (!lineEl || !textEl) {
+    return;
+  }
+  lineEl.classList.remove("is-online", "is-loading", "is-error");
+  const envLabel = getConnectedEnvironmentLabel();
+  if (envLabel) {
+    lineEl.classList.add("is-online");
+    textEl.textContent = `Connected to ${envLabel} — ${workflowLabel} ready.`;
+    return;
+  }
+  lineEl.classList.add("is-loading");
+  textEl.textContent = "Connect to a CatalogOne environment in the sidebar to begin.";
+}
+
+function updateWorkflowStatusLines() {
+  updateWorkflowStatusLine(
+    els.pushWorkflowStatus,
+    els.pushWorkflowStatusText,
+    "Upload & publish",
+  );
+  updateWorkflowStatusLine(
+    els.dgWorkflowStatus,
+    els.dgWorkflowStatusText,
+    "DG import",
+  );
+}
+
+function updatePushWorkflowStepStates() {
+  if (!els.pushStepNav) {
+    return;
+  }
+  const hasZip = Boolean(state.zipAnalyzeResult);
+  const hasBr = Boolean(els.businessRequestId?.value.trim());
+  const importDone = Boolean(state.zipImportCompleted);
+  els.pushStepNav.querySelector('[data-workflow-step="upload"]')
+    ?.classList.toggle("is-complete", hasZip && !state.zipAnalyzeResult?.has_blocking_issues);
+  els.pushStepNav.querySelector('[data-workflow-step="review"]')
+    ?.classList.toggle("is-complete", importDone || hasBr);
+  els.pushStepNav.querySelector('[data-workflow-step="publish"]')
+    ?.classList.toggle("is-complete", false);
+}
+
+function updateDgWorkflowStepStates() {
+  if (!els.dgStepNav) {
+    return;
+  }
+  const analyzed = Boolean(state.dgAnalyzeResult);
+  const hasBr = Boolean(els.dgBusinessRequestId?.value.trim());
+  els.dgStepNav.querySelector('[data-workflow-step="upload"]')
+    ?.classList.toggle("is-complete", analyzed);
+  els.dgStepNav.querySelector('[data-workflow-step="import"]')
+    ?.classList.toggle("is-complete", state.dgImportCompleted || hasBr);
+  els.dgStepNav.querySelector('[data-workflow-step="publish"]')
+    ?.classList.toggle("is-complete", false);
 }
 
 function escapeHtml(value) {
@@ -1317,7 +1463,7 @@ function resetMergeBelowStep1() {
     els.brCreatePanel.innerHTML = "";
   }
   if (els.pushResult) {
-    els.pushResult.hidden = true;
+    hideResult(els.pushResult);
   }
   if (els.zipAnalyzeReport) {
     els.zipAnalyzeReport.hidden = true;
@@ -2142,16 +2288,18 @@ function updateMergeBrUi() {
     els.businessRequestId.readOnly = hasBr;
   }
   if (els.createBrBtn) {
-    els.createBrBtn.disabled = hasBr || !connected || !hasAnalyzedZip || !hasName || blocking;
+    const busy = els.createBrBtn.classList.contains("is-busy");
+    els.createBrBtn.disabled = busy || hasBr || !connected || !hasAnalyzedZip || !hasName || blocking;
     const reasons = [];
     if (hasBr) reasons.push("Clear the business request ID to create another");
     else if (!connected) reasons.push("Connect to CatalogOne first");
     else if (!hasZip || !hasAnalyzedZip) reasons.push("Validate a zip in Step 1 first");
     else if (!hasName) reasons.push("Enter a business request name");
     else if (blocking) reasons.push("Resolve blocking validation issues");
-    els.createBrBtn.title = reasons.join(" · ") || "Create business request and import zip";
+    els.createBrBtn.title = reasons.join(" · ") || "Create a business request and import the validated zip";
   }
   updateCompareUi();
+  updatePushWorkflowStepStates();
 }
 
 function setActionButtonsEnabled() {
@@ -2239,6 +2387,7 @@ function updateDgBrUi() {
       els.dgImportEntriesHint.textContent = `Ready to import ${entryCount} Modify Reason and Action entries.`;
     }
   }
+  updateDgWorkflowStepStates();
 }
 
 function setDgActionButtonsEnabled() {
@@ -2339,6 +2488,7 @@ function setLoggedIn(loggedIn, username = "", environmentLabel = "") {
 
   renderEnvironmentSidebar();
   updateMainConnectionHint();
+  updateWorkflowStatusLines();
   window.catalogTool?.reloadMcpTools?.();
   window.catalogTool?.refreshMcpRunState?.();
   window.catalogTool?.notifyEnvironmentsChanged?.();
@@ -2419,7 +2569,30 @@ async function handleSessionExpired(message) {
 async function api(path, options = {}) {
   const response = await fetch(path, {
     headers: { "Content-Type": "application/json" },
+    credentials: "same-origin",
     ...options,
+  });
+  const body = await response.json();
+  if (!response.ok) {
+    const message = body.error || `Request failed (${response.status})`;
+    if (
+      response.status === 401
+      && !String(path).includes("/api/login")
+      && !String(path).includes("/api/logout")
+      && /log in first|session expired|not logged in/i.test(message)
+    ) {
+      void handleSessionExpired(message);
+    }
+    throw Object.assign(new Error(message), { status: response.status, body });
+  }
+  return body;
+}
+
+async function apiForm(path, formData) {
+  const response = await fetch(path, {
+    method: "POST",
+    body: formData,
+    credentials: "same-origin",
   });
   const body = await response.json();
   if (!response.ok) {
@@ -2575,7 +2748,8 @@ function updateZipValidateButton() {
     return;
   }
   const hasZip = isZipFile(els.catalogZipInput?.files?.[0]);
-  els.analyzeZipBtn.disabled = !hasZip;
+  const busy = els.analyzeZipBtn.classList.contains("is-busy");
+  els.analyzeZipBtn.disabled = busy || !hasZip;
   els.analyzeZipBtn.title = hasZip ? "Validate the selected zip file" : "Choose a zip file first";
 }
 
@@ -2764,6 +2938,7 @@ els.analyzeExcelBtn?.addEventListener("click", async () => {
     state.zipAnalyzeResult = null;
     suggestDgBusinessRequestName(body.workbook_name);
     syncDgBusinessRequestFields();
+    updateDgWorkflowStepStates();
   } catch (error) {
     showAnalyzeError({
       reportEl: els.excelAnalyzeReport,
@@ -2788,7 +2963,10 @@ els.analyzeZipBtn?.addEventListener("click", async () => {
     return;
   }
 
-  els.analyzeZipBtn.disabled = true;
+  setWorkflowButtonBusy(els.analyzeZipBtn, els.analyzeZipBtnLabel, true, {
+    busyText: "Validating…",
+    idleText: "Validate",
+  });
   els.zipAnalyzeReport.hidden = true;
 
   const formData = new FormData();
@@ -2798,6 +2976,7 @@ els.analyzeZipBtn?.addEventListener("click", async () => {
     const response = await fetch("/api/zip/analyze", {
       method: "POST",
       body: formData,
+      credentials: "same-origin",
     });
     const body = await response.json();
     if (!response.ok) {
@@ -2813,10 +2992,15 @@ els.analyzeZipBtn?.addEventListener("click", async () => {
     state.importFilename = body.import_filename || file.name;
     state.dgAnalyzeResult = null;
     updateMergeBrUi();
+    if (!body.has_blocking_issues) {
+      pushWorkflowNav?.showStep("review");
+    }
   } catch (error) {
     showZipValidateError(error.message || "Zip validation failed.");
   } finally {
-    els.analyzeZipBtn.disabled = false;
+    setWorkflowButtonBusy(els.analyzeZipBtn, els.analyzeZipBtnLabel, false, {
+      idleText: "Validate",
+    });
     updateZipValidateButton();
   }
 });
@@ -2845,17 +3029,25 @@ els.createBrBtn?.addEventListener("click", async () => {
     return;
   }
 
-  els.createBrBtn.disabled = true;
+  setWorkflowButtonBusy(els.createBrBtn, null, true, {
+    busyText: "Working…",
+    idleText: "Create BR and Import",
+  });
   resetMergeCompareUi();
   if (els.brCreateResult) {
     els.brCreateResult.hidden = true;
   }
 
   try {
-    const result = await api("/api/business-request", {
-      method: "POST",
-      body: JSON.stringify({ name, import_type: "zip" }),
-    });
+    const formData = new FormData();
+    formData.append("name", name);
+    formData.append("import_type", "zip");
+    const zipFile = els.catalogZipInput?.files?.[0];
+    if (zipFile) {
+      formData.append("zip_file", zipFile);
+    }
+
+    const result = await apiForm("/api/business-request", formData);
 
     applyBusinessRequestIdFromResult(result);
     state.zipImportCompleted = isZipImportSuccessful(result);
@@ -2869,11 +3061,18 @@ els.createBrBtn?.addEventListener("click", async () => {
     await promptCompareAfterImport(result.business_request_id);
   } catch (error) {
     state.zipImportCompleted = false;
+    const message = error.message || "";
+    if (/401|unauthorized|expired|invalid token/i.test(message)) {
+      void handleSessionExpired("CatalogOne session expired — connect again in the sidebar.");
+    }
     if (error?.body?.business_request_id) {
       applyBusinessRequestIdFromResult(error.body);
     }
     showBrCreateResult(error, { isError: true });
   } finally {
+    setWorkflowButtonBusy(els.createBrBtn, null, false, {
+      idleText: "Create BR and Import",
+    });
     setActionButtonsEnabled();
   }
 });
@@ -2896,7 +3095,7 @@ els.publishBtn.addEventListener("click", async () => {
   }
 
   els.publishBtn.disabled = true;
-  els.pushResult.hidden = true;
+  hideResult(els.pushResult);
 
   try {
     const result = await api("/api/publish", {
@@ -2934,7 +3133,7 @@ els.dgCreateBrBtn?.addEventListener("click", async () => {
   }
 
   els.dgCreateBrBtn.disabled = true;
-  els.dgBrCreateResult.hidden = true;
+  hideResult(els.dgBrCreateResult);
 
   try {
     const result = await api("/api/business-request", {
@@ -2983,7 +3182,7 @@ els.dgImportEntriesBtn?.addEventListener("click", async () => {
   }
 
   els.dgImportEntriesBtn.disabled = true;
-  els.dgImportResult.hidden = true;
+  hideResult(els.dgImportResult);
 
   try {
     const result = await api("/api/push", {
@@ -3020,7 +3219,7 @@ els.dgPublishBtn?.addEventListener("click", async () => {
   }
 
   els.dgPublishBtn.disabled = true;
-  els.dgPublishResult.hidden = true;
+  hideResult(els.dgPublishResult);
 
   try {
     const result = await api("/api/publish", {
@@ -3172,6 +3371,11 @@ async function initApp() {
   initZipDropzone();
   updateZipValidateButton();
   initExcelDropzone();
+  pushWorkflowNav = initWorkflowStepNav(els.pushStepNav, "upload");
+  initWorkflowStepNav(els.dgStepNav, "upload");
+  updateWorkflowStatusLines();
+  updatePushWorkflowStepStates();
+  updateDgWorkflowStepStates();
   initAgenticSettings();
   updateAgenticUi(document.body?.dataset?.useAgentic !== "false");
 

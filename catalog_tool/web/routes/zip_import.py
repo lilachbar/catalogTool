@@ -15,6 +15,7 @@ from catalog_tool.web.import_context import (
     clear_import_context,
     load_import_bytes,
     store_import_file,
+    store_zip_analyze_entities,
 )
 
 
@@ -63,15 +64,18 @@ def register(app: Flask) -> None:
 
         result["import_type"] = "zip"
         result["import_filename"] = import_ctx["filename"]
-        session["zip_analyze_entities"] = [
-            {
-                "entity_id": item.get("entity_id"),
-                "entity_type": item.get("entity_type"),
-                "title": item.get("title"),
-            }
-            for item in result.get("entities") or []
-            if item.get("entity_id") and item.get("entity_type")
-        ]
+        store_zip_analyze_entities(
+            session,
+            [
+                {
+                    "entity_id": item.get("entity_id"),
+                    "entity_type": item.get("entity_type"),
+                    "title": item.get("title"),
+                }
+                for item in result.get("entities") or []
+                if item.get("entity_id") and item.get("entity_type")
+            ],
+        )
         return jsonify(result)
 
     @app.post("/api/zip/import")

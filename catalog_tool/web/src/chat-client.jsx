@@ -347,6 +347,7 @@ function useChatHealth() {
     defaultModel: null,
     models: [],
     chatMode: "agent",
+    contextBaselines: DEFAULT_CONTEXT_BASELINES,
   });
 
   useEffect(() => {
@@ -379,6 +380,7 @@ function useChatHealth() {
           defaultModel: data.models?.defaultModel || data.chatProvider?.model || null,
           models: Array.isArray(data.models?.models) ? data.models.models : [],
           chatMode: CHAT_MODES.some((entry) => entry.id === data.chatMode) ? data.chatMode : "agent",
+          contextBaselines: data.contextBaselines || DEFAULT_CONTEXT_BASELINES,
         });
       } catch {
         if (!cancelled) {
@@ -390,6 +392,7 @@ function useChatHealth() {
             defaultModel: null,
             models: [],
             chatMode: "agent",
+            contextBaselines: DEFAULT_CONTEXT_BASELINES,
           });
         }
       }
@@ -784,35 +787,175 @@ function ChatModelSelect({
   );
 }
 
-function ChatContextUsage({ usedTokens, budget }) {
-  const rawPercent = budget > 0 ? (usedTokens / budget) * 100 : 0;
+const CONTEXT_USAGE_CATEGORIES = [
+  { id: "systemPrompt", label: "System prompt", color: "#a1a1aa" },
+  { id: "toolDefinitions", label: "Tool definitions", color: "#a855f7" },
+  { id: "rules", label: "Rules", color: "#22c55e" },
+  { id: "skills", label: "Skills", color: "#ca8a04" },
+  { id: "mcp", label: "MCP", color: "#ec4899" },
+  { id: "subagentDefinitions", label: "Subagent definitions", color: "#2563eb" },
+  { id: "summarizedConversation", label: "Summarized conversation", color: "#ef4444" },
+  { id: "conversation", label: "Conversation", color: "#06b6d4" },
+];
+
+const DEFAULT_CONTEXT_BASELINES = {
+  systemPrompt: 462,
+  toolDefinitions: 6700,
+  rules: 0,
+  skills: 0,
+  mcp: 746,
+  subagentDefinitions: 0,
+  summarizedConversation: 0,
+};
+
+function formatCompactTokens(value) {
+  const tokens = Math.max(0, Number(value) || 0);
+  if (tokens >= 1_000_000) {
+    return `${(tokens / 1_000_000).toFixed(1).replace(/\.0$/, "")}M`;
+  }
+  if (tokens >= 1000) {
+    const compact = tokens / 1000;
+    return compact >= 100
+      ? `${Math.round(compact)}K`
+      : `${compact.toFixed(1).replace(/\.0$/, "")}K`;
+  }
+  return tokens.toLocaleString();
+}
+
+function buildContextUsageBreakdown({
+  baselines = DEFAULT_CONTEXT_BASELINES,
+  conversationTokens = 0,
+  summarizedConversationTokens = 0,
+}) {
+  const items = CONTEXT_USAGE_CATEGORIES.map((category) => {
+    if (category.id === "conversation") {
+      return { ...category, tokens: conversationTokens };
+    }
+    if (category.id === "summarizedConversation") {
+      return { ...category, tokens: summarizedConversationTokens || baselines.summarizedConversation || 0 };
+    }
+    return { ...category, tokens: baselines[category.id] || 0 };
+  }).filter((item) => item.tokens > 0);
+
+  const total = items.reduce((sum, item) => sum + item.tokens, 0);
+  return { items, total };
+}
+
+function ChatContextUsage({ breakdown, budget }) {
+  const [open, setOpen] = useState(false);
+  const wrapRef = useRef(null);
+  const { items, total } = breakdown;
+  const rawPercent = budget > 0 ? (total / budget) * 100 : 0;
   const displayPercent = Math.min(100, Math.round(rawPercent));
-  const ringPercent = usedTokens > 0 ? Math.max(rawPercent, 3) : 0;
+  const ringPercent = total > 0 ? Math.max(rawPercent, 3) : 0;
   const radius = 7;
   const circumference = 2 * Math.PI * radius;
   const dash = (ringPercent / 100) * circumference;
 
+  useEffect(() => {
+    if (!open) {
+      return undefined;
+    }
+
+    const onPointerDown = (event) => {
+      if (wrapRef.current && !wrapRef.current.contains(event.target)) {
+        setOpen(false);
+      }
+    };
+    const onKeyDown = (event) => {
+      if (event.key === "Escape") {
+        setOpen(false);
+      }
+    };
+
+    document.addEventListener("mousedown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [open]);
+
   return (
-    <div
-      className="chat-composer-icon-btn chat-context-ring"
-      title={`~${usedTokens.toLocaleString()} / ${budget.toLocaleString()} tokens (${displayPercent}% context used)`}
-      aria-label={`Context usage ${displayPercent} percent`}
-      role="img"
-    >
-      <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true">
-        <circle cx="9" cy="9" r={radius} fill="none" stroke="var(--chat-context-track)" strokeWidth="2" />
-        <circle
-          cx="9"
-          cy="9"
-          r={radius}
-          fill="none"
-          stroke="var(--chat-context-fill)"
-          strokeWidth="2"
-          strokeDasharray={`${dash} ${circumference}`}
-          transform="rotate(-90 9 9)"
-          strokeLinecap="round"
-        />
-      </svg>
+    <div className="chat-context-usage-wrap" ref={wrapRef}>
+      <button
+        type="button"
+        className="chat-composer-icon-btn chat-context-ring"
+        onClick={() => setOpen((current) => !current)}
+        aria-label={`Context usage ${displayPercent} percent`}
+        aria-expanded={open}
+        aria-haspopup="dialog"
+        title="Context usage"
+      >
+        <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true">
+          <circle cx="9" cy="9" r={radius} fill="none" stroke="var(--chat-context-track)" strokeWidth="2" />
+          <circle
+            cx="9"
+            cy="9"
+            r={radius}
+            fill="none"
+            stroke="var(--chat-context-fill)"
+            strokeWidth="2"
+            strokeDasharray={`${dash} ${circumference}`}
+            transform="rotate(-90 9 9)"
+            strokeLinecap="round"
+          />
+        </svg>
+      </button>
+
+      {open ? (
+        <div className="chat-context-usage-popover" role="dialog" aria-label="Context usage">
+          <header className="chat-context-usage-head">
+            <h3 className="chat-context-usage-title">Context Usage</h3>
+            <button
+              type="button"
+              className="chat-context-usage-close"
+              onClick={() => setOpen(false)}
+              aria-label="Close context usage"
+            >
+              ×
+            </button>
+          </header>
+
+          <div className="chat-context-usage-summary">
+            <span className="chat-context-usage-percent">{displayPercent}% Full</span>
+            <span className="chat-context-usage-total">
+              ~{formatCompactTokens(total)} / {formatCompactTokens(budget)} Tokens
+            </span>
+          </div>
+
+          <div
+            className="chat-context-usage-bar"
+            role="progressbar"
+            aria-valuemin={0}
+            aria-valuemax={budget}
+            aria-valuenow={total}
+            aria-label="Context token breakdown"
+          >
+            {items.map((item) => (
+              <span
+                key={item.id}
+                className="chat-context-usage-segment"
+                style={{
+                  flexGrow: item.tokens,
+                  backgroundColor: item.color,
+                }}
+                title={`${item.label}: ${formatCompactTokens(item.tokens)}`}
+              />
+            ))}
+          </div>
+
+          <ul className="chat-context-usage-legend">
+            {items.map((item) => (
+              <li key={item.id} className="chat-context-usage-legend-item">
+                <span className="chat-context-usage-swatch" style={{ backgroundColor: item.color }} aria-hidden="true" />
+                <span className="chat-context-usage-legend-label">{item.label}</span>
+                <span className="chat-context-usage-legend-value">{formatCompactTokens(item.tokens)}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -1251,7 +1394,14 @@ function ChatPanel({
     return total + Math.ceil((attachment.data?.length || 0) / 4);
   }, 0);
   const contextBudget = resolveContextBudget(selectedModel, chatHealth.defaultModel);
-  const contextUsedTokens = estimateMessagesTokens(messages) + estimateTokenCount(input) + attachmentTokens;
+  const conversationTokens = estimateMessagesTokens(messages) + estimateTokenCount(input) + attachmentTokens;
+  const contextBreakdown = useMemo(
+    () => buildContextUsageBreakdown({
+      baselines: chatHealth.contextBaselines || DEFAULT_CONTEXT_BASELINES,
+      conversationTokens,
+    }),
+    [chatHealth.contextBaselines, conversationTokens],
+  );
   const canSend = Boolean(input.trim() || attachments.length) && !isBusy && !chatBlocked && !sendBlocked;
 
   const persistPanelWidth = useCallback((width) => {
@@ -1509,7 +1659,7 @@ function ChatPanel({
               />
             </div>
             <div className="chat-composer-toolbar-right">
-              <ChatContextUsage usedTokens={contextUsedTokens} budget={contextBudget} />
+              <ChatContextUsage breakdown={contextBreakdown} budget={contextBudget} />
               <input
                 ref={fileInputRef}
                 type="file"

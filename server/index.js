@@ -25,6 +25,7 @@ import {
   CHAT_PROVIDER_OPTIONS,
 } from "./providers.js";
 import { reloadChatEnvFromFile } from "./env-reload.js";
+import { getContextUsageBaselines } from "./context-usage.js";
 
 const app = express();
 app.use(express.json({ limit: "12mb" }));
@@ -81,6 +82,7 @@ app.get("/health", async (_req, res) => {
   const chatKey = await validateChatProviderKey({ remote: true });
   const mcp = await probeCatalogoneMcpOnline();
   const models = await listModelsForProvider(status.provider);
+  const contextBaselines = await getContextUsageBaselines();
   res.json({
     ok: Boolean(chatKey.ok && mcp.online),
     chatReady: chatKey.ok,
@@ -94,6 +96,7 @@ app.get("/health", async (_req, res) => {
     },
     models,
     catalogoneMcp: mcp,
+    contextBaselines,
   });
 });
 

@@ -60,7 +60,15 @@ def connection_from_request(data: dict) -> CatalogOneConnectionConfig:
     )
 
 
-def client_from_session() -> CatalogOneClient:
+def client_from_session(*, refresh: bool = True) -> CatalogOneClient:
+    if refresh:
+        if not validate_catalogone_session(refresh=True):
+            raise RuntimeError(
+                "CatalogOne session expired — connect again in the sidebar."
+            )
+    elif not session.get("logged_in"):
+        raise RuntimeError("Not logged in")
+
     payload = session.get("connection")
     if not payload:
         raise RuntimeError("Not logged in")
@@ -74,7 +82,6 @@ def client_from_session() -> CatalogOneClient:
 
 def clear_catalogone_login() -> None:
     """Clear CatalogOne connection state while preserving LDAP app login."""
-    clear_import_context(session)
     session.pop("logged_in", None)
     session.pop("access_token", None)
     session.pop("connection", None)

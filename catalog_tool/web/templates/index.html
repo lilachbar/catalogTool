@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/static/styles.css?v=20260702app55">
+  <link rel="stylesheet" href="/static/styles.css?v=20260702app62">
   <script>
     (function () {
       var theme = localStorage.getItem("catalogTool.theme");
@@ -185,9 +185,9 @@
         </div>
 
         <div id="pushView" class="app-view app-view-fill">
-          <main class="workflow workflow-single app-view-body">
-          <section class="panel panel-wide merge-panel">
-            <header class="merge-hero">
+          <div class="app-view-body">
+          <section class="panel panel-wide workflow-panel">
+            <header class="merge-hero workflow-page-hero">
               <div class="merge-hero-icon" aria-hidden="true">
                 <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
                   <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
@@ -199,13 +199,13 @@
                 <p class="merge-hero-eyebrow">CatalogOne</p>
                 <h2 class="merge-hero-title">Upload, review, and publish with confidence</h2>
                 <p class="merge-hero-lead">
-                  Upload a CatalogOne export zip to build a review-only PR package.<br>
+                  Upload a CatalogOne export zip to build a review-only PR package.
                   Nothing is published until you explicitly choose to.
                 </p>
               </div>
             </header>
 
-            <ol class="merge-steps" aria-label="Merge &amp; import workflow">
+            <ol class="merge-steps workflow-page-steps" aria-label="Upload workflow">
               <li class="merge-step">
                 <span class="merge-step-num">1</span>
                 <span class="merge-step-label">Upload zip</span>
@@ -222,153 +222,206 @@
               </li>
             </ol>
 
-            <div class="merge-cards">
-              <article class="merge-card merge-card-compact" aria-labelledby="mergeCardZipTitle">
-                <header class="merge-card-head merge-card-head-compact">
-                  <span class="merge-card-step">Step 1</span>
-                  <h3 id="mergeCardZipTitle" class="merge-card-title">Upload &amp; Validate</h3>
-                </header>
+            <div class="workflow-shell">
+              <p id="pushWorkflowStatus" class="mcp-tools-status-line is-loading">
+                <span class="mcp-tools-status-dot" aria-hidden="true"></span>
+                <span id="pushWorkflowStatusText">Connect to a CatalogOne environment in the sidebar to begin.</span>
+              </p>
 
-                <div class="zip-upload-row">
-                  <div class="zip-dropzone zip-dropzone-inline" id="zipDropzone">
-                    <input type="file" id="catalogZipInput" class="zip-dropzone-input" accept=".zip,application/zip">
-                    <div class="zip-dropzone-body">
-                      <span class="zip-dropzone-icon zip-dropzone-icon-empty" aria-hidden="true">
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-                          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-                          <polyline points="14 2 14 8 20 8"/>
-                        </svg>
+              <div class="workflow-workbench">
+                <aside class="workflow-sidebar">
+                  <div class="workflow-sidebar-head">
+                    <h3 class="workflow-sidebar-title">Workflow</h3>
+                  </div>
+                  <p class="workflow-sidebar-lead">Upload a CatalogOne export zip, review changes, and publish when ready.</p>
+                  <nav id="pushStepNav" class="workflow-step-list" aria-label="Upload workflow steps">
+                    <button type="button" class="workflow-step-btn is-active" data-workflow-step="upload" aria-selected="true">
+                      <span class="workflow-step-num">1</span>
+                      <span class="workflow-step-copy">
+                        <span class="workflow-step-label">Upload &amp; validate</span>
+                        <span class="workflow-step-desc">Choose zip and run validation</span>
                       </span>
-                      <span class="zip-dropzone-icon zip-dropzone-icon-selected" aria-hidden="true" hidden>
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
-                          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-                          <polyline points="14 2 14 8 20 8"/>
-                          <path d="m9 15 2 2 4-4"/>
-                        </svg>
+                    </button>
+                    <button type="button" class="workflow-step-btn" data-workflow-step="review" aria-selected="false">
+                      <span class="workflow-step-num">2</span>
+                      <span class="workflow-step-copy">
+                        <span class="workflow-step-label">Business request</span>
+                        <span class="workflow-step-desc">Create BR and import zip</span>
                       </span>
-                      <div class="zip-dropzone-text">
-                        <p class="zip-dropzone-title" id="zipDropzoneTitle">Choose or drop a zip file</p>
-                        <p class="zip-dropzone-hint" id="zipDropzoneHint"><span class="zip-dropzone-link">Browse</span></p>
+                    </button>
+                    <button type="button" class="workflow-step-btn" data-workflow-step="publish" aria-selected="false">
+                      <span class="workflow-step-num">3</span>
+                      <span class="workflow-step-copy">
+                        <span class="workflow-step-label">Publish</span>
+                        <span class="workflow-step-desc">Queue to release when ready</span>
+                      </span>
+                    </button>
+                  </nav>
+                </aside>
+
+                <section class="workflow-main">
+                  <div class="workflow-main-scroll">
+                    <div id="pushStepUpload" class="workflow-step-panel is-active" data-workflow-step="upload">
+                      <div class="mcp-tool-form-card">
+                        <div class="mcp-tool-form-card-head">
+                          <div class="mcp-tool-detail-meta">
+                            <h3 id="mergeCardZipTitle" class="mcp-tool-detail-title">Upload &amp; validate</h3>
+                            <span class="mcp-tool-category-badge">Step 1</span>
+                          </div>
+                        </div>
+                        <p class="workflow-panel-lead">Upload a CatalogOne export zip to build a review-only PR package. Nothing is published until you explicitly choose to.</p>
+                        <div class="zip-upload-row">
+                          <div class="zip-dropzone zip-dropzone-inline" id="zipDropzone">
+                            <input type="file" id="catalogZipInput" class="zip-dropzone-input" accept=".zip,application/zip">
+                            <div class="zip-dropzone-body">
+                              <span class="zip-dropzone-icon zip-dropzone-icon-empty" aria-hidden="true">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                                  <polyline points="14 2 14 8 20 8"/>
+                                </svg>
+                              </span>
+                              <span class="zip-dropzone-icon zip-dropzone-icon-selected" aria-hidden="true" hidden>
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+                                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                                  <polyline points="14 2 14 8 20 8"/>
+                                  <path d="m9 15 2 2 4-4"/>
+                                </svg>
+                              </span>
+                              <div class="zip-dropzone-text">
+                                <p class="zip-dropzone-title" id="zipDropzoneTitle">Choose or drop a zip file</p>
+                                <p class="zip-dropzone-hint" id="zipDropzoneHint"><span class="zip-dropzone-link">Browse</span></p>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                        <div class="workflow-step-actions">
+                          <button type="button" id="analyzeZipBtn" class="btn btn-primary btn-analyze" disabled title="Choose a zip file first">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+                              <circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>
+                            </svg>
+                            <span id="analyzeZipBtnLabel">Validate</span>
+                          </button>
+                        </div>
+                      </div>
+                      <div id="zipAnalyzeReport" class="mcp-tool-result-card analyze-report analyze-report-validation is-collapsible" hidden>
+                        <div class="analyze-report-toolbar">
+                          <button type="button" id="zipAnalyzeToggleBtn" class="analyze-report-toggle" aria-expanded="false">
+                            <svg class="analyze-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+                            <span class="analyze-report-heading">Validation</span>
+                            <span id="zipAnalyzeStatusBadge" class="analyze-badge is-muted"></span>
+                          </button>
+                        </div>
+                        <div id="zipAnalyzeSummary" class="analyze-report-summary"></div>
+                        <div id="zipAnalyzePanel" class="analyze-report-details"></div>
+                      </div>
+                    </div>
+
+                    <div id="pushStepReview" class="workflow-step-panel" data-workflow-step="review" hidden>
+                      <div class="mcp-tool-form-card">
+                        <div class="mcp-tool-form-card-head">
+                          <div class="mcp-tool-detail-meta">
+                            <h3 id="mergeCardBrTitle" class="mcp-tool-detail-title">Business request</h3>
+                            <span class="mcp-tool-category-badge">Step 2</span>
+                          </div>
+                        </div>
+                        <div id="mergeBrFormSection" class="merge-section-body">
+                          <div class="form-row merge-br-fields">
+                            <label class="field field-grow">
+                              <span class="field-label">Name</span>
+                              <input type="text" id="businessRequestName" placeholder="e.g. IL12 promo update" autocomplete="off">
+                            </label>
+                            <label class="field merge-br-id-field">
+                              <span class="field-label">Business request ID</span>
+                              <div class="input-with-action">
+                                <input type="text" id="businessRequestId" placeholder="Auto-filled after create" autocomplete="off" readonly>
+                                <button type="button" id="clearBrBtn" class="btn btn-ghost btn-sm" hidden title="Clear to create another">Clear</button>
+                              </div>
+                            </label>
+                          </div>
+                          <div class="workflow-step-actions">
+                            <button type="button" id="createBrBtn" class="btn btn-primary btn-analyze">Create BR and Import</button>
+                          </div>
+                        </div>
+                      </div>
+                      <div id="brCreateResult" class="mcp-tool-result-card analyze-report is-collapsible" hidden>
+                        <div class="analyze-report-toolbar">
+                          <button type="button" id="brCreateToggleBtn" class="analyze-report-toggle" aria-expanded="true">
+                            <svg class="analyze-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+                            <span class="analyze-report-heading">Import result</span>
+                            <span id="brCreateStatusBadge" class="analyze-badge"></span>
+                          </button>
+                        </div>
+                        <div id="brCreatePanel" class="analyze-report-panel analyze-report-body"></div>
+                      </div>
+                      <div id="brCompareSection" class="merge-compare-section" hidden>
+                        <div id="brCompareActions" class="br-compare-actions-bar mcp-tool-form-card">
+                          <div class="br-compare-actions-copy">
+                            <span class="br-compare-actions-label">Compare with production</span>
+                            <p id="brCompareHint" class="br-compare-hint" hidden></p>
+                          </div>
+                          <button type="button" id="brCompareProductionBtn" class="btn btn-secondary btn-sm" disabled title="Import must complete successfully before comparing">Run compare</button>
+                        </div>
+                        <div id="brComparePanel" class="mcp-tool-result-card analyze-report is-collapsible" hidden>
+                          <div class="analyze-report-toolbar">
+                            <button type="button" id="brCompareToggleBtn" class="analyze-report-toggle" aria-expanded="true">
+                              <svg class="analyze-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+                              <span id="brCompareTitle" class="analyze-report-heading">Compare results</span>
+                            </button>
+                            <label class="checkbox analyze-json-toggle">
+                              <input type="checkbox" id="brCompareShowJson">
+                              <span>Raw JSON</span>
+                            </label>
+                          </div>
+                          <div id="brCompareReport" class="analyze-report-panel analyze-report-body"></div>
+                          <pre id="brCompareJson" class="analyze-json" hidden></pre>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div id="pushStepPublish" class="workflow-step-panel" data-workflow-step="publish" hidden>
+                      <div class="mcp-tool-form-card">
+                        <div class="mcp-tool-form-card-head">
+                          <div class="mcp-tool-detail-meta">
+                            <h3 id="mergeCardPublishTitle" class="mcp-tool-detail-title">Publish to catalog</h3>
+                            <span class="mcp-tool-category-badge">Step 3</span>
+                          </div>
+                          <div class="mcp-tool-form-card-actions">
+                            <button type="button" id="publishBtn" class="btn btn-danger btn-sm" disabled title="Connect to an environment and create a business request first">Publish business request</button>
+                          </div>
+                        </div>
+                        <p class="workflow-panel-lead">When your review is complete, publish the business request to the release queue.</p>
+                        <div class="merge-safety-banner" role="note">
+                          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+                            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                          </svg>
+                          <p>Zip analysis never publishes. You stay in control — publish only when you click the button above.</p>
+                        </div>
+                        <label class="field merge-publish-br-field">
+                          <span class="field-label">Business request ID to publish</span>
+                          <input type="text" id="publishBusinessRequestId" placeholder="Paste BR UUID or use ID from Step 2" autocomplete="off">
+                          <span class="field-hint" id="publishBusinessRequestIdHint">Filled automatically when you create a BR in Step 2.</span>
+                        </label>
+                        <p class="footnote merge-footnote">Queues via <code>releaseQueue/publish</code> on your connected environment.</p>
+                      </div>
+                      <div id="pushResultCard" class="mcp-tool-result-card" hidden>
+                        <div class="mcp-tool-result-card-head">
+                          <h4 class="mcp-tool-result-heading">Result</h4>
+                        </div>
+                        <pre id="pushResult" class="result mcp-tool-result"></pre>
                       </div>
                     </div>
                   </div>
-                  <button type="button" id="analyzeZipBtn" class="btn btn-primary btn-sm btn-analyze" disabled title="Choose a zip file first">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
-                      <circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>
-                    </svg>
-                    <span>Validate</span>
-                  </button>
-                </div>
-                <div id="zipAnalyzeReport" class="analyze-report analyze-report-validation is-collapsible" hidden>
-                  <div class="analyze-report-toolbar">
-                    <button type="button" id="zipAnalyzeToggleBtn" class="analyze-report-toggle" aria-expanded="false">
-                      <svg class="analyze-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
-                      <span class="analyze-report-heading">Validation</span>
-                      <span id="zipAnalyzeStatusBadge" class="analyze-badge is-muted"></span>
-                    </button>
-                  </div>
-                  <div id="zipAnalyzeSummary" class="analyze-report-summary"></div>
-                  <div id="zipAnalyzePanel" class="analyze-report-details"></div>
-                </div>
-              </article>
-
-              <article class="merge-card" aria-labelledby="mergeCardBrTitle">
-                <header class="merge-card-head merge-card-head-compact">
-                  <span class="merge-card-step">Step 2</span>
-                  <h3 id="mergeCardBrTitle" class="merge-card-title">Business request</h3>
-                </header>
-
-                <div id="mergeBrFormSection" class="merge-section-body">
-                  <div class="form-row merge-br-fields">
-                    <label class="field field-grow">
-                      <span class="field-label">Name</span>
-                      <input type="text" id="businessRequestName" placeholder="e.g. IL12 promo update" autocomplete="off">
-                    </label>
-                    <label class="field merge-br-id-field">
-                      <span class="field-label">Business request ID</span>
-                      <div class="input-with-action">
-                        <input type="text" id="businessRequestId" placeholder="Auto-filled after create" autocomplete="off" readonly>
-                        <button type="button" id="clearBrBtn" class="btn btn-ghost btn-sm" hidden title="Clear to create another">Clear</button>
-                      </div>
-                    </label>
-                  </div>
-
-                  <div class="merge-card-actions merge-br-actions">
-                    <button type="button" id="createBrBtn" class="btn btn-primary">Create &amp; import</button>
-                  </div>
-                </div>
-
-                <div id="brCreateResult" class="analyze-report is-collapsible" hidden>
-                  <div class="analyze-report-toolbar">
-                    <button type="button" id="brCreateToggleBtn" class="analyze-report-toggle" aria-expanded="true">
-                      <svg class="analyze-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
-                      <span class="analyze-report-heading">Import result</span>
-                      <span id="brCreateStatusBadge" class="analyze-badge"></span>
-                    </button>
-                  </div>
-                  <div id="brCreatePanel" class="analyze-report-panel analyze-report-body"></div>
-                </div>
-
-                <div id="brCompareSection" class="merge-compare-section" hidden>
-                  <div id="brCompareActions" class="br-compare-actions-bar">
-                    <div class="br-compare-actions-copy">
-                      <span class="br-compare-actions-label">Compare with production</span>
-                      <p id="brCompareHint" class="br-compare-hint" hidden></p>
-                    </div>
-                    <button type="button" id="brCompareProductionBtn" class="btn btn-secondary btn-sm" disabled title="Import must complete successfully before comparing">Run compare</button>
-                  </div>
-                  <div id="brComparePanel" class="analyze-report is-collapsible" hidden>
-                    <div class="analyze-report-toolbar">
-                      <button type="button" id="brCompareToggleBtn" class="analyze-report-toggle" aria-expanded="true">
-                        <svg class="analyze-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
-                        <span id="brCompareTitle" class="analyze-report-heading">Compare results</span>
-                      </button>
-                      <label class="checkbox analyze-json-toggle">
-                        <input type="checkbox" id="brCompareShowJson">
-                        <span>Raw JSON</span>
-                      </label>
-                    </div>
-                    <div id="brCompareReport" class="analyze-report-panel analyze-report-body"></div>
-                    <pre id="brCompareJson" class="analyze-json" hidden></pre>
-                  </div>
-                </div>
-              </article>
-
-              <article class="merge-card merge-card-publish" aria-labelledby="mergeCardPublishTitle">
-                <header class="merge-card-head">
-                  <span class="merge-card-step">Step 3</span>
-                  <h3 id="mergeCardPublishTitle" class="merge-card-title">Publish to catalog</h3>
-                  <p class="merge-card-desc">When your review is complete, publish the business request to the release queue.</p>
-                </header>
-
-                <div class="merge-safety-banner" role="note">
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
-                    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
-                  </svg>
-                  <p>Zip analysis never publishes. You stay in control — publish only when you click the button below.</p>
-                </div>
-
-                <label class="field merge-publish-br-field">
-                  <span class="field-label">Business request ID to publish</span>
-                  <input type="text" id="publishBusinessRequestId" placeholder="Paste BR UUID or use ID from Step 2" autocomplete="off">
-                  <span class="field-hint" id="publishBusinessRequestIdHint">Filled automatically when you create a BR in Step 2.</span>
-                </label>
-
-                <div class="actions actions-primary actions-inline merge-publish-actions">
-                  <button type="button" id="publishBtn" class="btn btn-danger" disabled title="Connect to an environment and create a business request first">Publish business request</button>
-                </div>
-                <p class="footnote merge-footnote">Queues via <code>releaseQueue/publish</code> on your connected environment.</p>
-                <pre id="pushResult" class="result" hidden></pre>
-              </article>
+                </section>
+              </div>
             </div>
           </section>
-          </main>
+          </div>
         </div>
 
         <div id="dgImportView" class="app-view app-view-fill" hidden>
-          <main class="workflow workflow-single app-view-body">
-          <section class="panel panel-wide merge-panel dg-panel">
-            <header class="merge-hero mcp-hero">
+          <div class="app-view-body">
+          <section class="panel panel-wide workflow-panel">
+            <header class="merge-hero workflow-page-hero">
               <div class="merge-hero-icon" aria-hidden="true">
                 <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
                   <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
@@ -382,13 +435,13 @@
                 <h2 class="merge-hero-title">Import Actions &amp; Reasons from Excel</h2>
                 <p class="merge-hero-lead">
                   Upload a WLS Actions and Reasons workbook. We parse each tab, preview the
-                  genericElementEntry JSON, and outline MCP steps to create a BR and load changes.
+                  genericElementEntry JSON, and load changes into a business request.
                   Nothing is published until you explicitly choose to.
                 </p>
               </div>
             </header>
 
-            <ol class="merge-steps" aria-label="DG import workflow">
+            <ol class="merge-steps workflow-page-steps" aria-label="DG import workflow">
               <li class="merge-step">
                 <span class="merge-step-num">1</span>
                 <span class="merge-step-label">Upload workbook</span>
@@ -405,133 +458,231 @@
               </li>
             </ol>
 
-            <div class="merge-cards">
-              <article class="merge-card" aria-labelledby="dgCardUploadTitle">
-                <header class="merge-card-head">
-                  <span class="merge-card-step">Step 1</span>
-                  <h3 id="dgCardUploadTitle" class="merge-card-title">Upload DG workbook</h3>
-                  <p class="merge-card-desc">Expects tabs such as Add, Cancel, Change, Terminate, Modify_Reasons, and proration policy sheets.</p>
-                </header>
+            <div class="workflow-shell">
+              <p id="dgWorkflowStatus" class="mcp-tools-status-line is-loading">
+                <span class="mcp-tools-status-dot" aria-hidden="true"></span>
+                <span id="dgWorkflowStatusText">Connect to a CatalogOne environment in the sidebar to begin.</span>
+              </p>
 
-                <div class="zip-dropzone" id="excelDropzone">
-                  <input type="file" id="catalogExcelInput" class="zip-dropzone-input" accept=".xlsx,.xlsm,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet">
-                  <div class="zip-dropzone-body">
-                    <span class="zip-dropzone-icon zip-dropzone-icon-empty" aria-hidden="true">
-                      <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-                        <polyline points="14 2 14 8 20 8"/>
-                        <line x1="8" x2="16" y1="13" y2="13"/>
-                        <line x1="8" x2="16" y1="17" y2="17"/>
-                      </svg>
-                    </span>
-                    <span class="zip-dropzone-icon zip-dropzone-icon-selected" aria-hidden="true" hidden>
-                      <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-                        <polyline points="14 2 14 8 20 8"/>
-                        <path d="m9 15 2 2 4-4"/>
-                      </svg>
-                    </span>
-                    <p class="zip-dropzone-title" id="excelDropzoneTitle">Drag &amp; drop your Excel DG here</p>
-                    <p class="zip-dropzone-hint" id="excelDropzoneHint">or <span class="zip-dropzone-link">browse files</span> · .xlsx / .xlsm</p>
+              <div class="workflow-workbench">
+                <aside class="workflow-sidebar">
+                  <div class="workflow-sidebar-head">
+                    <h3 class="workflow-sidebar-title">Workflow</h3>
                   </div>
-                </div>
+                  <p class="workflow-sidebar-lead">Import WLS Actions and Reasons from an Excel design guide workbook.</p>
+                  <nav id="dgStepNav" class="workflow-step-list" aria-label="DG import workflow steps">
+                    <button type="button" class="workflow-step-btn is-active" data-workflow-step="upload" aria-selected="true">
+                      <span class="workflow-step-num">1</span>
+                      <span class="workflow-step-copy">
+                        <span class="workflow-step-label">Upload workbook</span>
+                        <span class="workflow-step-desc">Parse tabs and preview JSON</span>
+                      </span>
+                    </button>
+                    <button type="button" class="workflow-step-btn" data-workflow-step="import" aria-selected="false">
+                      <span class="workflow-step-num">2</span>
+                      <span class="workflow-step-copy">
+                        <span class="workflow-step-label">Business request</span>
+                        <span class="workflow-step-desc">Create BR and import entries</span>
+                      </span>
+                    </button>
+                    <button type="button" class="workflow-step-btn" data-workflow-step="publish" aria-selected="false">
+                      <span class="workflow-step-num">3</span>
+                      <span class="workflow-step-copy">
+                        <span class="workflow-step-label">Publish</span>
+                        <span class="workflow-step-desc">Queue to release when ready</span>
+                      </span>
+                    </button>
+                  </nav>
+                </aside>
 
-                <div class="merge-card-actions merge-card-actions-row">
-                  <button type="button" id="analyzeExcelBtn" class="btn btn-primary btn-analyze">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
-                      <circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>
-                    </svg>
-                    <span>Analyze &amp; preview</span>
-                  </button>
-                </div>
-                <div id="excelAnalyzeReport" class="analyze-report" hidden>
-                  <div class="analyze-report-toolbar">
-                    <h4 class="analyze-report-heading">Analysis results</h4>
-                    <label class="checkbox analyze-json-toggle">
-                      <input type="checkbox" id="excelAnalyzeShowJson">
-                      <span>Show raw JSON</span>
-                    </label>
+                <section class="workflow-main">
+                  <div class="workflow-main-scroll">
+                    <div id="dgStepUpload" class="workflow-step-panel is-active" data-workflow-step="upload">
+                      <div class="mcp-tool-form-card">
+                        <div class="mcp-tool-form-card-head">
+                          <div class="mcp-tool-detail-meta">
+                            <h3 id="dgCardUploadTitle" class="mcp-tool-detail-title">Upload DG workbook</h3>
+                            <span class="mcp-tool-category-badge">Step 1</span>
+                          </div>
+                          <div class="mcp-tool-form-card-actions">
+                            <button type="button" id="analyzeExcelBtn" class="btn btn-primary btn-sm btn-analyze">
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+                                <circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>
+                              </svg>
+                              <span>Analyze &amp; preview</span>
+                            </button>
+                          </div>
+                        </div>
+                        <p class="workflow-panel-lead">Expects tabs such as Add, Cancel, Change, Terminate, Modify_Reasons, and proration policy sheets.</p>
+                        <div class="zip-dropzone" id="excelDropzone">
+                          <input type="file" id="catalogExcelInput" class="zip-dropzone-input" accept=".xlsx,.xlsm,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet">
+                          <div class="zip-dropzone-body">
+                            <span class="zip-dropzone-icon zip-dropzone-icon-empty" aria-hidden="true">
+                              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                                <polyline points="14 2 14 8 20 8"/>
+                                <line x1="8" x2="16" y1="13" y2="13"/>
+                                <line x1="8" x2="16" y1="17" y2="17"/>
+                              </svg>
+                            </span>
+                            <span class="zip-dropzone-icon zip-dropzone-icon-selected" aria-hidden="true" hidden>
+                              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                                <polyline points="14 2 14 8 20 8"/>
+                                <path d="m9 15 2 2 4-4"/>
+                              </svg>
+                            </span>
+                            <p class="zip-dropzone-title" id="excelDropzoneTitle">Drag &amp; drop your Excel DG here</p>
+                            <p class="zip-dropzone-hint" id="excelDropzoneHint">or <span class="zip-dropzone-link">browse files</span> · .xlsx / .xlsm</p>
+                          </div>
+                        </div>
+                      </div>
+                      <div id="excelAnalyzeReport" class="mcp-tool-result-card analyze-report" hidden>
+                        <div class="analyze-report-toolbar">
+                          <h4 class="analyze-report-heading mcp-tool-result-heading">Analysis results</h4>
+                          <label class="checkbox analyze-json-toggle">
+                            <input type="checkbox" id="excelAnalyzeShowJson">
+                            <span>Show raw JSON</span>
+                          </label>
+                        </div>
+                        <div id="excelAnalyzePanel" class="analyze-report-panel"></div>
+                        <pre id="excelAnalyzeJson" class="result analyze-report-json" hidden></pre>
+                      </div>
+                    </div>
+
+                    <div id="dgStepImport" class="workflow-step-panel" data-workflow-step="import" hidden>
+                      <div class="mcp-tool-form-card">
+                        <div class="mcp-tool-form-card-head">
+                          <div class="mcp-tool-detail-meta">
+                            <h3 id="dgCardBrTitle" class="mcp-tool-detail-title">Business request &amp; import</h3>
+                            <span class="mcp-tool-category-badge">Step 2</span>
+                          </div>
+                        </div>
+                        <div id="dgBrConnectHint" class="merge-br-connect-hint" role="status">
+                          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+                            <circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/>
+                          </svg>
+                          <p id="dgBrConnectHintText">Connect to an environment in the sidebar, analyze your workbook in Step 1, then create a business request below.</p>
+                        </div>
+                        <div class="form-row merge-br-fields">
+                          <label class="field field-grow">
+                            <span class="field-label">Name for new business request</span>
+                            <input type="text" id="dgBusinessRequestName" placeholder="e.g. DG import — WLS Actions PI29" autocomplete="off">
+                            <span class="field-hint" id="dgBusinessRequestNameHint">Filled automatically after analyze — edit if needed.</span>
+                          </label>
+                          <label class="field">
+                            <span class="field-label">Business request ID</span>
+                            <input type="text" id="dgBusinessRequestId" placeholder="Auto-filled after create">
+                          </label>
+                        </div>
+                        <div class="merge-card-actions merge-br-actions">
+                          <button type="button" id="dgCreateBrBtn" class="btn btn-primary">Create business request</button>
+                          <p id="dgCreateBrBtnHint" class="merge-br-btn-hint" aria-live="polite"></p>
+                        </div>
+                      </div>
+                      <div id="dgBrCreateResultCard" class="mcp-tool-result-card" hidden>
+                        <div class="mcp-tool-result-card-head">
+                          <h4 class="mcp-tool-result-heading">Create result</h4>
+                        </div>
+                        <pre id="dgBrCreateResult" class="result mcp-tool-result"></pre>
+                      </div>
+                      <div class="mcp-tool-form-card dg-import-actions-card">
+                        <div class="mcp-tool-form-card-head">
+                          <div class="mcp-tool-detail-meta">
+                            <h4 class="mcp-tool-form-heading">Import entries</h4>
+                          </div>
+                          <div class="mcp-tool-form-card-actions">
+                            <button type="button" id="dgImportEntriesBtn" class="btn btn-primary btn-sm" disabled title="Analyze workbook, connect, and create a business request first">
+                              Import entries to catalog
+                            </button>
+                          </div>
+                        </div>
+                        <p id="dgImportEntriesHint" class="merge-br-btn-hint" aria-live="polite">Analyze the workbook first to load entry payloads.</p>
+                      </div>
+                      <div id="dgImportResultCard" class="mcp-tool-result-card" hidden>
+                        <div class="mcp-tool-result-card-head">
+                          <h4 class="mcp-tool-result-heading">Import result</h4>
+                        </div>
+                        <pre id="dgImportResult" class="result mcp-tool-result"></pre>
+                      </div>
+                    </div>
+
+                    <div id="dgStepPublish" class="workflow-step-panel" data-workflow-step="publish" hidden>
+                      <div class="mcp-tool-form-card">
+                        <div class="mcp-tool-form-card-head">
+                          <div class="mcp-tool-detail-meta">
+                            <h3 id="dgCardPublishTitle" class="mcp-tool-detail-title">Publish to catalog</h3>
+                            <span class="mcp-tool-category-badge">Step 3</span>
+                          </div>
+                          <div class="mcp-tool-form-card-actions">
+                            <button type="button" id="dgPublishBtn" class="btn btn-danger btn-sm" disabled title="Connect to an environment and create a business request first">Publish business request</button>
+                          </div>
+                        </div>
+                        <p class="workflow-panel-lead">When import is complete, publish the business request to the release queue.</p>
+                        <div class="merge-safety-banner" role="note">
+                          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+                            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                          </svg>
+                          <p>Excel analysis never publishes. Import entries in Step 2, then publish only when you click the button above.</p>
+                        </div>
+                        <label class="field merge-publish-br-field">
+                          <span class="field-label">Business request ID to publish</span>
+                          <input type="text" id="dgPublishBusinessRequestId" placeholder="Paste BR UUID or use ID from Step 2" autocomplete="off">
+                          <span class="field-hint" id="dgPublishBusinessRequestIdHint">Filled automatically when you create a BR in Step 2.</span>
+                        </label>
+                        <p class="footnote merge-footnote">Queues via <code>releaseQueue/publish</code> on your connected environment.</p>
+                      </div>
+                      <div id="dgPublishResultCard" class="mcp-tool-result-card" hidden>
+                        <div class="mcp-tool-result-card-head">
+                          <h4 class="mcp-tool-result-heading">Result</h4>
+                        </div>
+                        <pre id="dgPublishResult" class="result mcp-tool-result"></pre>
+                      </div>
+                    </div>
                   </div>
-                  <div id="excelAnalyzePanel" class="analyze-report-panel"></div>
-                  <pre id="excelAnalyzeJson" class="result analyze-report-json" hidden></pre>
-                </div>
-              </article>
-
-              <article class="merge-card" aria-labelledby="dgCardBrTitle">
-                <header class="merge-card-head">
-                  <span class="merge-card-step">Step 2</span>
-                  <h3 id="dgCardBrTitle" class="merge-card-title">Business request &amp; import</h3>
-                  <p class="merge-card-desc">Create a business request, then load Modify Reason and Action entries from the analyzed workbook.</p>
-                </header>
-
-                <div id="dgBrConnectHint" class="merge-br-connect-hint" role="status">
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
-                    <circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/>
-                  </svg>
-                  <p id="dgBrConnectHintText">Connect to an environment in the sidebar, analyze your workbook in Step 1, then create a business request below.</p>
-                </div>
-
-                <div class="form-row merge-br-fields">
-                  <label class="field field-grow">
-                    <span class="field-label">Name for new business request</span>
-                    <input type="text" id="dgBusinessRequestName" placeholder="e.g. DG import — WLS Actions PI29" autocomplete="off">
-                    <span class="field-hint" id="dgBusinessRequestNameHint">Filled automatically after analyze — edit if needed.</span>
-                  </label>
-                  <label class="field">
-                    <span class="field-label">Business request ID</span>
-                    <input type="text" id="dgBusinessRequestId" placeholder="Auto-filled after create">
-                  </label>
-                </div>
-
-                <div class="merge-card-actions merge-br-actions">
-                  <button type="button" id="dgCreateBrBtn" class="btn btn-primary btn-lg">Create business request</button>
-                  <p id="dgCreateBrBtnHint" class="merge-br-btn-hint" aria-live="polite"></p>
-                </div>
-                <pre id="dgBrCreateResult" class="result" hidden></pre>
-
-                <div class="merge-card-actions merge-card-actions-row dg-import-actions">
-                  <button type="button" id="dgImportEntriesBtn" class="btn btn-primary" disabled title="Analyze workbook, connect, and create a business request first">
-                    Import entries to catalog
-                  </button>
-                  <p id="dgImportEntriesHint" class="merge-br-btn-hint" aria-live="polite">Analyze the workbook first to load entry payloads.</p>
-                </div>
-                <pre id="dgImportResult" class="result" hidden></pre>
-              </article>
-
-              <article class="merge-card merge-card-publish" aria-labelledby="dgCardPublishTitle">
-                <header class="merge-card-head">
-                  <span class="merge-card-step">Step 3</span>
-                  <h3 id="dgCardPublishTitle" class="merge-card-title">Publish to catalog</h3>
-                  <p class="merge-card-desc">When import is complete, publish the business request to the release queue.</p>
-                </header>
-
-                <div class="merge-safety-banner" role="note">
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
-                    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
-                  </svg>
-                  <p>Excel analysis never publishes. Import entries in Step 2, then publish only when you click the button below.</p>
-                </div>
-
-                <label class="field merge-publish-br-field">
-                  <span class="field-label">Business request ID to publish</span>
-                  <input type="text" id="dgPublishBusinessRequestId" placeholder="Paste BR UUID or use ID from Step 2" autocomplete="off">
-                  <span class="field-hint" id="dgPublishBusinessRequestIdHint">Filled automatically when you create a BR in Step 2.</span>
-                </label>
-
-                <div class="actions actions-primary actions-inline merge-publish-actions">
-                  <button type="button" id="dgPublishBtn" class="btn btn-danger" disabled title="Connect to an environment and create a business request first">Publish business request</button>
-                </div>
-                <p class="footnote merge-footnote">Queues via <code>releaseQueue/publish</code> on your connected environment.</p>
-                <pre id="dgPublishResult" class="result" hidden></pre>
-              </article>
+                </section>
+              </div>
             </div>
           </section>
-          </main>
+          </div>
         </div>
 
         <div id="mcpToolsView" class="app-view app-view-fill" hidden>
           <div class="app-view-body">
           <section class="panel panel-wide mcp-panel">
+            <header class="merge-hero mcp-page-hero">
+              <div class="merge-hero-icon" aria-hidden="true">
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>
+                </svg>
+              </div>
+              <div class="merge-hero-text">
+                <p class="merge-hero-eyebrow">CatalogOne MCP</p>
+                <h2 class="merge-hero-title">Browse and run CatalogOne MCP tools</h2>
+                <p class="merge-hero-lead">
+                  Search the tool library, fill in parameters, and execute against your connected environment.
+                  Tools use the same CatalogOne session as the sidebar — connect first, then run.
+                </p>
+              </div>
+            </header>
+
+            <ol class="merge-steps mcp-page-steps" aria-label="MCP tools workflow">
+              <li class="merge-step">
+                <span class="merge-step-num">1</span>
+                <span class="merge-step-label">Choose tool</span>
+              </li>
+              <li class="merge-step-connector" aria-hidden="true"></li>
+              <li class="merge-step">
+                <span class="merge-step-num">2</span>
+                <span class="merge-step-label">Set parameters</span>
+              </li>
+              <li class="merge-step-connector" aria-hidden="true"></li>
+              <li class="merge-step">
+                <span class="merge-step-num">3</span>
+                <span class="merge-step-label">Run tool</span>
+              </li>
+            </ol>
+
             <div class="mcp-tools-shell">
               <p id="mcpToolsStatus" class="mcp-tools-status-line">
                 <span class="mcp-tools-status-dot" aria-hidden="true"></span>
@@ -815,8 +966,8 @@
 
   <script id="tablesConfig" type="application/json">{{ defaults.tables | tojson }}</script>
   <script id="defaultsConfig" type="application/json">{{ defaults | tojson }}</script>
-  <script src="/static/app.js?v=20260702app55"></script>
-  <script src="/static/mcp-tools.js?v=20260702app55"></script>
-  <script type="module" src="/static/chat.bundle.js?v=20260702app56"></script>
+  <script src="/static/app.js?v=20260702app61"></script>
+  <script src="/static/mcp-tools.js?v=20260702app57"></script>
+  <script type="module" src="/static/chat.bundle.js?v=20260702app59"></script>
 </body>
 </html>

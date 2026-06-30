@@ -24,7 +24,11 @@ from catalog_tool.web.helpers import (
     tables_payload,
 )
 from catalog_tool.web.push_service import publish_business_request, push_to_catalog
-from catalog_tool.web.import_context import get_import_context
+from catalog_tool.web.import_context import (
+    get_import_context,
+    get_zip_analyze_entities,
+    store_import_file,
+)
 from catalog_tool.web.mcp_client import McpToolError, import_catalog_data_via_mcp
 from catalog_tool.br_compare import compare_business_request
 
@@ -128,17 +132,34 @@ def register(app: Flask) -> None:
         if not session.get("logged_in"):
             return jsonify({"error": "Log in first"}), 401
 
-        data = request.get_json(force=True)
-        name = (data.get("name") or "").strip()
+        zip_upload = request.files.get("zip_file")
+        if zip_upload or request.form.get("name"):
+            name = (request.form.get("name") or "").strip()
+            import_type = (request.form.get("import_type") or "").strip().lower()
+        else:
+            data = request.get_json(force=True) or {}
+            name = (data.get("name") or "").strip()
+            import_type = (data.get("import_type") or "").strip().lower()
+
         if not name:
             return jsonify({"error": "Business request name is required"}), 400
 
-        import_type = (data.get("import_type") or "").strip().lower()
         if import_type and import_type not in {"zip", "excel"}:
             return jsonify({"error": "import_type must be zip or excel"}), 400
 
         business_request_id: str | None = None
         try:
+            if import_type == "zip" and zip_upload and zip_upload.filename:
+                zip_bytes = zip_upload.read()
+                if not zip_bytes:
+                    raise ValueError("Uploaded zip file is empty")
+                store_import_file(
+                    session,
+                    import_type="zip",
+                    filename=zip_upload.filename,
+                    data=zip_bytes,
+                )
+
             client = client_from_session()
             business_request_id = client.create_business_request(name=name)
             payload: dict = {
@@ -244,11 +265,8 @@ def register(app: Flask) -> None:
 
         entities = data.get("entities")
         if not isinstance(entities, list) or not entities:
-            import_ctx = get_import_context(session)
-            zip_analyze = session.get("zip_analyze_entities")
-            if isinstance(zip_analyze, list) and zip_analyze:
-                entities = zip_analyze
-            else:
+            entities = get_zip_analyze_entities(session)
+            if not entities:
                 return jsonify(
                     {
                         "error": "No entities to compare — analyze a zip in Step 1 first",

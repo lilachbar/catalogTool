@@ -9,8 +9,10 @@ import pytest
 
 from catalog_tool.web.import_context import (
     clear_import_context,
+    get_zip_analyze_entities,
     load_import_bytes,
     store_import_file,
+    store_zip_analyze_entities,
 )
 
 
@@ -63,3 +65,27 @@ def test_import_type_mismatch():
 
     with pytest.raises(ValueError, match="Import type mismatch"):
         load_import_bytes(session, expected_type="excel")
+
+
+def test_store_zip_analyze_entities_sidecar():
+    session: dict = {}
+    store_import_file(
+        session,
+        import_type="zip",
+        filename="catalog-export.zip",
+        data=_zip_bytes(),
+    )
+    entities = [
+        {
+            "entity_id": "00000000-0000-4000-8000-000000000001",
+            "entity_type": "promotion",
+            "title": "Sample promo",
+        }
+    ]
+    store_zip_analyze_entities(session, entities)
+    loaded = get_zip_analyze_entities(session)
+    assert loaded == entities
+    assert "zip_analyze_entities" not in session
+
+    clear_import_context(session)
+    assert get_zip_analyze_entities(session) is None
