@@ -485,6 +485,11 @@ body.is-resizing-sidebar * {
   padding: 1rem 2rem;
 }
 
+.mcp-panel .mcp-tools-shell,
+.workflow-panel .workflow-shell {
+  width: 100%;
+}
+
 .mcp-panel .mcp-tools-shell {
   flex: 1;
   min-height: 0;
@@ -511,19 +516,27 @@ body.is-resizing-sidebar * {
   flex-shrink: 0;
 }
 
+#pushView.app-view-fill,
+#dgImportView.app-view-fill,
 #mcpToolsView.app-view-fill {
   flex: 1;
   min-height: 0;
 }
 
+#pushView .app-view-body,
+#dgImportView .app-view-body,
 #mcpToolsView .app-view-body {
   flex: 1;
   min-height: 0;
 }
 
-#mcpToolsView .mcp-panel {
-  height: calc(100vh - 9.5rem);
-  max-height: calc(100vh - 9.5rem);
+#pushView .workflow-panel,
+#dgImportView .workflow-panel,
+#mcpToolsView .workflow-panel {
+  flex: 1;
+  min-height: 0;
+  height: auto;
+  max-height: none;
 }
 
 .env-sidebar-head {
@@ -3185,9 +3198,11 @@ body.is-resizing-chat-panel.is-moving-chat-panel * {
 .mcp-tools-workbench {
   display: grid;
   grid-template-columns: minmax(280px, 340px) minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
   gap: 0.75rem;
   flex: 1;
   min-height: 0;
+  width: 100%;
   overflow: hidden;
   border: none;
   border-radius: 0;
@@ -4303,6 +4318,7 @@ html.session-resetting body {
   min-height: 0;
   gap: 0.75rem;
   padding: 0.75rem 1rem 1rem;
+  overflow: visible;
 }
 
 .workflow-shell .mcp-tools-status-line {
@@ -4310,21 +4326,21 @@ html.session-resetting body {
   flex-shrink: 0;
 }
 
-#pushView .workflow-panel,
-#dgImportView .workflow-panel {
-  flex: 1;
-  min-height: 0;
-  height: auto;
-  max-height: none;
-}
-
 .workflow-workbench {
   display: grid;
   grid-template-columns: minmax(280px, 340px) minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
   gap: 0.75rem;
   flex: 1;
   min-height: 0;
+  width: 100%;
   overflow: hidden;
+}
+
+.workflow-workbench > .workflow-sidebar,
+.workflow-workbench > .workflow-main {
+  min-height: 0;
+  min-width: 0;
 }
 
 .workflow-sidebar {
@@ -4460,6 +4476,7 @@ html.session-resetting body {
   justify-content: flex-start;
   flex: 1;
   min-height: 0;
+  min-width: 0;
   padding: 0;
   overflow: hidden;
   border: 1px solid var(--border);
@@ -4468,10 +4485,14 @@ html.session-resetting body {
 }
 
 .workflow-main-scroll {
-  flex: 1;
+  flex: 1 1 auto;
   min-height: 0;
+  overflow-x: hidden;
   overflow-y: auto;
+  overscroll-behavior: auto;
+  -webkit-overflow-scrolling: touch;
   padding: 1rem;
+  padding-bottom: 1.5rem;
   display: flex;
   flex-direction: column;
   align-items: stretch;
@@ -4483,6 +4504,9 @@ html.session-resetting body {
   flex-direction: column;
   gap: 0.875rem;
   width: 100%;
+  min-width: 0;
+  min-height: auto;
+  flex: 0 0 auto;
 }
 
 .workflow-step-panel[hidden] {
@@ -4514,7 +4538,21 @@ html.session-resetting body {
 .workflow-main-scroll .merge-compare-section .mcp-tool-result-card.analyze-report {
   padding: 0;
   border: none;
-  background: transparent;
+  background: var(--bg-elevated);
+}
+
+.analyze-compare-loading {
+  margin: 0;
+  padding: 0.25rem 0;
+}
+
+.merge-compare-section.is-running .br-compare-actions-bar {
+  border-color: rgba(59, 130, 246, 0.35);
+}
+
+.br-compare-actions-bar .btn.is-busy {
+  opacity: 0.85;
+  cursor: wait;
 }
 
 .workflow-main-scroll .merge-compare-section .mcp-tool-result-card.analyze-report .analyze-report-toolbar {
@@ -4531,6 +4569,7 @@ html.session-resetting body {
   border-top: none;
   border-radius: 0 0 var(--radius) var(--radius);
   background: var(--surface-inset);
+  overflow: visible;
 }
 
 .workflow-step-actions {
@@ -4541,16 +4580,177 @@ html.session-resetting body {
   margin-top: 1rem;
 }
 
-.workflow-step-actions .btn-analyze {
+.workflow-step-actions--split {
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.workflow-step-actions--split .btn-analyze {
   min-width: 9rem;
+}
+
+.workflow-step-actions--split #brCompareProductionBtn {
+  margin-left: auto;
+}
+
+.merge-br-fields + .workflow-step-actions {
+  margin-top: 1.25rem;
+}
+
+.br-compare-hint {
+  margin: 0.625rem 0 0;
+  font-size: 0.8125rem;
+  color: var(--warn, #d97706);
+  line-height: 1.45;
+}
+
+.br-compare-results-section {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  margin-top: 0;
+  padding-top: 0;
+  border-top: none;
+}
+
+.br-compare-results-section.br-compare-results-full {
+  margin-top: 0;
+  padding-top: 0.75rem;
+  border-top: 2px solid var(--border-strong);
+  flex-shrink: 0;
+}
+
+.workflow-shell.has-compare-open {
+  gap: 0.5rem;
+}
+
+.workflow-shell.has-compare-open .workflow-workbench {
+  min-height: auto;
+  grid-template-rows: auto;
+  align-items: start;
+}
+
+.workflow-shell.has-compare-open .workflow-main,
+.workflow-shell.has-compare-open .workflow-sidebar {
+  min-height: auto;
+}
+
+.workflow-shell.has-compare-open .br-compare-results-full {
+  margin-top: 0;
+  padding-top: 0.625rem;
+}
+
+.br-compare-results-section[hidden] {
+  display: none !important;
+}
+
+.br-compare-panel {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  min-width: 0;
+  min-height: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-inset);
+  overflow: visible;
+}
+
+.br-compare-results-full .br-compare-panel {
+  max-height: none;
+  height: auto;
+}
+
+.br-compare-panel.is-error {
+  border-color: rgba(239, 68, 68, 0.35);
+  background: var(--err-muted, rgba(239, 68, 68, 0.06));
+}
+
+.br-compare-panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-shrink: 0;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-elevated);
+}
+
+.br-compare-panel-title {
+  margin: 0;
+  font-size: 0.9375rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.br-compare-panel-body {
+  flex: 1 1 auto;
+  width: 100%;
+  min-width: 0;
+  min-height: 0;
+  padding: 1rem;
+  overflow: visible;
+  background: var(--surface-inset);
+}
+
+.br-compare-results-full .br-compare-panel-body {
+  overflow: visible;
+  max-height: none;
+}
+
+.br-compare-json {
+  margin: 0;
+  padding: 1rem;
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: none;
+  overflow: auto;
+  border-top: 1px solid var(--border);
+  background: var(--bg-elevated);
+}
+
+.br-compare-results-section.is-running .br-compare-panel {
+  border-color: rgba(59, 130, 246, 0.35);
+}
+
+.br-compare-results-section .br-compare-toolbar,
+.br-compare-results-section .br-compare-stat-grid,
+.br-compare-results-section .br-compare-entities {
+  width: 100%;
+  min-width: 0;
+}
+
+.workflow-main-scroll.has-compare-results,
+#page.has-compare-results {
+  scroll-padding-bottom: 2rem;
+}
+
+.br-compare-results-section .br-compare-table-wrap {
+  width: 100%;
+  min-width: 0;
+  max-height: none;
+  overflow: visible;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-elevated);
+}
+
+.br-compare-results-full .br-compare-table-wrap {
+  overflow-x: auto;
+}
+
+.br-compare-results-section .br-compare-table {
+  width: 100%;
+  table-layout: auto;
 }
 
 .zip-upload-row + .workflow-step-actions {
   margin-top: 0.875rem;
 }
 
-.merge-br-fields + .workflow-step-actions {
-  margin-top: 1.25rem;
+.workflow-step-actions .btn-analyze {
+  min-width: 9rem;
 }
 
 .workflow-step-actions .btn.is-busy,
@@ -5086,6 +5286,16 @@ html.session-resetting body {
   .merge-br-id-field {
     min-width: 0;
   }
+
+  .workflow-step-actions--split {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .workflow-step-actions--split #brCompareProductionBtn {
+    margin-left: 0;
+    width: 100%;
+  }
 }
 
 .analyze-report-heading {
@@ -5239,7 +5449,20 @@ html.session-resetting body {
 }
 
 .br-compare-table-wrap {
-  max-height: 420px;
+  max-height: min(480px, 45vh);
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-elevated);
+}
+
+.br-compare-stat-grid {
+  grid-template-columns: repeat(auto-fit, minmax(6.5rem, 1fr));
+}
+
+.merge-compare-section:not(.is-running) .br-compare-actions-bar .btn.is-busy {
+  opacity: 1;
+  cursor: pointer;
 }
 
 .br-compare-sort-btn {
@@ -5839,9 +6062,57 @@ html.session-resetting body {
   flex-direction: column;
   flex: 1;
   min-height: 0;
-  max-height: calc(100vh - 1.75rem);
-  overflow: hidden;
+  max-height: 100vh;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: auto;
+  scrollbar-gutter: stable;
   padding: 0.5rem 1rem 0.75rem;
+}
+
+.app-page-body #pushView.app-view-fill,
+.app-page-body #pushView .app-view-body,
+.app-page-body #pushView .workflow-panel,
+.app-page-body #pushView .workflow-shell {
+  flex: none;
+  min-height: auto;
+  overflow: visible;
+  height: auto;
+}
+
+.app-page-body #pushView .workflow-shell.has-compare-open .workflow-workbench {
+  min-height: auto;
+  grid-template-rows: auto;
+  align-items: start;
+}
+
+.app-page-body #pushView .workflow-shell.has-compare-open .workflow-main {
+  min-height: auto;
+}
+
+.app-page-body #pushView .workflow-shell.has-compare-open .workflow-sidebar {
+  min-height: auto;
+}
+
+.app-page-body #pushView .workflow-workbench {
+  flex: none;
+  min-height: min(520px, calc(100vh - 18rem));
+  overflow: visible;
+}
+
+.app-page-body #pushView .workflow-main {
+  overflow: visible;
+  min-height: min(480px, calc(100vh - 20rem));
+}
+
+.app-page-body #pushView .workflow-main-scroll {
+  overflow: visible;
+  max-height: none;
+  flex: none;
+}
+
+.app-page-body .page.has-compare-results {
+  scroll-padding-bottom: 2rem;
 }
 
 .app-page-body .app-main {
@@ -5852,8 +6123,29 @@ html.session-resetting body {
 }
 
 .app-page-body .page > .app-view-fill {
+  flex: none;
+  min-height: auto;
+  overflow: visible;
+}
+
+.app-page-body #pushView.app-view-fill {
+  flex: none;
+  min-height: auto;
+  overflow: visible;
+}
+
+.app-page-body .app-view-body {
   flex: 1;
   min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.app-page-body #pushView .app-view-body {
+  flex: none;
+  min-height: auto;
+  overflow: visible;
 }
 
 .app-page-body .footer {
@@ -6208,19 +6500,20 @@ body:has(.connection-modal[open]) .app-bg-shape::after {
   padding: 0.875rem 1.75rem;
 }
 
-.app-page-body #mcpToolsView .mcp-panel {
-  flex: 1;
-  min-height: 0;
-  height: auto;
-  max-height: none;
-}
-
+.app-page-body #mcpToolsView .workflow-panel,
 .app-page-body #pushView .workflow-panel,
 .app-page-body #dgImportView .workflow-panel {
   flex: 1;
   min-height: 0;
   height: auto;
   max-height: none;
+  width: 100%;
+}
+
+.app-page-body #pushView .workflow-panel {
+  flex: none;
+  min-height: auto;
+  overflow: visible;
 }
 
 .app-page-body .workflow-sidebar,
@@ -6247,6 +6540,26 @@ body:has(.connection-modal[open]) .app-bg-shape::after {
   background: rgba(59, 130, 246, 0.1);
   border-color: rgba(59, 130, 246, 0.25);
   color: var(--app-blue);
+}
+
+.app-page-body .br-compare-panel {
+  background: var(--app-card);
+  border-color: var(--app-border);
+  border-radius: 16px;
+}
+
+.app-page-body .br-compare-panel-head {
+  background: var(--app-surface-soft);
+  border-bottom-color: var(--app-border);
+}
+
+.app-page-body .br-compare-panel-body {
+  background: var(--app-surface-soft);
+}
+
+.app-page-body .br-compare-results-section .br-compare-table-wrap {
+  background: var(--app-card);
+  border-color: var(--app-border);
 }
 
 .app-page-body .workflow-main-scroll .mcp-tool-form-card,

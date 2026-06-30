@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/static/styles.css?v=20260702app64">
+  <link rel="stylesheet" href="/static/styles.css?v=20260702app80">
   <script>
     (function () {
       var theme = localStorage.getItem("catalogTool.theme");
@@ -223,11 +223,6 @@
             </ol>
 
             <div class="workflow-shell">
-              <p id="pushWorkflowStatus" class="mcp-tools-status-line is-loading">
-                <span class="mcp-tools-status-dot" aria-hidden="true"></span>
-                <span id="pushWorkflowStatusText">Connect to a CatalogOne environment in the sidebar to begin.</span>
-              </p>
-
               <div class="workflow-workbench">
                 <aside class="workflow-sidebar">
                   <div class="workflow-sidebar-head">
@@ -338,9 +333,11 @@
                               </div>
                             </label>
                           </div>
-                          <div class="workflow-step-actions">
+                          <div class="workflow-step-actions workflow-step-actions--split">
                             <button type="button" id="createBrBtn" class="btn btn-primary btn-analyze">Create BR and Import</button>
+                            <button type="button" id="brCompareProductionBtn" class="btn btn-secondary btn-analyze" hidden disabled title="Complete import before comparing">Run compare</button>
                           </div>
+                          <p id="brCompareHint" class="br-compare-hint" hidden></p>
                         </div>
                       </div>
                       <div id="brCreateResult" class="mcp-tool-result-card analyze-report is-collapsible" hidden>
@@ -352,29 +349,6 @@
                           </button>
                         </div>
                         <div id="brCreatePanel" class="analyze-report-panel analyze-report-body"></div>
-                      </div>
-                      <div id="brCompareSection" class="merge-compare-section" hidden>
-                        <div id="brCompareActions" class="br-compare-actions-bar mcp-tool-form-card">
-                          <div class="br-compare-actions-copy">
-                            <span class="br-compare-actions-label">Compare with production</span>
-                            <p id="brCompareHint" class="br-compare-hint" hidden></p>
-                          </div>
-                          <button type="button" id="brCompareProductionBtn" class="btn btn-secondary btn-sm" disabled title="Import must complete successfully before comparing">Run compare</button>
-                        </div>
-                        <div id="brComparePanel" class="mcp-tool-result-card analyze-report is-collapsible" hidden>
-                          <div class="analyze-report-toolbar">
-                            <button type="button" id="brCompareToggleBtn" class="analyze-report-toggle" aria-expanded="true">
-                              <svg class="analyze-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
-                              <span id="brCompareTitle" class="analyze-report-heading">Compare results</span>
-                            </button>
-                            <label class="checkbox analyze-json-toggle">
-                              <input type="checkbox" id="brCompareShowJson">
-                              <span>Raw JSON</span>
-                            </label>
-                          </div>
-                          <div id="brCompareReport" class="analyze-report-panel analyze-report-body"></div>
-                          <pre id="brCompareJson" class="analyze-json" hidden></pre>
-                        </div>
                       </div>
                     </div>
 
@@ -412,6 +386,20 @@
                     </div>
                   </div>
                 </section>
+              </div>
+
+              <div id="brCompareResultsSection" class="br-compare-results-section br-compare-results-full" hidden>
+                <div id="brComparePanel" class="br-compare-panel">
+                  <div class="br-compare-panel-head">
+                    <h4 id="brCompareTitle" class="br-compare-panel-title">Compare results</h4>
+                    <label class="checkbox analyze-json-toggle">
+                      <input type="checkbox" id="brCompareShowJson">
+                      <span>Raw JSON</span>
+                    </label>
+                  </div>
+                  <div id="brCompareReport" class="br-compare-panel-body"></div>
+                  <pre id="brCompareJson" class="analyze-json br-compare-json" hidden></pre>
+                </div>
               </div>
             </div>
           </section>
@@ -649,7 +637,7 @@
 
         <div id="mcpToolsView" class="app-view app-view-fill" hidden>
           <div class="app-view-body">
-          <section class="panel panel-wide mcp-panel">
+          <section class="panel panel-wide workflow-panel mcp-panel">
             <header class="merge-hero mcp-page-hero">
               <div class="merge-hero-icon" aria-hidden="true">
                 <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
@@ -689,8 +677,8 @@
                 <span id="mcpToolsStatusText">Loading CatalogOne MCP tools…</span>
               </p>
 
-          <div id="mcpToolsPanel" class="mcp-tools-workbench">
-            <aside class="mcp-tools-sidebar">
+              <div id="mcpToolsPanel" class="mcp-tools-workbench">
+                <aside class="mcp-tools-sidebar">
               <div class="mcp-tools-sidebar-head">
                 <h3 class="mcp-tools-sidebar-title">Tool library</h3>
                 <span id="mcpToolsCount" class="mcp-tools-count-badge" hidden>0</span>
@@ -703,21 +691,21 @@
                 <input type="search" id="mcpToolsSearch" class="mcp-pill-input" placeholder="Search by name or description…" autocomplete="off">
               </label>
               <div id="mcpToolsList" class="mcp-tools-list" role="listbox" aria-label="CatalogOne MCP tools"></div>
-            </aside>
+                </aside>
 
-            <section class="mcp-tools-main">
-              <div class="mcp-tools-main-scroll">
-              <div id="mcpToolsEmptyDetail" class="mcp-tools-empty-detail">
+                <section class="mcp-tools-main">
+                  <div class="mcp-tools-main-scroll">
+                    <div id="mcpToolsEmptyDetail" class="mcp-tools-empty-detail">
                 <div class="mcp-tools-empty-icon" aria-hidden="true">
                   <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
                     <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>
                   </svg>
                 </div>
                 <h3 class="mcp-tools-empty-title">Choose a tool</h3>
-                <p class="mcp-tools-empty-lead">Select a tool from the library or use search to filter by name, category, or description.</p>
-              </div>
+                    <p class="mcp-tools-empty-lead">Select a tool from the library or use search to filter by name, category, or description.</p>
+                    </div>
 
-              <div id="mcpToolsDetail" class="mcp-tools-detail" hidden>
+                    <div id="mcpToolsDetail" class="mcp-tools-detail" hidden>
                 <div class="mcp-tool-form-card">
                   <div class="mcp-tool-form-card-head">
                     <div class="mcp-tool-detail-meta">
@@ -761,13 +749,13 @@
                     <div id="mcpToolResultMeta" class="mcp-tool-result-meta"></div>
                   </div>
                   <pre id="mcpToolResult" class="result mcp-tool-result"></pre>
-                </div>
+                    </div>
+                    </div>
+                  </div>
+                </section>
               </div>
-              </div>
-            </section>
-          </div>
-          <div id="mcpFloatTip" class="sidebar-float-tip mcp-float-tip" role="tooltip" hidden></div>
-          </div>
+            </div>
+            <div id="mcpFloatTip" class="sidebar-float-tip mcp-float-tip" role="tooltip" hidden></div>
           </section>
           </div>
         </div>
@@ -966,9 +954,9 @@
 
   <script id="tablesConfig" type="application/json">{{ defaults.tables | tojson }}</script>
   <script id="defaultsConfig" type="application/json">{{ defaults | tojson }}</script>
-  <script src="/static/page-control.js?v=20260702app65"></script>
-  <script src="/static/app.js?v=20260702app65"></script>
+  <script src="/static/page-control.js?v=20260702app68"></script>
+  <script src="/static/app.js?v=20260702app80"></script>
   <script src="/static/mcp-tools.js?v=20260702app57"></script>
-  <script type="module" src="/static/chat.bundle.js?v=20260702app65"></script>
+  <script type="module" src="/static/chat.bundle.js?v=20260702app67"></script>
 </body>
 </html>

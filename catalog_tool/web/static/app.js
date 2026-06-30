@@ -74,6 +74,8 @@ const state = {
   importType: null,
   importFilename: null,
   brCompareData: null,
+  brCompareResultsOpen: false,
+  compareEntityPayload: null,
   brCompareTableUi: {
     query: "",
     status: "all",
@@ -172,12 +174,10 @@ const els = {
   brCreatePanel: document.getElementById("brCreatePanel"),
   brCreateToggleBtn: document.getElementById("brCreateToggleBtn"),
   brCreateStatusBadge: document.getElementById("brCreateStatusBadge"),
-  brCompareSection: document.getElementById("brCompareSection"),
-  brCompareActions: document.getElementById("brCompareActions"),
+  brCompareResultsSection: document.getElementById("brCompareResultsSection"),
   brCompareHint: document.getElementById("brCompareHint"),
   brCompareProductionBtn: document.getElementById("brCompareProductionBtn"),
   brComparePanel: document.getElementById("brComparePanel"),
-  brCompareToggleBtn: document.getElementById("brCompareToggleBtn"),
   brCompareTitle: document.getElementById("brCompareTitle"),
   brCompareReport: document.getElementById("brCompareReport"),
   brCompareJson: document.getElementById("brCompareJson"),
@@ -1109,11 +1109,6 @@ function updateWorkflowStatusLine(lineEl, textEl, workflowLabel) {
 
 function updateWorkflowStatusLines() {
   updateWorkflowStatusLine(
-    els.pushWorkflowStatus,
-    els.pushWorkflowStatusText,
-    "Upload & publish",
-  );
-  updateWorkflowStatusLine(
     els.dgWorkflowStatus,
     els.dgWorkflowStatusText,
     "DG import",
@@ -1391,18 +1386,18 @@ function showBrCreateResult(result, { isError = false } = {}) {
 }
 
 function updateCompareUi() {
-  if (!els.brCompareSection || !els.brCompareProductionBtn) {
+  if (!els.brCompareProductionBtn) {
     return;
   }
 
   const hasBr = !!els.businessRequestId?.value.trim();
   const canCompare = state.zipImportCompleted && hasBr;
 
-  els.brCompareSection.hidden = !hasBr;
+  els.brCompareProductionBtn.hidden = !hasBr;
   els.brCompareProductionBtn.disabled = !canCompare;
   els.brCompareProductionBtn.title = canCompare
     ? "Compare imported entities with production"
-    : state.zipImportError || "Import must complete successfully before comparing";
+    : state.zipImportError || "Complete Create BR and Import before comparing";
 
   if (els.brCompareHint) {
     if (!hasBr || canCompare) {
@@ -1416,22 +1411,184 @@ function updateCompareUi() {
   }
 }
 
+function getCompareScrollHost() {
+  return document.getElementById("appPage") || document.scrollingElement || null;
+}
+
+function syncCompareShellLayout() {
+  const section = els.brCompareResultsSection;
+  const shell = section?.closest(".workflow-shell");
+  const open = Boolean(section && !section.hidden && state.brCompareResultsOpen);
+  shell?.classList.toggle("has-compare-open", open);
+}
+
+function syncComparePanelLayout() {
+  const section = els.brCompareResultsSection;
+  const panel = els.brComparePanel;
+  const body = els.brCompareReport;
+  const pageScroll = getCompareScrollHost();
+  syncCompareShellLayout();
+  if (!section || section.hidden || !panel) {
+    pageScroll?.classList.remove("has-compare-results");
+    if (panel) {
+      panel.style.maxHeight = "";
+      panel.style.height = "";
+    }
+    body?.style.removeProperty("max-height");
+    body?.querySelector(".br-compare-table-wrap")?.style.removeProperty("max-height");
+    return;
+  }
+
+  pageScroll?.classList.add("has-compare-results");
+  panel.style.maxHeight = "";
+  panel.style.height = "";
+  body?.style.removeProperty("max-height");
+  body?.querySelector(".br-compare-table-wrap")?.style.removeProperty("max-height");
+}
+
+function openCompareResultsPanel() {
+  if (els.brCompareResultsSection) {
+    els.brCompareResultsSection.hidden = false;
+  }
+  if (els.brComparePanel) {
+    els.brComparePanel.hidden = false;
+  }
+  if (els.brCompareReport) {
+    els.brCompareReport.hidden = false;
+  }
+  state.brCompareResultsOpen = true;
+  syncComparePanelLayout();
+}
+
+function closeCompareResultsPanel() {
+  if (els.brCompareResultsSection) {
+    els.brCompareResultsSection.hidden = true;
+  }
+  state.brCompareResultsOpen = false;
+  syncComparePanelLayout();
+}
+
+function initComparePanelLayout() {
+  if (window.__comparePanelLayoutWired) {
+    return;
+  }
+  window.__comparePanelLayoutWired = true;
+  window.addEventListener("resize", () => {
+    if (state.brCompareResultsOpen) {
+      syncComparePanelLayout();
+    }
+  });
+}
+
+function wireCompareJsonToggle() {
+  if (!els.brCompareShowJson || els.brCompareShowJson.dataset.wired === "1") {
+    return;
+  }
+  els.brCompareShowJson.addEventListener("change", () => {
+    const showJson = els.brCompareShowJson.checked;
+    if (els.brCompareReport) {
+      els.brCompareReport.hidden = showJson;
+    }
+    if (els.brCompareJson) {
+      els.brCompareJson.hidden = !showJson;
+    }
+  });
+  els.brCompareShowJson.dataset.wired = "1";
+}
+
+function rememberCompareEntityPayload(source) {
+  const raw = source?.compare_entities || source?.entities;
+  if (!Array.isArray(raw)) {
+    return;
+  }
+  const entities = raw
+    .filter((item) => item?.entity_id && item?.entity_type)
+    .map((item) => ({
+      entity_id: String(item.entity_id).trim(),
+      entity_type: String(item.entity_type).trim(),
+      title: String(item.title || item.entity_id).trim(),
+    }));
+  if (entities.length) {
+    state.compareEntityPayload = entities;
+  }
+}
+
 function resetMergeCompareUi() {
   state.zipImportCompleted = false;
   state.zipImportBusinessRequestId = null;
   state.zipImportError = null;
   state.brCompareData = null;
+  state.compareEntityPayload = null;
   resetBrCompareTableUi();
+  closeCompareResultsPanel();
   if (els.brCompareReport) {
     els.brCompareReport.dataset.compareTableWired = "";
-  }
-  if (els.brComparePanel) {
-    els.brComparePanel.hidden = true;
   }
   if (els.brCompareReport) {
     els.brCompareReport.innerHTML = "";
   }
   updateCompareUi();
+}
+
+function formatCompareErrorMessage(error) {
+  const raw = typeof error === "string" ? error : error?.message || "Compare failed.";
+  if (error?.body?.error && typeof error.body.error === "string") {
+    return error.body.error;
+  }
+  const httpMatch = raw.match(/^HTTP (\d+):\s*(.+)$/s);
+  if (httpMatch) {
+    try {
+      const payload = JSON.parse(httpMatch[2]);
+      if (payload?.message) {
+        return `Compare failed (HTTP ${httpMatch[1]}): ${payload.message}`;
+      }
+      if (payload?.error) {
+        return `Compare failed (HTTP ${httpMatch[1]}): ${payload.error}`;
+      }
+    } catch {
+      // Fall through to raw message.
+    }
+    return `Compare failed (HTTP ${httpMatch[1]}). Check that the business request exists and you are connected to the right environment.`;
+  }
+  return raw;
+}
+
+function scrollCompareResultsIntoView() {
+  if (!els.brCompareResultsSection || els.brCompareResultsSection.hidden) {
+    return;
+  }
+  window.requestAnimationFrame(() => {
+    syncComparePanelLayout();
+    const scrollHost = getCompareScrollHost();
+    const section = els.brCompareResultsSection;
+    if (!scrollHost) {
+      section.scrollIntoView({ behavior: "smooth", block: "start" });
+      return;
+    }
+    const hostRect = scrollHost.getBoundingClientRect();
+    const targetRect = section.getBoundingClientRect();
+    const nextTop = scrollHost.scrollTop + (targetRect.top - hostRect.top) - 16;
+    scrollHost.scrollTo({ top: Math.max(0, nextTop), behavior: "smooth" });
+    window.setTimeout(() => {
+      const tableWrap = els.brCompareReport?.querySelector(".br-compare-table-wrap");
+      (tableWrap || section).scrollIntoView({ behavior: "smooth", block: "nearest" });
+    }, 360);
+  });
+}
+
+function setCompareRunningUi(compareType, running) {
+  setWorkflowButtonBusy(els.brCompareProductionBtn, null, running, {
+    busyText: "Comparing…",
+    idleText: "Run compare",
+  });
+  if (els.brCompareProductionBtn) {
+    els.brCompareProductionBtn.disabled = running || !(state.zipImportCompleted && getCompareBusinessRequestId());
+  }
+  if (!running || !els.brCompareTitle) {
+    return;
+  }
+  const compareLabel = compareType === "audit" ? "audit" : "production";
+  els.brCompareTitle.textContent = `Comparing with ${compareLabel}…`;
 }
 
 function getCompareBusinessRequestId() {
@@ -1442,15 +1599,26 @@ function getCompareBusinessRequestId() {
   );
 }
 
+function getCompareEntityPayload() {
+  if (state.compareEntityPayload?.length) {
+    return state.compareEntityPayload;
+  }
+  const entities = (state.zipAnalyzeResult?.entities || [])
+    .filter((item) => item?.entity_id && item?.entity_type)
+    .map((item) => ({
+      entity_id: String(item.entity_id).trim(),
+      entity_type: String(item.entity_type).trim(),
+      title: String(item.title || item.entity_id).trim(),
+    }));
+  return entities.length ? entities : null;
+}
+
 function showCompareSectionAfterImport(businessRequestId) {
   if (!state.zipImportCompleted || !businessRequestId) {
     updateCompareUi();
     return;
   }
   state.zipImportBusinessRequestId = businessRequestId;
-  if (els.brComparePanel) {
-    els.brComparePanel.hidden = true;
-  }
   updateCompareUi();
 }
 
@@ -1770,6 +1938,7 @@ function refreshBrCompareEntitiesTable() {
   if (details) {
     details.innerHTML = buildBrCompareChangedDetails(filtered);
   }
+  syncComparePanelLayout();
 }
 
 function wireBrCompareTableInteractions() {
@@ -1843,10 +2012,11 @@ function buildBrComparePanel(body) {
   const entities = body.entities || [];
   const compareLabel = body.compare_type === "audit" ? "Audit" : "Production";
 
-  let html = `<div class="analyze-stat-grid">
+  let html = `<div class="analyze-stat-grid br-compare-stat-grid">
     ${analyzeStatCard("Identical", summary.identical ?? 0, summary.identical ? "ok" : "")}
     ${analyzeStatCard("Changed", summary.changed ?? 0, summary.changed ? "warn" : "")}
     ${analyzeStatCard("New in BR", summary.new_in_br ?? 0, summary.new_in_br ? "accent" : "")}
+    ${analyzeStatCard("Missing in BR", summary.missing_in_br ?? 0, summary.missing_in_br ? "muted" : "")}
     ${analyzeStatCard("Errors", summary.errors ?? 0, summary.errors ? "warn" : "")}
   </div>`;
 
@@ -1877,38 +2047,46 @@ function showBrCompareReport(body, { isError = false } = {}) {
   if (!els.brComparePanel || !els.brCompareReport || !els.brCompareJson) {
     return;
   }
+
+  wireCompareJsonToggle();
+
   const compareLabel = body?.compare_type === "audit" ? "Audit" : "Production";
   if (els.brCompareTitle) {
     els.brCompareTitle.textContent = isError
       ? "Compare failed"
       : `Compare with ${compareLabel}`;
   }
+
+  const panelHtml = isError
+    ? `<p class="analyze-error-msg">${escapeHtml(formatCompareErrorMessage(typeof body === "string" ? body : body?.error || body))}</p>`
+    : buildBrComparePanel(body);
+
+  els.brCompareReport.innerHTML = panelHtml;
+  els.brCompareJson.textContent = typeof body === "string"
+    ? body
+    : JSON.stringify(body, null, 2);
+  els.brComparePanel.classList.toggle("is-error", Boolean(isError));
+
+  if (els.brCompareShowJson) {
+    els.brCompareShowJson.checked = false;
+  }
+  els.brCompareReport.hidden = false;
+  els.brCompareJson.hidden = true;
+
   if (!isError && body?.entities?.length) {
     state.brCompareData = body;
     resetBrCompareTableUi();
+    wireBrCompareTableInteractions();
   } else {
     state.brCompareData = null;
   }
-  wireAnalyzeReport({
-    reportEl: els.brComparePanel,
-    panelEl: els.brCompareReport,
-    jsonEl: els.brCompareJson,
-    toggleEl: els.brCompareShowJson,
-    toggleBtn: els.brCompareToggleBtn,
-    panelHtml: isError
-      ? `<p class="analyze-error-msg">${escapeHtml(typeof body === "string" ? body : body?.error || "Compare failed.")}</p>`
-      : buildBrComparePanel(body),
-    rawData: body,
-    isError,
-    defaultCollapsed: false,
+
+  openCompareResultsPanel();
+  scrollCompareResultsIntoView();
+  window.requestAnimationFrame(() => {
+    syncComparePanelLayout();
+    window.requestAnimationFrame(syncComparePanelLayout);
   });
-  if (!isError && body?.entities?.length) {
-    wireBrCompareTableInteractions();
-  }
-  if (els.brCompareSection) {
-    els.brCompareSection.hidden = false;
-  }
-  els.brComparePanel.hidden = false;
 }
 
 async function runBrCompare(compareType, businessRequestId) {
@@ -1918,36 +2096,34 @@ async function runBrCompare(compareType, businessRequestId) {
     return;
   }
 
-  if (els.brCompareSection) {
-    els.brCompareSection.hidden = false;
-  }
-  if (els.brComparePanel) {
-    els.brComparePanel.hidden = false;
-    els.brComparePanel.classList.remove("is-collapsed");
-  }
-  if (els.brCompareToggleBtn) {
-    els.brCompareToggleBtn.setAttribute("aria-expanded", "true");
-  }
+  openCompareResultsPanel();
   if (els.brCompareReport) {
-    els.brCompareReport.innerHTML = `<p class="analyze-step-note">Running ${compareType} compare…</p>`;
+    els.brCompareReport.innerHTML = `<p class="analyze-step-note analyze-compare-loading">Comparing with ${compareType}…</p>`;
   }
-  if (els.brCompareProductionBtn) {
-    els.brCompareProductionBtn.disabled = true;
-    els.brCompareProductionBtn.classList.add("is-busy");
-  }
+  els.brCompareResultsSection?.classList.add("is-running");
+  setCompareRunningUi(compareType, true);
+  scrollCompareResultsIntoView();
 
   try {
+    const payload = { compare_type: compareType };
+    const entities = getCompareEntityPayload();
+    if (entities) {
+      payload.entities = entities;
+    }
     const result = await api(`/api/business-request/${encodeURIComponent(brId)}/compare`, {
       method: "POST",
-      body: JSON.stringify({ compare_type: compareType }),
+      body: JSON.stringify(payload),
     });
+    if (result?.error && !result?.entities?.length) {
+      showBrCompareReport(result, { isError: true });
+      return;
+    }
     showBrCompareReport(result);
   } catch (error) {
-    showBrCompareReport(error.message, { isError: true });
+    showBrCompareReport(formatCompareErrorMessage(error), { isError: true });
   } finally {
-    if (els.brCompareProductionBtn) {
-      els.brCompareProductionBtn.classList.remove("is-busy");
-    }
+    els.brCompareResultsSection?.classList.remove("is-running");
+    setCompareRunningUi(compareType, false);
     updateCompareUi();
   }
 }
@@ -3279,6 +3455,7 @@ els.analyzeZipBtn?.addEventListener("click", async () => {
       defaultCollapsed: !body.has_blocking_issues,
     });
     state.zipAnalyzeResult = body;
+    rememberCompareEntityPayload(body);
     state.importType = body.import_type || "zip";
     state.importFilename = body.import_filename || file.name;
     state.dgAnalyzeResult = null;
@@ -3335,6 +3512,7 @@ els.createBrBtn?.addEventListener("click", async () => {
     const result = await apiForm("/api/business-request", formData);
 
     applyBusinessRequestIdFromResult(result);
+    rememberCompareEntityPayload(result);
     state.zipImportCompleted = isZipImportSuccessful(result);
     if (!state.zipImportCompleted) {
       const importError = result.import?.error || result.message || "Zip import did not complete successfully.";
@@ -3657,6 +3835,8 @@ async function initApp() {
   updateZipValidateButton();
   initExcelDropzone();
   pushWorkflowNav = initWorkflowStepNav(els.pushStepNav, "upload");
+  initComparePanelLayout();
+  wireCompareJsonToggle();
   initWorkflowStepNav(els.dgStepNav, "upload");
   updateWorkflowStatusLines();
   updatePushWorkflowStepStates();

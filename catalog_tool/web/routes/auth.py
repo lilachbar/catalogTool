@@ -5,12 +5,7 @@ from __future__ import annotations
 from flask import Flask, jsonify, request, session
 
 from catalog_tool.client.catalog_one_client import CatalogOneClient, derive_catalog_ui_url, derive_environment_label
-from catalog_tool.web.helpers import connection_from_request, validate_catalogone_session
-from catalog_tool.web.import_context import clear_import_context
-from catalog_tool.web.user_session import (
-    APP_USER_DISPLAY_KEY,
-    APP_USER_SESSION_KEY,
-)
+from catalog_tool.web.helpers import clear_catalogone_login, connection_from_request, validate_catalogone_session
 
 
 def register(app: Flask) -> None:
@@ -54,14 +49,9 @@ def register(app: Flask) -> None:
 
     @app.post("/api/logout")
     def api_logout():
-        """Disconnect from CatalogOne only — preserve LDAP app login."""
-        app_user = session.get(APP_USER_SESSION_KEY)
-        app_user_display = session.get(APP_USER_DISPLAY_KEY)
-        clear_import_context(session)
-        session.clear()
-        if app_user:
-            session[APP_USER_SESSION_KEY] = app_user
-            session[APP_USER_DISPLAY_KEY] = app_user_display
+        """Disconnect from CatalogOne only — preserve LDAP app login and import context."""
+        clear_catalogone_login()
+        session.modified = True
         return jsonify({"status": "ok"})
 
     @app.get("/api/session")

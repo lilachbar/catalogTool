@@ -25,9 +25,9 @@ from catalog_tool.web.helpers import (
 from catalog_tool.web.push_service import publish_business_request, push_to_catalog
 from catalog_tool.web.import_context import (
     get_import_context,
+    get_zip_analyze_entities,
     resolve_compare_entities,
     store_import_file,
-    store_zip_entity_refs_from_path,
 )
 from catalog_tool.web.mcp_client import McpToolError, import_catalog_data_via_mcp
 from catalog_tool.web.mcp_catalog import (
@@ -187,11 +187,6 @@ def register(app: Flask) -> None:
                     filename=zip_upload.filename,
                     data=zip_bytes,
                 )
-                try:
-                    store_zip_entity_refs_from_path(session, import_ctx["path"])
-                except ValueError:
-                    pass
-
             catalogone_env = _require_mcp_env()
             business_request_id = create_business_request_via_mcp(
                 name=name,
@@ -225,6 +220,11 @@ def register(app: Flask) -> None:
                 payload["message"] = (
                     "Business request created and zip imported via MCP."
                 )
+                compare_entities = get_zip_analyze_entities(session) or resolve_compare_entities(
+                    session, None
+                )
+                if compare_entities:
+                    payload["compare_entities"] = compare_entities
             elif import_type == "excel":
                 payload["import_type"] = "excel"
                 payload["message"] = (
@@ -306,7 +306,10 @@ def register(app: Flask) -> None:
         if not entities:
             return jsonify(
                 {
-                    "error": "No entities to compare — choose a zip in Step 1 first",
+                    "error": (
+                        "No entities to compare — validate the zip in Step 1 first, "
+                        "then create the business request and import again."
+                    ),
                 }
             ), 400
 

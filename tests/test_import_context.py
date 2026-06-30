@@ -89,3 +89,35 @@ def test_store_zip_analyze_entities_sidecar():
 
     clear_import_context(session)
     assert get_zip_analyze_entities(session) is None
+
+
+def test_store_import_preserves_analyze_entities_when_reparse_fails():
+    session: dict = {}
+    good_zip = _zip_bytes()
+    store_import_file(
+        session,
+        import_type="zip",
+        filename="catalog-export.zip",
+        data=good_zip,
+    )
+    entities = [
+        {
+            "entity_id": "00000000-0000-4000-8000-000000000001",
+            "entity_type": "promotion",
+            "title": "Sample promo",
+        }
+    ]
+    store_zip_analyze_entities(session, entities)
+
+    bad_zip = io.BytesIO()
+    with zipfile.ZipFile(bad_zip, "w") as archive:
+        archive.writestr("manifest.json", "{}")
+    store_import_file(
+        session,
+        import_type="zip",
+        filename="catalog-export.zip",
+        data=bad_zip.getvalue(),
+    )
+
+    loaded = get_zip_analyze_entities(session)
+    assert loaded == entities

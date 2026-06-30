@@ -155,7 +155,11 @@ class McpCatalogAdapter:
                 catalogone_env=self._env,
             )
         except McpToolError as exc:
-            if "already exists" in str(exc).lower():
+            msg = str(exc).lower()
+            if "already exists" in msg:
+                return
+            if "404" in msg or "not found" in msg:
+                # Import usually creates local context; some environments return 404 when it already exists.
                 return
             raise
 

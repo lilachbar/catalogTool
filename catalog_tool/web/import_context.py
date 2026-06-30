@@ -16,6 +16,11 @@ EXCEL_EXTENSIONS = (".xlsx", ".xlsm")
 ENTITIES_SIDECAR_SUFFIX = ".entities.json"
 
 
+def _mark_session_modified(session: dict[str, Any]) -> None:
+    if hasattr(session, "modified"):
+        session.modified = True
+
+
 def _extension(name: str) -> str:
     lower = (name or "").lower()
     for ext in ZIP_EXTENSIONS + EXCEL_EXTENSIONS:
@@ -62,6 +67,10 @@ def store_import_file(
         if ext not in EXCEL_EXTENSIONS:
             raise ValueError("DG import requires an .xlsx or .xlsm workbook")
 
+    prior_ctx = get_import_context(session)
+    prior_entities = get_zip_analyze_entities(session)
+    prior_filename = (prior_ctx or {}).get("filename")
+
     clear_import_context(session)
 
     suffix = ext or (".zip" if import_type == "zip" else ".xlsx")
@@ -81,8 +90,41 @@ def store_import_file(
         "path": path,
     }
     session[IMPORT_SESSION_KEY] = ctx
-    session.modified = True
+    _mark_session_modified(session)
+
+    if import_type == "zip":
+        ensure_zip_entity_refs(
+            session,
+            path,
+            prior_entities=prior_entities,
+            prior_filename=prior_filename,
+            new_filename=ctx["filename"],
+        )
+
     return ctx
+
+
+def ensure_zip_entity_refs(
+    session: dict[str, Any],
+    zip_path: str,
+    *,
+    prior_entities: list[dict[str, Any]] | None = None,
+    prior_filename: str | None = None,
+    new_filename: str | None = None,
+) -> list[dict[str, Any]]:
+    """Parse entity refs from a stored zip, restoring prior analyze refs when parse fails."""
+    try:
+        return store_zip_entity_refs_from_path(session, zip_path)
+    except ValueError:
+        if (
+            prior_entities
+            and prior_filename
+            and new_filename
+            and prior_filename == new_filename
+        ):
+            store_zip_analyze_entities(session, prior_entities)
+            return prior_entities
+        raise
 
 
 def store_zip_analyze_entities(session: dict[str, Any], entities: list[dict[str, Any]]) -> None:
@@ -97,7 +139,7 @@ def store_zip_analyze_entities(session: dict[str, Any], entities: list[dict[str,
 
     ctx["entities_path"] = entities_path
     session[IMPORT_SESSION_KEY] = ctx
-    session.modified = True
+    _mark_session_modified(session)
 
 
 def store_zip_entity_refs_from_path(session: dict[str, Any], zip_path: str) -> list[dict[str, Any]]:
