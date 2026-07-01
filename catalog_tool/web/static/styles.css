@@ -168,6 +168,9 @@ body.is-resizing-sidebar * {
   --sidebar-row-font: 0.8125rem;
   --sidebar-icon-slot: 15px;
 
+  container-type: inline-size;
+  container-name: env-sidebar;
+
   position: sticky;
   top: 0;
   height: 100vh;
@@ -544,11 +547,17 @@ body.is-resizing-sidebar * {
   align-items: center;
   justify-content: space-between;
   gap: 0.5rem;
+  min-width: 0;
   padding: 0 0.125rem;
 }
 
 .env-sidebar-title {
   margin: 0;
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   font-size: 0.6875rem;
   font-weight: 700;
   letter-spacing: 0.06em;
@@ -581,6 +590,15 @@ body.is-resizing-sidebar * {
 
 .btn.env-refresh-btn {
   padding: 0 0.625rem 0 0.5rem;
+}
+
+.btn.env-refresh-btn.is-icon-only {
+  width: 1.75rem;
+  padding: 0;
+}
+
+.btn.env-refresh-btn.is-icon-only .env-toolbar-label {
+  display: none;
 }
 
 .btn.env-toolbar-btn:not(.env-refresh-btn) {
@@ -2122,6 +2140,27 @@ code {
     display: none;
   }
 
+  .merge-steps.workflow-page-steps,
+  .merge-steps.mcp-page-steps {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+
+  .merge-steps.workflow-page-steps::-webkit-scrollbar,
+  .merge-steps.mcp-page-steps::-webkit-scrollbar {
+    display: none;
+  }
+
+  .merge-steps.workflow-page-steps .merge-step-connector,
+  .merge-steps.mcp-page-steps .merge-step-connector {
+    display: block;
+    flex: 0 0 1.5rem;
+    min-width: 1.5rem;
+    max-width: 2rem;
+  }
+
   .merge-card {
     padding: 1.25rem;
   }
@@ -2182,7 +2221,6 @@ code {
 
 .chat-attach-btn {
   color: var(--accent);
-}
 }
 
 .chat-attach-btn:hover {
@@ -3194,16 +3232,8 @@ body.is-resizing-chat-panel.is-moving-chat-panel * {
   }
 }
 
-/* ── MCP tools runner ───────────────────────────────────────────── */
+/* ── MCP tools runner (layout inherits from .workflow-workbench) ── */
 .mcp-tools-workbench {
-  display: grid;
-  grid-template-columns: minmax(280px, 340px) minmax(0, 1fr);
-  grid-template-rows: minmax(0, 1fr);
-  gap: 0.75rem;
-  flex: 1;
-  min-height: 0;
-  width: 100%;
-  overflow: hidden;
   border: none;
   border-radius: 0;
   background: transparent;
@@ -3218,15 +3248,6 @@ body.is-resizing-chat-panel.is-moving-chat-panel * {
   --sidebar-row-pl: 0.625rem;
   --sidebar-row-font: 0.8125rem;
   --sidebar-icon-slot: 15px;
-
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-  padding: 1rem;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  min-height: 0;
-  background: var(--bg-elevated);
 }
 
 .mcp-tools-sidebar-head {
@@ -3310,6 +3331,7 @@ body.is-resizing-chat-panel.is-moving-chat-panel * {
 }
 
 .mcp-tools-list {
+  flex: 1 1 auto;
   overflow: auto;
   min-height: 0;
   padding-right: 0.125rem;
@@ -3407,28 +3429,16 @@ body.is-resizing-chat-panel.is-moving-chat-panel * {
 }
 
 .mcp-tools-main {
-  display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  justify-content: flex-start;
-  flex: 1;
   min-height: 0;
-  padding: 0;
   overflow: hidden;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--bg-elevated);
 }
 
 .mcp-tools-main-scroll {
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
-  padding: 1rem;
   display: flex;
   flex-direction: column;
   align-items: stretch;
   justify-content: flex-start;
+  gap: 0.875rem;
 }
 
 .mcp-tools-empty-detail {
@@ -3715,16 +3725,6 @@ body.is-resizing-chat-panel.is-moving-chat-panel * {
 }
 
 @media (max-width: 900px) {
-  .mcp-tools-workbench {
-    grid-template-columns: 1fr;
-    min-height: 0;
-    padding: 0.75rem;
-  }
-
-  .mcp-tools-sidebar {
-    max-height: 240px;
-  }
-
   .mcp-tool-fields {
     grid-template-columns: 1fr;
   }
@@ -4284,11 +4284,6 @@ html.session-resetting body {
   border-bottom: 1px solid var(--border);
 }
 
-  .mcp-tools-sidebar {
-    max-height: 40vh;
-  }
-}
-
 /* ── Workflow pages (Upload / DG Import) — MCP-style workbench ── */
 .workflow-panel {
   padding: 0;
@@ -4328,19 +4323,65 @@ html.session-resetting body {
 
 .workflow-workbench {
   display: grid;
-  grid-template-columns: minmax(280px, 340px) minmax(0, 1fr);
+  grid-template-columns: var(--workflow-sidebar-width, 300px) 5px minmax(0, 1fr);
   grid-template-rows: minmax(0, 1fr);
-  gap: 0.75rem;
+  gap: 0;
   flex: 1;
   min-height: 0;
   width: 100%;
   overflow: hidden;
 }
 
+body.workflow-main-pinned .workflow-workbench {
+  grid-template-columns: var(--workflow-sidebar-width, 300px) 5px var(--workflow-main-width, minmax(0, 1fr));
+}
+
 .workflow-workbench > .workflow-sidebar,
 .workflow-workbench > .workflow-main {
   min-height: 0;
   min-width: 0;
+}
+
+.workflow-sidebar-resizer {
+  position: relative;
+  z-index: 2;
+  margin: 0 -2px;
+  cursor: col-resize;
+  touch-action: none;
+  background: transparent;
+  transition: background var(--transition);
+}
+
+.workflow-sidebar-resizer::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 1px;
+  transform: translateX(-50%);
+  background: var(--border);
+  transition: background var(--transition), width var(--transition);
+}
+
+.workflow-sidebar-resizer:hover::after,
+.workflow-sidebar-resizer:focus-visible::after,
+.workflow-sidebar-resizer.is-dragging::after {
+  width: 3px;
+  background: var(--accent);
+}
+
+.workflow-sidebar-resizer:focus-visible {
+  outline: none;
+}
+
+body.is-resizing-workflow-sidebar {
+  cursor: col-resize;
+  user-select: none;
+}
+
+body.is-resizing-workflow-sidebar * {
+  cursor: col-resize !important;
 }
 
 .workflow-sidebar {
@@ -4351,6 +4392,7 @@ html.session-resetting body {
   border: 1px solid var(--border);
   border-radius: var(--radius);
   min-height: 0;
+  height: 100%;
   background: var(--bg-elevated);
 }
 
@@ -4382,6 +4424,7 @@ html.session-resetting body {
   flex-direction: column;
   gap: 0.375rem;
   overflow: auto;
+  flex: 1 1 auto;
   min-height: 0;
   margin: 0;
   padding: 0;
@@ -4477,6 +4520,7 @@ html.session-resetting body {
   flex: 1;
   min-height: 0;
   min-width: 0;
+  height: 100%;
   padding: 0;
   overflow: hidden;
   border: 1px solid var(--border);
@@ -4507,6 +4551,47 @@ html.session-resetting body {
   min-width: 0;
   min-height: auto;
   flex: 0 0 auto;
+}
+
+.workflow-workbench .workflow-main-scroll {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  flex: 1 1 auto;
+  min-height: 0;
+  height: 100%;
+  max-height: 100%;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-gutter: stable;
+  scroll-padding-bottom: 2rem;
+}
+
+.workflow-workbench .workflow-step-panel {
+  min-height: auto;
+  width: 100%;
+  flex: 0 0 auto;
+}
+
+.workflow-workbench .workflow-step-panel:not(.is-active) {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  visibility: hidden;
+  pointer-events: none;
+  user-select: none;
+  z-index: 0;
+}
+
+.workflow-workbench .workflow-step-panel.is-active {
+  position: relative;
+  visibility: visible;
+  pointer-events: auto;
+  z-index: 1;
 }
 
 .workflow-step-panel[hidden] {
@@ -4621,23 +4706,106 @@ html.session-resetting body {
 }
 
 .workflow-shell.has-compare-open {
+  --br-compare-row-h: 2.125rem;
+  --br-compare-thead-h: 2.5rem;
+  --br-compare-visible-rows: 20;
   gap: 0.5rem;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .workflow-shell.has-compare-open .workflow-workbench {
-  min-height: auto;
-  grid-template-rows: auto;
-  align-items: start;
+  flex: 0 0 auto;
+  min-height: 0;
+  max-height: min(28vh, 13rem);
+  grid-template-rows: minmax(0, 1fr);
+  align-items: stretch;
+  overflow: hidden;
 }
 
 .workflow-shell.has-compare-open .workflow-main,
 .workflow-shell.has-compare-open .workflow-sidebar {
-  min-height: auto;
+  min-height: 0;
+  height: 100%;
+  max-height: 100%;
+}
+
+.workflow-shell.has-compare-open .workflow-main-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: 100%;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-gutter: stable;
 }
 
 .workflow-shell.has-compare-open .br-compare-results-full {
+  flex: 1 1 auto;
+  min-height: min(28rem, 55vh);
+  display: flex;
+  flex-direction: column;
   margin-top: 0;
   padding-top: 0.625rem;
+  overflow: hidden;
+}
+
+.workflow-shell.has-compare-open .br-compare-panel {
+  flex: 1 1 auto;
+  min-height: 0;
+  height: 100%;
+  max-height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.workflow-shell.has-compare-open .br-compare-panel-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: none;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.workflow-shell.has-compare-open .br-compare-panel-body > .br-compare-stat-grid,
+.workflow-shell.has-compare-open .br-compare-panel-body > .br-compare-toolbar,
+.workflow-shell.has-compare-open .br-compare-panel-body > .br-compare-stat-hint,
+.workflow-shell.has-compare-open .br-compare-panel-body > .analyze-badge-row,
+.workflow-shell.has-compare-open .br-compare-panel-body > .analyze-step-note,
+.workflow-shell.has-compare-open .br-compare-panel-body > .analyze-error-msg {
+  flex-shrink: 0;
+}
+
+.workflow-shell.has-compare-open .br-compare-entities {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.workflow-shell.has-compare-open .br-compare-entities .br-compare-toolbar {
+  flex-shrink: 0;
+}
+
+.workflow-shell.has-compare-open .br-compare-entities .analyze-section-title {
+  flex-shrink: 0;
+  margin-bottom: 0.375rem;
+}
+
+.workflow-shell.has-compare-open .br-compare-table-wrap {
+  flex: 1 1 auto;
+  min-height: 12rem;
+  max-height: none;
+  overflow-x: auto;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-gutter: stable;
 }
 
 .br-compare-results-section[hidden] {
@@ -4658,7 +4826,22 @@ html.session-resetting body {
 
 .br-compare-results-full .br-compare-panel {
   max-height: none;
-  height: auto;
+}
+
+.workflow-shell.has-compare-open .br-compare-results-full .br-compare-panel {
+  height: 100%;
+}
+
+.br-compare-results-full .br-compare-panel-body {
+  max-height: none;
+}
+
+.workflow-shell.has-compare-open .br-compare-results-full .br-compare-panel-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
 
 .br-compare-panel.is-error {
@@ -4695,8 +4878,19 @@ html.session-resetting body {
 }
 
 .br-compare-results-full .br-compare-panel-body {
-  overflow: visible;
   max-height: none;
+}
+
+.app-page-body #pushView .workflow-shell.has-compare-open .br-compare-panel-body,
+.app-page-body #dgImportView .workflow-shell.has-compare-open .br-compare-panel-body {
+  overflow: hidden;
+}
+
+.app-page-body #pushView .workflow-shell.has-compare-open .br-compare-entities,
+.app-page-body #dgImportView .workflow-shell.has-compare-open .br-compare-entities {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .br-compare-json {
@@ -4722,22 +4916,40 @@ html.session-resetting body {
 }
 
 .workflow-main-scroll.has-compare-results,
-#page.has-compare-results {
+#pushView.has-compare-results {
   scroll-padding-bottom: 2rem;
 }
 
 .br-compare-results-section .br-compare-table-wrap {
   width: 100%;
   min-width: 0;
-  max-height: none;
-  overflow: visible;
+  max-height: min(480px, 45vh);
+  overflow-x: auto;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-gutter: stable;
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   background: var(--bg-elevated);
 }
 
 .br-compare-results-full .br-compare-table-wrap {
+  max-height: min(480px, 45vh);
   overflow-x: auto;
+  overflow-y: auto;
+}
+
+.workflow-shell.has-compare-open .br-compare-results-full .br-compare-table-wrap {
+  max-height: none;
+}
+
+.br-compare-table-wrap .br-compare-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  background: var(--bg-elevated);
+  box-shadow: 0 1px 0 var(--border);
 }
 
 .br-compare-results-section .br-compare-table {
@@ -4773,6 +4985,10 @@ html.session-resetting body {
     grid-template-rows: auto minmax(0, 1fr);
   }
 
+  .workflow-sidebar-resizer {
+    display: none;
+  }
+
   .workflow-sidebar {
     max-height: none;
   }
@@ -4782,6 +4998,11 @@ html.session-resetting body {
     height: auto;
     max-height: none;
     min-height: calc(100vh - 9.5rem);
+  }
+
+  .app-page-body #pushView .workflow-panel,
+  .app-page-body #dgImportView .workflow-panel {
+    min-height: auto;
   }
 }
 
@@ -4850,10 +5071,15 @@ html.session-resetting body {
 
 .merge-hero-lead {
   margin: 0.625rem 0 0;
-  max-width: 36rem;
+  max-width: none;
   font-size: 0.9375rem;
   color: var(--text-secondary);
   line-height: 1.55;
+}
+
+.merge-hero-text {
+  flex: 1;
+  min-width: 0;
 }
 
 .merge-steps {
@@ -4898,6 +5124,27 @@ html.session-resetting body {
   height: 1px;
   margin: 0 0.75rem;
   background: var(--border-strong);
+}
+
+.merge-steps.workflow-page-steps,
+.merge-steps.mcp-page-steps {
+  flex-wrap: nowrap;
+  justify-content: center;
+  gap: 0;
+}
+
+.merge-steps.workflow-page-steps .merge-step,
+.merge-steps.mcp-page-steps .merge-step {
+  flex-shrink: 0;
+}
+
+.merge-steps.workflow-page-steps .merge-step-connector,
+.merge-steps.mcp-page-steps .merge-step-connector {
+  flex: 1 1 2.5rem;
+  width: auto;
+  min-width: 1.25rem;
+  max-width: 4.5rem;
+  margin: 0 0.5rem;
 }
 
 .merge-cards {
@@ -5450,7 +5697,11 @@ html.session-resetting body {
 
 .br-compare-table-wrap {
   max-height: min(480px, 45vh);
-  overflow: auto;
+  overflow-x: auto;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-gutter: stable;
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   background: var(--bg-elevated);
@@ -5477,7 +5728,7 @@ html.session-resetting body {
 }
 
 .br-compare-stat-hint {
-  margin-top: 0.35rem;
+  margin: 0 0 0.5rem;
 }
 
 .br-compare-status-group + .br-compare-status-group {
@@ -5931,19 +6182,110 @@ html.session-resetting body {
 .app-page-body .app-shell {
   padding: 0.875rem;
   gap: 0;
-  min-height: 100vh;
+  height: 100vh;
   max-height: 100vh;
+  min-height: 0;
   overflow: hidden;
+  grid-template-rows: minmax(0, 1fr);
+  align-items: stretch;
+}
+
+.app-page-body .app-shell > .env-sidebar,
+.app-page-body .app-shell > .sidebar-resizer,
+.app-page-body .app-shell > .app-main {
+  min-height: 0;
 }
 
 .app-page-body .env-sidebar {
   margin: 0.25rem 0;
-  height: calc(100vh - 1.75rem);
+  height: 100%;
+  max-height: calc(100vh - 1.75rem);
   background: var(--app-card);
   border: none;
   border-radius: 24px;
   box-shadow: var(--app-shadow);
   padding: 1.25rem 1rem;
+}
+
+/* Agentic panel — match action sidebar card */
+.app-page-body .chat-panel:not(.chat-panel-popup) {
+  top: calc(0.875rem + 0.25rem);
+  right: 0.875rem;
+  height: calc(100vh - 1.75rem);
+  width: min(var(--chat-panel-width, 420px), calc(100vw - 1.75rem));
+  border: none;
+  border-radius: 24px;
+  box-shadow: var(--app-shadow);
+  background: var(--app-card);
+  overflow: hidden;
+}
+
+.app-page-body .chat-panel-head {
+  padding: 1.25rem 1rem 1rem;
+  border-bottom-color: var(--app-border);
+}
+
+.app-page-body .chat-panel-eyebrow {
+  letter-spacing: 0.04em;
+  color: var(--app-blue);
+  line-height: 1.2;
+}
+
+.app-page-body .chat-panel-title {
+  font-size: 1.125rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--app-text);
+  line-height: 1.2;
+}
+
+.app-page-body .chat-panel-action {
+  color: var(--app-muted);
+}
+
+.app-page-body .chat-panel-action:hover:not(:disabled) {
+  color: var(--app-text);
+}
+
+.app-page-body .chat-messages {
+  background: var(--app-card);
+}
+
+.app-page-body .chat-message {
+  border-color: var(--app-border);
+  background: var(--app-surface-soft);
+  border-radius: 16px;
+}
+
+.app-page-body .chat-message-user {
+  background: rgba(59, 130, 246, 0.08);
+  border-color: rgba(59, 130, 246, 0.2);
+}
+
+.app-page-body .chat-composer {
+  border-top-color: var(--app-border);
+  background: var(--app-card);
+  padding: 0.75rem 1rem 1.25rem;
+}
+
+.app-page-body .chat-composer-box {
+  border-color: var(--app-border);
+  background: var(--app-surface-soft);
+  border-radius: 16px;
+}
+
+.app-page-body .chat-composer-box:focus-within {
+  border-color: rgba(59, 130, 246, 0.35);
+}
+
+.app-page-body .chat-panel-resizer::after {
+  background: rgba(59, 130, 246, 0.18);
+}
+
+.app-page-body .chat-panel-resizer:hover::after,
+.app-page-body .chat-panel-resizer:focus-visible::after,
+.app-page-body .chat-panel-resizer.is-dragging::after {
+  background: rgba(59, 130, 246, 0.45);
 }
 
 .app-page-body .sidebar-brand {
@@ -6093,84 +6435,43 @@ html.session-resetting body {
   background: rgba(59, 130, 246, 0.45);
 }
 
+.app-page-body .workflow-sidebar-resizer::after {
+  background: var(--app-border);
+}
+
+.app-page-body .workflow-sidebar-resizer:hover::after,
+.app-page-body .workflow-sidebar-resizer:focus-visible::after,
+.app-page-body .workflow-sidebar-resizer.is-dragging::after {
+  background: rgba(59, 130, 246, 0.45);
+}
+
 .app-page-body .page {
   display: flex;
   flex-direction: column;
   flex: 1;
   min-height: 0;
-  max-height: 100vh;
-  overflow-x: hidden;
-  overflow-y: auto;
-  overscroll-behavior: auto;
-  scrollbar-gutter: stable;
+  max-height: 100%;
+  max-width: none;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  overscroll-behavior: contain;
   padding: 0.5rem 1rem 0.75rem;
 }
 
-.app-page-body #pushView.app-view-fill,
-.app-page-body #pushView .app-view-body,
-.app-page-body #pushView .workflow-panel,
-.app-page-body #pushView .workflow-shell {
-  flex: none;
-  min-height: auto;
-  overflow: visible;
-  height: auto;
-}
-
-.app-page-body #pushView .workflow-shell.has-compare-open .workflow-workbench {
-  min-height: auto;
-  grid-template-rows: auto;
-  align-items: start;
-}
-
-.app-page-body #pushView .workflow-shell.has-compare-open .workflow-main {
-  min-height: auto;
-}
-
-.app-page-body #pushView .workflow-shell.has-compare-open .workflow-sidebar {
-  min-height: auto;
-}
-
-.app-page-body #pushView .workflow-workbench {
-  flex: none;
-  min-height: min(520px, calc(100vh - 18rem));
-  overflow: visible;
-}
-
-.app-page-body #pushView .workflow-main {
-  overflow: visible;
-  min-height: min(480px, calc(100vh - 20rem));
-}
-
-.app-page-body #pushView .workflow-main-scroll {
-  overflow: visible;
-  max-height: none;
-  flex: none;
-}
-
-.app-page-body .page.has-compare-results {
-  scroll-padding-bottom: 2rem;
-}
-
-.app-page-body .app-main {
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-  flex: 1;
+.app-page-body .main-connection-hint {
+  flex-shrink: 0;
+  position: relative;
+  top: auto;
+  z-index: 60;
+  margin: 0 0 0.75rem;
+  border-radius: 16px;
+  border: 1px solid var(--app-border);
+  border-left-width: 4px;
+  box-shadow: var(--app-shadow-sm);
 }
 
 .app-page-body .page > .app-view-fill {
-  flex: none;
-  min-height: auto;
-  overflow: visible;
-}
-
-.app-page-body #pushView.app-view-fill {
-  flex: none;
-  min-height: auto;
-  overflow: visible;
-}
-
-.app-page-body .app-view-body {
   flex: 1;
   min-height: 0;
   overflow: hidden;
@@ -6178,11 +6479,206 @@ html.session-resetting body {
   flex-direction: column;
 }
 
-.app-page-body #pushView .app-view-body {
-  flex: none;
-  min-height: auto;
-  overflow: visible;
+.app-page-body #pushView.app-view-fill,
+.app-page-body #dgImportView.app-view-fill,
+.app-page-body #mcpToolsView.app-view-fill {
+  flex: 1;
+  width: 100%;
+  min-height: 0;
+  overflow: hidden;
+  justify-content: flex-start;
 }
+
+.app-page-body #pushView .app-view-body,
+.app-page-body #dgImportView .app-view-body,
+.app-page-body #mcpToolsView .app-view-body {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.app-page-body #pushView .workflow-panel,
+.app-page-body #dgImportView .workflow-panel,
+.app-page-body #mcpToolsView .workflow-panel {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.app-page-body #pushView .workflow-shell,
+.app-page-body #dgImportView .workflow-shell,
+.app-page-body #mcpToolsView .workflow-shell,
+.app-page-body #mcpToolsView .mcp-tools-shell {
+  flex: 1;
+  min-height: 0;
+  max-height: none;
+  overflow: hidden;
+  padding: 0.5rem 1rem 0.75rem;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  gap: 0.75rem;
+}
+
+.app-page-body #pushView .workflow-shell.has-compare-open,
+.app-page-body #dgImportView .workflow-shell.has-compare-open {
+  flex: 1;
+  min-height: 0;
+  max-height: none;
+  overflow: hidden;
+}
+
+.app-page-body #pushView.has-compare-results .workflow-page-hero,
+.app-page-body #pushView.has-compare-results .workflow-page-steps {
+  display: none;
+}
+
+.app-page-body #pushView.has-compare-results .mcp-tools-status-line {
+  flex-shrink: 0;
+}
+
+.app-page-body #pushView.has-compare-results.app-view-fill {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.app-page-body #pushView.has-compare-results .app-view-body,
+.app-page-body #pushView.has-compare-results .workflow-panel {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.app-page-body #pushView .workflow-shell.has-compare-open .workflow-workbench,
+.app-page-body #dgImportView .workflow-shell.has-compare-open .workflow-workbench {
+  align-items: stretch;
+  flex: 0 0 auto;
+  max-height: min(28vh, 13rem);
+  overflow: hidden;
+}
+
+.app-page-body #pushView .workflow-shell.has-compare-open .br-compare-results-full,
+.app-page-body #dgImportView .workflow-shell.has-compare-open .br-compare-results-full {
+  flex: 1 1 auto;
+  min-height: min(28rem, 55vh);
+}
+
+.app-page-body #pushView .workflow-shell.has-compare-open .br-compare-table-wrap,
+.app-page-body #dgImportView .workflow-shell.has-compare-open .br-compare-table-wrap {
+  flex: 1 1 auto;
+  min-height: 12rem;
+  max-height: none;
+  overflow-x: auto;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+
+.app-page-body #pushView .workflow-shell.has-compare-open .workflow-main,
+.app-page-body #pushView .workflow-shell.has-compare-open .workflow-sidebar,
+.app-page-body #dgImportView .workflow-shell.has-compare-open .workflow-main,
+.app-page-body #dgImportView .workflow-shell.has-compare-open .workflow-sidebar {
+  min-height: 0;
+  height: 100%;
+  max-height: 100%;
+}
+
+.app-page-body #pushView .workflow-shell.has-compare-open .workflow-main-scroll,
+.app-page-body #dgImportView .workflow-shell.has-compare-open .workflow-main-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: 100%;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+
+.app-page-body #pushView .workflow-workbench,
+.app-page-body #dgImportView .workflow-workbench,
+.app-page-body #mcpToolsView .workflow-workbench,
+.app-page-body #mcpToolsView .mcp-tools-workbench {
+  flex: 1;
+  width: 100%;
+  min-height: 0;
+  grid-template-rows: minmax(0, 1fr);
+  align-items: stretch;
+  align-content: stretch;
+  overflow: hidden;
+}
+
+.app-page-body #pushView .workflow-main,
+.app-page-body #dgImportView .workflow-main,
+.app-page-body #mcpToolsView .workflow-main,
+.app-page-body #mcpToolsView .mcp-tools-main {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-height: 0;
+  height: 100%;
+}
+
+.app-page-body #pushView .workflow-sidebar,
+.app-page-body #dgImportView .workflow-sidebar,
+.app-page-body #mcpToolsView .workflow-sidebar,
+.app-page-body #mcpToolsView .mcp-tools-sidebar {
+  align-self: stretch;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.app-page-body #pushView .workflow-main-scroll,
+.app-page-body #dgImportView .workflow-main-scroll,
+.app-page-body #mcpToolsView .workflow-main-scroll,
+.app-page-body #mcpToolsView .mcp-tools-main-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  height: 100%;
+  max-height: 100%;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-gutter: stable;
+  scroll-padding-bottom: 2.5rem;
+  padding-bottom: 2.5rem;
+  gap: 0.875rem;
+}
+
+.app-page-body .workflow-shell .mcp-tools-status-line,
+.app-page-body .mcp-tools-shell .mcp-tools-status-line {
+  margin: 0;
+  flex-shrink: 0;
+}
+
+.app-page-body .mcp-tools-empty-detail {
+  flex: 0 1 auto;
+  min-height: auto;
+  margin: 0;
+  max-width: none;
+  padding: 2rem 1rem;
+}
+
+.app-page-body #pushView.has-compare-results {
+  scroll-padding-bottom: 2rem;
+}
+
+.app-page-body .app-main {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  max-height: 100%;
+  height: 100%;
+  flex: 1;
+  overflow: hidden;
+}
+
 
 .app-page-body .footer {
   flex-shrink: 0;
@@ -6289,12 +6785,6 @@ html.session-resetting body {
   border-radius: 999px;
 }
 
-.app-page-body .main-connection-hint {
-  border-radius: 16px;
-  border: 1px solid var(--app-border);
-  border-left-width: 4px;
-}
-
 .app-page-body .main-connection-bar-actions .icon-btn {
   background: var(--app-card);
   border-color: var(--app-border);
@@ -6343,10 +6833,13 @@ html.session-resetting body {
 
 .app-page-body .merge-hero-title {
   color: var(--app-text);
+  font-size: 1.625rem;
+  line-height: 1.2;
 }
 
 .app-page-body .merge-hero-lead {
   color: var(--app-muted);
+  max-width: none;
 }
 
 .app-page-body .merge-steps {
@@ -6526,37 +7019,37 @@ body:has(.connection-modal[open]) .app-bg-shape::after {
 .app-page-body .merge-hero.workflow-page-hero {
   background: transparent;
   border-bottom: 1px solid var(--app-border);
-  padding: 1.5rem 1.75rem 1.125rem;
+  padding: 1.25rem 1.25rem 1rem;
+  flex-shrink: 0;
+  gap: 1rem;
 }
 
 .app-page-body .merge-steps.mcp-page-steps,
 .app-page-body .merge-steps.workflow-page-steps {
   background: var(--app-surface-soft);
   border-bottom-color: var(--app-border);
-  padding: 0.875rem 1.75rem;
+  padding: 0.875rem 1.75rem 1rem;
+  margin-bottom: 0.75rem;
+  flex-shrink: 0;
 }
 
-.app-page-body #mcpToolsView .workflow-panel,
-.app-page-body #pushView .workflow-panel,
-.app-page-body #dgImportView .workflow-panel {
-  flex: 1;
-  min-height: 0;
-  height: auto;
-  max-height: none;
-  width: 100%;
-}
-
-.app-page-body #pushView .workflow-panel {
-  flex: none;
-  min-height: auto;
-  overflow: visible;
+body.app-page-body.is-chat-docked .app-main {
+  padding-right: calc(min(var(--chat-panel-width, 420px), calc(100vw - 1.75rem)) + 1.375rem);
+  transition: padding-right 0.15s ease;
 }
 
 .app-page-body .workflow-sidebar,
-.app-page-body .workflow-main {
+.app-page-body .workflow-main,
+.app-page-body .mcp-tools-sidebar,
+.app-page-body .mcp-tools-main {
   background: var(--app-surface-soft);
   border-color: var(--app-border);
   border-radius: 16px;
+}
+
+.app-page-body .workflow-sidebar-title,
+.app-page-body .mcp-tools-sidebar-title {
+  color: var(--app-muted);
 }
 
 .app-page-body .workflow-step-btn {
@@ -6596,6 +7089,17 @@ body:has(.connection-modal[open]) .app-bg-shape::after {
 .app-page-body .br-compare-results-section .br-compare-table-wrap {
   background: var(--app-card);
   border-color: var(--app-border);
+}
+
+.app-page-body .workflow-shell.has-compare-open .br-compare-table-wrap {
+  background: var(--app-card);
+  border-color: var(--app-border);
+}
+
+.app-page-body .br-compare-table-wrap .br-compare-table thead th {
+  background: var(--app-card);
+  box-shadow: 0 1px 0 var(--app-border);
+  z-index: 3;
 }
 
 .app-page-body .workflow-main-scroll .mcp-tool-form-card,
@@ -6715,6 +7219,19 @@ body:has(.connection-modal[open]) .app-bg-shape::after {
     height: auto;
     border-radius: 0;
     box-shadow: none;
+  }
+
+  .app-page-body .chat-panel:not(.chat-panel-popup) {
+    top: 0;
+    right: 0;
+    height: 100vh;
+    width: min(var(--chat-panel-width, 420px), 100vw);
+    border-radius: 0;
+    box-shadow: none;
+  }
+
+  body.app-page-body.is-chat-docked .app-main {
+    padding-right: min(var(--chat-panel-width, 420px), 100vw);
   }
 
   .app-page-body .page {

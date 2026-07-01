@@ -47,6 +47,47 @@ const MAX_ATTACHMENT_BYTES = 5 * 1024 * 1024;
 const ATTACHMENT_TEXT_EXTENSIONS = new Set([
   ".txt", ".md", ".json", ".csv", ".xml", ".yaml", ".yml", ".log", ".py", ".js", ".ts", ".jsx", ".tsx",
 ]);
+const ATTACHMENT_IMAGE_EXTENSIONS = new Set([
+  ".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp", ".svg",
+]);
+const IMAGE_EXTENSION_MIME_TYPES = {
+  ".jpg": "image/jpeg",
+  ".jpeg": "image/jpeg",
+  ".png": "image/png",
+  ".gif": "image/gif",
+  ".webp": "image/webp",
+  ".bmp": "image/bmp",
+  ".svg": "image/svg+xml",
+};
+
+/** crypto.randomUUID() is only available in secure contexts (HTTPS / localhost). */
+function newAttachmentId() {
+  if (globalThis.crypto?.randomUUID) {
+    return globalThis.crypto.randomUUID();
+  }
+  return `att-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+function fileExtension(name) {
+  if (!name?.includes(".")) {
+    return "";
+  }
+  return name.slice(name.lastIndexOf(".")).toLowerCase();
+}
+
+function isImageAttachment(file) {
+  if (file.type?.startsWith("image/")) {
+    return true;
+  }
+  return ATTACHMENT_IMAGE_EXTENSIONS.has(fileExtension(file.name));
+}
+
+function imageMimeType(file) {
+  if (file.type?.startsWith("image/")) {
+    return file.type;
+  }
+  return IMAGE_EXTENSION_MIME_TYPES[fileExtension(file.name)] || "application/octet-stream";
+}
 
 function clampChatWidth(width, viewportWidth = window.innerWidth) {
   const max = Math.min(CHAT_WIDTH_MAX, Math.max(CHAT_WIDTH_MIN, viewportWidth - 80));
@@ -59,6 +100,10 @@ function clampDetachedHeight(height) {
 }
 
 function readSavedChatWidth() {
+  const layout = window.catalogToolLayoutCouple;
+  if (layout) {
+    return layout.readChatWidth();
+  }
   const saved = Number(localStorage.getItem(CHAT_WIDTH_STORAGE_KEY));
   if (Number.isFinite(saved) && saved > 0) {
     return clampChatWidth(saved);
@@ -271,12 +316,51 @@ function estimateMessagesTokens(messageList) {
   }, 0);
 }
 
+function normalizePastedFile(file) {
+  if (file.name) {
+    return file;
+  }
+
+  const mimeType = file.type || "application/octet-stream";
+  let extension = "bin";
+  if (mimeType.startsWith("image/")) {
+    extension = mimeType.slice("image/".length).split("+")[0] || "png";
+    if (extension === "jpeg") {
+      extension = "jpg";
+    }
+  } else if (mimeType === "text/plain") {
+    extension = "txt";
+  }
+
+  const prefix = mimeType.startsWith("image/") ? "pasted-image" : "pasted-file";
+  const name = `${prefix}-${Date.now()}.${extension}`;
+  return new File([file], name, { type: mimeType, lastModified: file.lastModified });
+}
+
+function extractPasteFiles(clipboardData) {
+  if (!clipboardData?.items?.length) {
+    return [];
+  }
+
+  const files = [];
+  for (const item of clipboardData.items) {
+    if (item.kind !== "file") {
+      continue;
+    }
+    const file = item.getAsFile();
+    if (file) {
+      files.push(normalizePastedFile(file));
+    }
+  }
+  return files;
+}
+
 async function readAttachmentFile(file) {
   if (file.size > MAX_ATTACHMENT_BYTES) {
     throw new Error(`${file.name} is too large (max ${Math.round(MAX_ATTACHMENT_BYTES / (1024 * 1024))}MB).`);
   }
 
-  if (file.type.startsWith("image/")) {
+  if (isImageAttachment(file)) {
     const dataUrl = await new Promise((resolve, reject) => {
       const reader = new FileReader();
       reader.onload = () => resolve(String(reader.result || ""));
@@ -285,16 +369,16 @@ async function readAttachmentFile(file) {
     });
     const commaIndex = dataUrl.indexOf(",");
     return {
-      id: crypto.randomUUID(),
+      id: newAttachmentId(),
       kind: "image",
       name: file.name,
-      mimeType: file.type || "image/png",
+      mimeType: imageMimeType(file),
       data: commaIndex >= 0 ? dataUrl.slice(commaIndex + 1) : dataUrl,
       previewUrl: dataUrl,
     };
   }
 
-  const extension = file.name.includes(".") ? file.name.slice(file.name.lastIndexOf(".")).toLowerCase() : "";
+  const extension = fileExtension(file.name);
   if (!ATTACHMENT_TEXT_EXTENSIONS.has(extension)) {
     throw new Error(`${file.name} is not a supported attachment type.`);
   }
@@ -307,7 +391,7 @@ async function readAttachmentFile(file) {
   });
 
   return {
-    id: crypto.randomUUID(),
+    id: newAttachmentId(),
     kind: "file",
     name: file.name,
     mimeType: file.type || "text/plain",
@@ -1319,6 +1403,7 @@ function ChatPanel({
   ));
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
+  const panelRef = useRef(null);
   const fileInputRef = useRef(null);
   const resizerRef = useRef(null);
   const widthDraggingRef = useRef(false);
@@ -1386,6 +1471,30 @@ function ChatPanel({
     setAttachments(nextAttachments);
   }, [attachments]);
 
+  const handleDragOver = useCallback((event) => {
+    if (isBusy || chatBlocked || sendBlocked) {
+      return;
+    }
+    if (!Array.from(event.dataTransfer?.types || []).includes("Files")) {
+      return;
+    }
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "copy";
+  }, [chatBlocked, isBusy, sendBlocked]);
+
+  const handleDrop = useCallback((event) => {
+    if (isBusy || chatBlocked || sendBlocked) {
+      return;
+    }
+    const files = event.dataTransfer?.files;
+    if (!files?.length) {
+      return;
+    }
+    event.preventDefault();
+    handleAttachFiles(files);
+    inputRef.current?.focus();
+  }, [chatBlocked, handleAttachFiles, isBusy, sendBlocked]);
+
   const removeAttachment = useCallback((attachmentId) => {
     setAttachments((current) => current.filter((entry) => entry.id !== attachmentId));
     setAttachError("");
@@ -1409,10 +1518,41 @@ function ChatPanel({
   const canSend = Boolean(input.trim() || attachments.length) && !isBusy && !chatBlocked && !sendBlocked;
 
   const persistPanelWidth = useCallback((width) => {
+    const layout = window.catalogToolLayoutCouple;
+    if (layout) {
+      const { chatWidth } = layout.applyCoupledFromChat(width);
+      setPanelWidth(chatWidth);
+      return;
+    }
     const next = clampChatWidth(width);
     setPanelWidth(next);
     localStorage.setItem(CHAT_WIDTH_STORAGE_KEY, String(next));
   }, []);
+
+  useEffect(() => {
+    const layout = window.catalogToolLayoutCouple;
+    if (!layout) {
+      return undefined;
+    }
+    const onLayoutCouple = (event) => {
+      const { source, chatWidth } = event.detail || {};
+      if (source === "workflow" && Number.isFinite(chatWidth)) {
+        setPanelWidth(chatWidth);
+      }
+    };
+    document.addEventListener(layout.LAYOUT_COUPLE_EVENT, onLayoutCouple);
+    return () => document.removeEventListener(layout.LAYOUT_COUPLE_EVENT, onLayoutCouple);
+  }, []);
+
+  useEffect(() => {
+    if (!open || isPopup || visuallyHidden) {
+      return undefined;
+    }
+    document.documentElement.style.setProperty("--chat-panel-width", `${panelWidth}px`);
+    return () => {
+      document.documentElement.style.removeProperty("--chat-panel-width");
+    };
+  }, [isPopup, open, panelWidth, visuallyHidden]);
 
   useEffect(() => {
     onBusyChange?.(isBusy);
@@ -1455,6 +1595,10 @@ function ChatPanel({
       if (window.matchMedia("(max-width: 768px)").matches || event.button !== 0) {
         return;
       }
+      const layout = window.catalogToolLayoutCouple;
+      if (layout?.shouldPinWorkflowMain?.()) {
+        layout.pinWorkflowMainWidth?.();
+      }
       widthDraggingRef.current = true;
       resizer.classList.add("is-dragging");
       document.body.classList.add("is-resizing-chat-panel");
@@ -1471,6 +1615,31 @@ function ChatPanel({
       stopWidthDrag();
     };
   }, [open, isPopup, persistPanelWidth]);
+
+  useEffect(() => {
+    const panel = panelRef.current;
+    if (!panel || !open || visuallyHidden) {
+      return undefined;
+    }
+
+    const onPaste = (event) => {
+      if (isBusy || chatBlocked || sendBlocked) {
+        return;
+      }
+
+      const pastedFiles = extractPasteFiles(event.clipboardData);
+      if (!pastedFiles.length) {
+        return;
+      }
+
+      event.preventDefault();
+      handleAttachFiles(pastedFiles);
+      inputRef.current?.focus();
+    };
+
+    panel.addEventListener("paste", onPaste);
+    return () => panel.removeEventListener("paste", onPaste);
+  }, [chatBlocked, handleAttachFiles, isBusy, open, sendBlocked, visuallyHidden]);
 
   useEffect(() => {
     if (open && !visuallyHidden) {
@@ -1541,7 +1710,14 @@ function ChatPanel({
   const panelStyle = { "--chat-panel-width": `${panelWidth}px` };
 
   return (
-    <aside className={panelClassName} aria-label="Catalog assistant" style={panelStyle}>
+    <aside
+      ref={panelRef}
+      className={panelClassName}
+      aria-label="Catalog assistant"
+      style={panelStyle}
+      onDragOver={handleDragOver}
+      onDrop={handleDrop}
+    >
       {!isPopup ? (
         <div
           ref={resizerRef}
@@ -1565,8 +1741,8 @@ function ChatPanel({
           </div>
         ) : (
           <div>
-            <span className="chat-panel-eyebrow">Agent</span>
-            <h2 className="chat-panel-title">Catalog assistant</h2>
+            <span className="chat-panel-eyebrow">Agentic</span>
+            <h2 className="chat-panel-title">Catalog Assistant</h2>
           </div>
         )}
         <div className="chat-panel-actions">
@@ -1669,7 +1845,7 @@ function ChatPanel({
                 type="file"
                 className="visually-hidden"
                 multiple
-                accept="image/*,.txt,.md,.json,.csv,.xml,.yaml,.yml,.log,.py,.js,.ts,.jsx,.tsx"
+                accept="image/*,.jpg,.jpeg,.png,.gif,.webp,.txt,.md,.json,.csv,.xml,.yaml,.yml,.log,.py,.js,.ts,.jsx,.tsx"
                 onChange={(event) => {
                   handleAttachFiles(event.target.files);
                   event.target.value = "";
@@ -1680,8 +1856,8 @@ function ChatPanel({
                 className="chat-composer-icon-btn"
                 onClick={() => fileInputRef.current?.click()}
                 disabled={isBusy || chatBlocked || attachments.length >= MAX_ATTACHMENTS}
-                aria-label="Attach file or image"
-                title="Attach file or image"
+                aria-label="Attach, paste, or drop file or image"
+                title="Attach, paste, or drop file or image"
               >
                 <PaperclipIcon />
               </button>
@@ -2025,6 +2201,12 @@ function ChatApp() {
   }, [open, popupActive]);
 
   const showDockedPanel = open || (popupActive && keepAliveBusy);
+  const chatDockedVisible = open && !popupActive;
+
+  useEffect(() => {
+    document.body.classList.toggle("is-chat-docked", chatDockedVisible);
+    return () => document.body.classList.remove("is-chat-docked");
+  }, [chatDockedVisible]);
 
   return (
     <ChatPanel

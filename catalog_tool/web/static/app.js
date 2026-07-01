@@ -220,9 +220,49 @@ function setSidebarWidth(width, { persist = true } = {}) {
   }
   const nextWidth = clampSidebarWidth(width);
   els.appShell.style.setProperty("--sidebar-width", `${nextWidth}px`);
+  syncEnvRefreshButtonLayout();
   if (persist) {
     localStorage.setItem(SIDEBAR_WIDTH_STORAGE_KEY, String(nextWidth));
   }
+}
+
+function syncEnvRefreshButtonLayout() {
+  const head = document.querySelector(
+    ".env-sidebar-section:not(.env-sidebar-section--compact) .env-sidebar-head",
+  );
+  const refreshBtn = head?.querySelector(".env-refresh-btn");
+  const title = head?.querySelector(".env-sidebar-title");
+  if (!head || !refreshBtn || !title) {
+    return;
+  }
+
+  const needsIconOnly = () => (
+    head.scrollWidth > head.clientWidth + 1
+    || title.scrollWidth > title.clientWidth + 1
+  );
+
+  refreshBtn.classList.remove("is-icon-only");
+  if (needsIconOnly()) {
+    refreshBtn.classList.add("is-icon-only");
+  }
+}
+
+function initEnvRefreshButtonLayout() {
+  syncEnvRefreshButtonLayout();
+
+  const head = document.querySelector(
+    ".env-sidebar-section:not(.env-sidebar-section--compact) .env-sidebar-head",
+  );
+  if (!head || typeof ResizeObserver === "undefined") {
+    window.addEventListener("resize", syncEnvRefreshButtonLayout);
+    return;
+  }
+
+  const observer = new ResizeObserver(() => {
+    syncEnvRefreshButtonLayout();
+  });
+  observer.observe(head);
+  window.addEventListener("resize", syncEnvRefreshButtonLayout);
 }
 
 function initSidebarResize() {
@@ -295,6 +335,87 @@ function initSidebarResize() {
       setSidebarWidth(sidebarWidth + (event.shiftKey ? 20 : 8));
       event.preventDefault();
     }
+  });
+}
+
+function initWorkflowSidebarResize() {
+  const layout = window.catalogToolLayoutCouple;
+  if (!layout) {
+    return;
+  }
+
+  const resizers = document.querySelectorAll(".workflow-sidebar-resizer");
+  resizers.forEach((resizer) => {
+    let dragging = false;
+    let startX = 0;
+    let startWidth = 0;
+
+    const stopDragging = (event) => {
+      if (!dragging) {
+        return;
+      }
+      dragging = false;
+      resizer.classList.remove("is-dragging");
+      document.body.classList.remove("is-resizing-workflow-sidebar");
+      document.removeEventListener("pointermove", onPointerMove);
+      document.removeEventListener("pointerup", stopDragging);
+      document.removeEventListener("pointercancel", stopDragging);
+      window.removeEventListener("blur", stopDragging);
+      if (event?.pointerId != null && resizer.hasPointerCapture?.(event.pointerId)) {
+        try {
+          resizer.releasePointerCapture(event.pointerId);
+        } catch {
+          // ignore release failures
+        }
+      }
+    };
+
+    const onPointerMove = (event) => {
+      if (!dragging) {
+        return;
+      }
+      const proposed = startWidth + (event.clientX - startX);
+      layout.applyCoupledFromWorkflow(proposed);
+    };
+
+    resizer.addEventListener("pointerdown", (event) => {
+      if (window.matchMedia("(max-width: 960px)").matches || event.button !== 0) {
+        return;
+      }
+      if (layout.shouldPinWorkflowMain?.()) {
+        layout.pinWorkflowMainWidth?.();
+      }
+      dragging = true;
+      startX = event.clientX;
+      startWidth = layout.readWorkflowSidebarWidth();
+      resizer.classList.add("is-dragging");
+      document.body.classList.add("is-resizing-workflow-sidebar");
+      document.addEventListener("pointermove", onPointerMove);
+      document.addEventListener("pointerup", stopDragging);
+      document.addEventListener("pointercancel", stopDragging);
+      window.addEventListener("blur", stopDragging);
+      try {
+        resizer.setPointerCapture(event.pointerId);
+      } catch {
+        // pointer capture is optional
+      }
+      event.preventDefault();
+    });
+
+    resizer.addEventListener("keydown", (event) => {
+      if (window.matchMedia("(max-width: 960px)").matches) {
+        return;
+      }
+      const step = event.shiftKey ? 20 : 8;
+      const current = layout.readWorkflowSidebarWidth();
+      if (event.key === "ArrowLeft") {
+        layout.applyCoupledFromWorkflow(current - step);
+        event.preventDefault();
+      } else if (event.key === "ArrowRight") {
+        layout.applyCoupledFromWorkflow(current + step);
+        event.preventDefault();
+      }
+    });
   });
 }
 
@@ -1070,8 +1191,9 @@ function initWorkflowStepNav(navEl, defaultStep = "upload") {
     });
     scopedPanels.forEach((panel) => {
       const active = panel.dataset.workflowStep === stepId;
-      panel.hidden = !active;
       panel.classList.toggle("is-active", active);
+      panel.setAttribute("aria-hidden", active ? "false" : "true");
+      panel.removeAttribute("hidden");
     });
     panelRoot?.querySelector(".workflow-main-scroll")?.scrollTo({ top: 0, behavior: "auto" });
   };
@@ -1108,6 +1230,11 @@ function updateWorkflowStatusLine(lineEl, textEl, workflowLabel) {
 }
 
 function updateWorkflowStatusLines() {
+  updateWorkflowStatusLine(
+    els.pushWorkflowStatus,
+    els.pushWorkflowStatusText,
+    "upload workflow",
+  );
   updateWorkflowStatusLine(
     els.dgWorkflowStatus,
     els.dgWorkflowStatusText,
@@ -1412,7 +1539,16 @@ function updateCompareUi() {
 }
 
 function getCompareScrollHost() {
-  return document.getElementById("appPage") || document.scrollingElement || null;
+  const section = els.brCompareResultsSection;
+  const shell = section?.closest(".workflow-shell");
+  if (shell?.classList.contains("has-compare-open")) {
+    return (
+      els.brCompareReport?.querySelector(".br-compare-table-wrap")
+      || els.brCompareReport?.closest(".br-compare-panel-body")
+      || shell
+    );
+  }
+  return document.getElementById("pushView") || document.getElementById("appPage") || document.scrollingElement || null;
 }
 
 function syncCompareShellLayout() {
@@ -1420,16 +1556,19 @@ function syncCompareShellLayout() {
   const shell = section?.closest(".workflow-shell");
   const open = Boolean(section && !section.hidden && state.brCompareResultsOpen);
   shell?.classList.toggle("has-compare-open", open);
+  document.getElementById("pushView")?.classList.toggle("has-compare-results", open);
+  document.getElementById("appShell")?.scrollTo({ top: 0, left: 0, behavior: "auto" });
+  if (open) {
+    window.requestAnimationFrame(syncComparePanelLayout);
+  }
 }
 
 function syncComparePanelLayout() {
   const section = els.brCompareResultsSection;
   const panel = els.brComparePanel;
   const body = els.brCompareReport;
-  const pageScroll = getCompareScrollHost();
   syncCompareShellLayout();
   if (!section || section.hidden || !panel) {
-    pageScroll?.classList.remove("has-compare-results");
     if (panel) {
       panel.style.maxHeight = "";
       panel.style.height = "";
@@ -1439,7 +1578,6 @@ function syncComparePanelLayout() {
     return;
   }
 
-  pageScroll?.classList.add("has-compare-results");
   panel.style.maxHeight = "";
   panel.style.height = "";
   body?.style.removeProperty("max-height");
@@ -1559,8 +1697,14 @@ function scrollCompareResultsIntoView() {
   }
   window.requestAnimationFrame(() => {
     syncComparePanelLayout();
-    const scrollHost = getCompareScrollHost();
     const section = els.brCompareResultsSection;
+    const shell = section.closest(".workflow-shell");
+    const tableWrap = els.brCompareReport?.querySelector(".br-compare-table-wrap");
+    if (shell?.classList.contains("has-compare-open")) {
+      tableWrap?.scrollTo({ top: 0, behavior: "smooth" });
+      return;
+    }
+    const scrollHost = getCompareScrollHost();
     if (!scrollHost) {
       section.scrollIntoView({ behavior: "smooth", block: "start" });
       return;
@@ -1570,8 +1714,15 @@ function scrollCompareResultsIntoView() {
     const nextTop = scrollHost.scrollTop + (targetRect.top - hostRect.top) - 16;
     scrollHost.scrollTo({ top: Math.max(0, nextTop), behavior: "smooth" });
     window.setTimeout(() => {
-      const tableWrap = els.brCompareReport?.querySelector(".br-compare-table-wrap");
-      (tableWrap || section).scrollIntoView({ behavior: "smooth", block: "nearest" });
+      const target = tableWrap || section;
+      if (!scrollHost || scrollHost === document.scrollingElement) {
+        target.scrollIntoView({ behavior: "smooth", block: "nearest" });
+        return;
+      }
+      const nextHostRect = scrollHost.getBoundingClientRect();
+      const nextTargetRect = target.getBoundingClientRect();
+      const tableTop = scrollHost.scrollTop + (nextTargetRect.top - nextHostRect.top) - 8;
+      scrollHost.scrollTo({ top: Math.max(0, tableTop), behavior: "smooth" });
     }, 360);
   });
 }
@@ -2050,8 +2201,8 @@ function buildBrComparePanel(body) {
   const summary = body.summary || {};
   const entities = body.entities || [];
 
-  let html = buildBrCompareStatGrid(summary);
-  html += `<p class="br-compare-stat-hint analyze-step-note">Click a result type above to filter. Use search to narrow rows.</p>`;
+  let html = `<p class="br-compare-stat-hint analyze-step-note">Click a result type below to filter. Use search to narrow rows.</p>`;
+  html += buildBrCompareStatGrid(summary);
 
   html += `<div class="analyze-badge-row">
     <span class="analyze-badge is-accent">${body.compare_type === "audit" ? "Compared with audit history" : "BR (local import) vs production (environment)"}</span>
@@ -2060,10 +2211,6 @@ function buildBrComparePanel(body) {
 
   if (summary.truncated && summary.total_entity_count > summary.entity_count) {
     html += `<p class="analyze-step-note">Compared the first ${summary.entity_count} of ${summary.total_entity_count} entities for responsiveness. Re-run on a smaller zip or filter entities for a full compare.</p>`;
-  }
-
-  if (body.compare_type !== "audit") {
-    html += `<p class="analyze-step-note">Production is what is live in the environment today. Local is what you imported into this business request.</p>`;
   }
 
   if (!entities.length) {
@@ -3360,7 +3507,7 @@ function updateZipValidateButton() {
   const hasZip = isZipFile(els.catalogZipInput?.files?.[0]);
   const busy = els.analyzeZipBtn.classList.contains("is-busy");
   els.analyzeZipBtn.disabled = busy || !hasZip;
-  els.analyzeZipBtn.title = hasZip ? "Validate the selected zip file" : "Choose a zip file first";
+  els.analyzeZipBtn.title = hasZip ? "Analyze and preview the selected zip file" : "Choose a zip file first";
 }
 
 function updateZipDropzoneLabel() {
@@ -3430,8 +3577,8 @@ function updateExcelDropzoneLabel() {
     titleEl: els.excelDropzoneTitle,
     hintEl: els.excelDropzoneHint,
     file: els.catalogExcelInput?.files?.[0],
-    emptyTitle: "Drag & drop your Excel DG here",
-    emptyHintHtml: 'or <span class="zip-dropzone-link">browse files</span> · .xlsx / .xlsm',
+    emptyTitle: "Choose or drop a workbook",
+    emptyHintHtml: '<span class="zip-dropzone-link">Browse</span>',
     selectedLabel: "Workbook ready",
   });
   state.dgAnalyzeResult = null;
@@ -3575,8 +3722,8 @@ els.analyzeZipBtn?.addEventListener("click", async () => {
   }
 
   setWorkflowButtonBusy(els.analyzeZipBtn, els.analyzeZipBtnLabel, true, {
-    busyText: "Validating…",
-    idleText: "Validate",
+    busyText: "Analyzing…",
+    idleText: "Analyze & preview",
   });
   els.zipAnalyzeReport.hidden = true;
 
@@ -3611,7 +3758,7 @@ els.analyzeZipBtn?.addEventListener("click", async () => {
     showZipValidateError(error.message || "Zip validation failed.");
   } finally {
     setWorkflowButtonBusy(els.analyzeZipBtn, els.analyzeZipBtnLabel, false, {
-      idleText: "Validate",
+      idleText: "Analyze & preview",
     });
     updateZipValidateButton();
   }
@@ -3983,6 +4130,8 @@ async function initApp() {
   }
 
   initSidebarResize();
+  initWorkflowSidebarResize();
+  initEnvRefreshButtonLayout();
   initSidebarFloatTips();
   initConnectionModalFloatTips();
   initZipDropzone();

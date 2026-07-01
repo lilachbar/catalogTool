@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/static/styles.css?v=20260702app80">
+  <link rel="stylesheet" href="/static/styles.css?v=20260702mcptoolslayout1">
   <script>
     (function () {
       var theme = localStorage.getItem("catalogTool.theme");
@@ -190,13 +190,14 @@
             <header class="merge-hero workflow-page-hero">
               <div class="merge-hero-icon" aria-hidden="true">
                 <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-                  <polyline points="17 11 12 16 7 11"/>
-                  <line x1="12" x2="12" y1="3" y2="16"/>
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                  <polyline points="14 2 14 8 20 8"/>
+                  <line x1="8" x2="16" y1="13" y2="13"/>
+                  <line x1="8" x2="16" y1="17" y2="17"/>
                 </svg>
               </div>
               <div class="merge-hero-text">
-                <p class="merge-hero-eyebrow">CatalogOne</p>
+                <p class="merge-hero-eyebrow">CatalogOne export</p>
                 <h2 class="merge-hero-title">Upload, review, and publish with confidence</h2>
                 <p class="merge-hero-lead">
                   Upload a CatalogOne export zip to build a review-only PR package.
@@ -223,6 +224,11 @@
             </ol>
 
             <div class="workflow-shell">
+              <p id="pushWorkflowStatus" class="mcp-tools-status-line is-loading">
+                <span class="mcp-tools-status-dot" aria-hidden="true"></span>
+                <span id="pushWorkflowStatusText">Connect to a CatalogOne environment in the sidebar to begin.</span>
+              </p>
+
               <div class="workflow-workbench">
                 <aside class="workflow-sidebar">
                   <div class="workflow-sidebar-head">
@@ -234,7 +240,7 @@
                       <span class="workflow-step-num">1</span>
                       <span class="workflow-step-copy">
                         <span class="workflow-step-label">Upload zip</span>
-                        <span class="workflow-step-desc">Choose zip (validate optional)</span>
+                        <span class="workflow-step-desc">Parse and validate export</span>
                       </span>
                     </button>
                     <button type="button" class="workflow-step-btn" data-workflow-step="review" aria-selected="false">
@@ -254,17 +260,26 @@
                   </nav>
                 </aside>
 
+                <div
+                  class="workflow-sidebar-resizer"
+                  tabindex="0"
+                  role="separator"
+                  aria-orientation="vertical"
+                  aria-label="Resize workflow sidebar"
+                  title="Drag to resize workflow sidebar"
+                ></div>
+
                 <section class="workflow-main">
                   <div class="workflow-main-scroll">
-                    <div id="pushStepUpload" class="workflow-step-panel is-active" data-workflow-step="upload">
+                    <div id="pushStepUpload" class="workflow-step-panel is-active" data-workflow-step="upload" aria-hidden="false">
                       <div class="mcp-tool-form-card">
                         <div class="mcp-tool-form-card-head">
                           <div class="mcp-tool-detail-meta">
-                            <h3 id="mergeCardZipTitle" class="mcp-tool-detail-title">Upload zip</h3>
+                            <h3 id="mergeCardZipTitle" class="mcp-tool-detail-title">Upload CatalogOne zip</h3>
                             <span class="mcp-tool-category-badge">Step 1</span>
                           </div>
                         </div>
-                        <p class="workflow-panel-lead">Upload a CatalogOne export zip to build a review-only PR package. Nothing is published until you explicitly choose to.</p>
+                        <p class="workflow-panel-lead">Choose a CatalogOne export zip. Validation checks structure before you create a business request.</p>
                         <div class="zip-upload-row">
                           <div class="zip-dropzone zip-dropzone-inline" id="zipDropzone">
                             <input type="file" id="catalogZipInput" class="zip-dropzone-input" accept=".zip,application/zip">
@@ -294,7 +309,7 @@
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
                               <circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>
                             </svg>
-                            <span id="analyzeZipBtnLabel">Validate</span>
+                            <span id="analyzeZipBtnLabel">Analyze &amp; preview</span>
                           </button>
                         </div>
                       </div>
@@ -311,7 +326,7 @@
                       </div>
                     </div>
 
-                    <div id="pushStepReview" class="workflow-step-panel" data-workflow-step="review" hidden>
+                    <div id="pushStepReview" class="workflow-step-panel" data-workflow-step="review" aria-hidden="true">
                       <div class="mcp-tool-form-card">
                         <div class="mcp-tool-form-card-head">
                           <div class="mcp-tool-detail-meta">
@@ -352,7 +367,7 @@
                       </div>
                     </div>
 
-                    <div id="pushStepPublish" class="workflow-step-panel" data-workflow-step="publish" hidden>
+                    <div id="pushStepPublish" class="workflow-step-panel" data-workflow-step="publish" aria-hidden="true">
                       <div class="mcp-tool-form-card">
                         <div class="mcp-tool-form-card-head">
                           <div class="mcp-tool-detail-meta">
@@ -483,46 +498,59 @@
                   </nav>
                 </aside>
 
+                <div
+                  class="workflow-sidebar-resizer"
+                  tabindex="0"
+                  role="separator"
+                  aria-orientation="vertical"
+                  aria-label="Resize workflow sidebar"
+                  title="Drag to resize workflow sidebar"
+                ></div>
+
                 <section class="workflow-main">
                   <div class="workflow-main-scroll">
-                    <div id="dgStepUpload" class="workflow-step-panel is-active" data-workflow-step="upload">
+                    <div id="dgStepUpload" class="workflow-step-panel is-active" data-workflow-step="upload" aria-hidden="false">
                       <div class="mcp-tool-form-card">
                         <div class="mcp-tool-form-card-head">
                           <div class="mcp-tool-detail-meta">
                             <h3 id="dgCardUploadTitle" class="mcp-tool-detail-title">Upload DG workbook</h3>
                             <span class="mcp-tool-category-badge">Step 1</span>
                           </div>
-                          <div class="mcp-tool-form-card-actions">
-                            <button type="button" id="analyzeExcelBtn" class="btn btn-primary btn-sm btn-analyze">
-                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
-                                <circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>
-                              </svg>
-                              <span>Analyze &amp; preview</span>
-                            </button>
-                          </div>
                         </div>
                         <p class="workflow-panel-lead">Expects tabs such as Add, Cancel, Change, Terminate, Modify_Reasons, and proration policy sheets.</p>
-                        <div class="zip-dropzone" id="excelDropzone">
-                          <input type="file" id="catalogExcelInput" class="zip-dropzone-input" accept=".xlsx,.xlsm,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet">
-                          <div class="zip-dropzone-body">
-                            <span class="zip-dropzone-icon zip-dropzone-icon-empty" aria-hidden="true">
-                              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-                                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-                                <polyline points="14 2 14 8 20 8"/>
-                                <line x1="8" x2="16" y1="13" y2="13"/>
-                                <line x1="8" x2="16" y1="17" y2="17"/>
-                              </svg>
-                            </span>
-                            <span class="zip-dropzone-icon zip-dropzone-icon-selected" aria-hidden="true" hidden>
-                              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
-                                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-                                <polyline points="14 2 14 8 20 8"/>
-                                <path d="m9 15 2 2 4-4"/>
-                              </svg>
-                            </span>
-                            <p class="zip-dropzone-title" id="excelDropzoneTitle">Drag &amp; drop your Excel DG here</p>
-                            <p class="zip-dropzone-hint" id="excelDropzoneHint">or <span class="zip-dropzone-link">browse files</span> · .xlsx / .xlsm</p>
+                        <div class="zip-upload-row">
+                          <div class="zip-dropzone zip-dropzone-inline" id="excelDropzone">
+                            <input type="file" id="catalogExcelInput" class="zip-dropzone-input" accept=".xlsx,.xlsm,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet">
+                            <div class="zip-dropzone-body">
+                              <span class="zip-dropzone-icon zip-dropzone-icon-empty" aria-hidden="true">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                                  <polyline points="14 2 14 8 20 8"/>
+                                  <line x1="8" x2="16" y1="13" y2="13"/>
+                                  <line x1="8" x2="16" y1="17" y2="17"/>
+                                </svg>
+                              </span>
+                              <span class="zip-dropzone-icon zip-dropzone-icon-selected" aria-hidden="true" hidden>
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+                                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                                  <polyline points="14 2 14 8 20 8"/>
+                                  <path d="m9 15 2 2 4-4"/>
+                                </svg>
+                              </span>
+                              <div class="zip-dropzone-text">
+                                <p class="zip-dropzone-title" id="excelDropzoneTitle">Choose or drop a workbook</p>
+                                <p class="zip-dropzone-hint" id="excelDropzoneHint"><span class="zip-dropzone-link">Browse</span></p>
+                              </div>
+                            </div>
                           </div>
+                        </div>
+                        <div class="workflow-step-actions">
+                          <button type="button" id="analyzeExcelBtn" class="btn btn-primary btn-analyze">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+                              <circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>
+                            </svg>
+                            <span>Analyze &amp; preview</span>
+                          </button>
                         </div>
                       </div>
                       <div id="excelAnalyzeReport" class="mcp-tool-result-card analyze-report" hidden>
@@ -538,7 +566,7 @@
                       </div>
                     </div>
 
-                    <div id="dgStepImport" class="workflow-step-panel" data-workflow-step="import" hidden>
+                    <div id="dgStepImport" class="workflow-step-panel" data-workflow-step="import" aria-hidden="true">
                       <div class="mcp-tool-form-card">
                         <div class="mcp-tool-form-card-head">
                           <div class="mcp-tool-detail-meta">
@@ -563,8 +591,8 @@
                             <input type="text" id="dgBusinessRequestId" placeholder="Auto-filled after create">
                           </label>
                         </div>
-                        <div class="merge-card-actions merge-br-actions">
-                          <button type="button" id="dgCreateBrBtn" class="btn btn-primary">Create business request</button>
+                        <div class="workflow-step-actions">
+                          <button type="button" id="dgCreateBrBtn" class="btn btn-primary btn-analyze">Create business request</button>
                           <p id="dgCreateBrBtnHint" class="merge-br-btn-hint" aria-live="polite"></p>
                         </div>
                       </div>
@@ -579,13 +607,13 @@
                           <div class="mcp-tool-detail-meta">
                             <h4 class="mcp-tool-form-heading">Import entries</h4>
                           </div>
-                          <div class="mcp-tool-form-card-actions">
-                            <button type="button" id="dgImportEntriesBtn" class="btn btn-primary btn-sm" disabled title="Analyze workbook, connect, and create a business request first">
-                              Import entries to catalog
-                            </button>
-                          </div>
                         </div>
                         <p id="dgImportEntriesHint" class="merge-br-btn-hint" aria-live="polite">Analyze the workbook first to load entry payloads.</p>
+                        <div class="workflow-step-actions">
+                          <button type="button" id="dgImportEntriesBtn" class="btn btn-primary btn-analyze" disabled title="Analyze workbook, connect, and create a business request first">
+                            Import entries to catalog
+                          </button>
+                        </div>
                       </div>
                       <div id="dgImportResultCard" class="mcp-tool-result-card" hidden>
                         <div class="mcp-tool-result-card-head">
@@ -595,7 +623,7 @@
                       </div>
                     </div>
 
-                    <div id="dgStepPublish" class="workflow-step-panel" data-workflow-step="publish" hidden>
+                    <div id="dgStepPublish" class="workflow-step-panel" data-workflow-step="publish" aria-hidden="true">
                       <div class="mcp-tool-form-card">
                         <div class="mcp-tool-form-card-head">
                           <div class="mcp-tool-detail-meta">
@@ -637,8 +665,8 @@
 
         <div id="mcpToolsView" class="app-view app-view-fill" hidden>
           <div class="app-view-body">
-          <section class="panel panel-wide workflow-panel mcp-panel">
-            <header class="merge-hero mcp-page-hero">
+          <section class="panel panel-wide workflow-panel">
+            <header class="merge-hero workflow-page-hero mcp-page-hero">
               <div class="merge-hero-icon" aria-hidden="true">
                 <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
                   <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>
@@ -654,7 +682,7 @@
               </div>
             </header>
 
-            <ol class="merge-steps mcp-page-steps" aria-label="MCP tools workflow">
+            <ol class="merge-steps workflow-page-steps mcp-page-steps" aria-label="MCP tools workflow">
               <li class="merge-step">
                 <span class="merge-step-num">1</span>
                 <span class="merge-step-label">Choose tool</span>
@@ -671,16 +699,16 @@
               </li>
             </ol>
 
-            <div class="mcp-tools-shell">
+            <div class="workflow-shell mcp-tools-shell">
               <p id="mcpToolsStatus" class="mcp-tools-status-line">
                 <span class="mcp-tools-status-dot" aria-hidden="true"></span>
                 <span id="mcpToolsStatusText">Loading CatalogOne MCP tools…</span>
               </p>
 
-              <div id="mcpToolsPanel" class="mcp-tools-workbench">
-                <aside class="mcp-tools-sidebar">
-              <div class="mcp-tools-sidebar-head">
-                <h3 class="mcp-tools-sidebar-title">Tool library</h3>
+              <div id="mcpToolsPanel" class="workflow-workbench mcp-tools-workbench">
+                <aside class="workflow-sidebar mcp-tools-sidebar">
+              <div class="workflow-sidebar-head mcp-tools-sidebar-head">
+                <h3 class="workflow-sidebar-title mcp-tools-sidebar-title">Tool library</h3>
                 <span id="mcpToolsCount" class="mcp-tools-count-badge" hidden>0</span>
               </div>
               <label class="mcp-pill-field mcp-tools-search-field">
@@ -693,8 +721,17 @@
               <div id="mcpToolsList" class="mcp-tools-list" role="listbox" aria-label="CatalogOne MCP tools"></div>
                 </aside>
 
-                <section class="mcp-tools-main">
-                  <div class="mcp-tools-main-scroll">
+                <div
+                  class="workflow-sidebar-resizer"
+                  tabindex="0"
+                  role="separator"
+                  aria-orientation="vertical"
+                  aria-label="Resize workflow sidebar"
+                  title="Drag to resize workflow sidebar"
+                ></div>
+
+                <section class="workflow-main mcp-tools-main">
+                  <div class="workflow-main-scroll mcp-tools-main-scroll">
                     <div id="mcpToolsEmptyDetail" class="mcp-tools-empty-detail">
                 <div class="mcp-tools-empty-icon" aria-hidden="true">
                   <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
@@ -954,9 +991,10 @@
 
   <script id="tablesConfig" type="application/json">{{ defaults.tables | tojson }}</script>
   <script id="defaultsConfig" type="application/json">{{ defaults | tojson }}</script>
+  <script src="/static/layout-couple.js?v=20260702workflowresize2"></script>
   <script src="/static/page-control.js?v=20260702app68"></script>
-  <script src="/static/app.js?v=20260630compare3"></script>
+  <script src="/static/app.js?v=20260702workflowresize2"></script>
   <script src="/static/mcp-tools.js?v=20260702app57"></script>
-  <script type="module" src="/static/chat.bundle.js?v=20260702app67"></script>
+  <script type="module" src="/static/chat.bundle.js?v=20260702imagemime1"></script>
 </body>
 </html>
