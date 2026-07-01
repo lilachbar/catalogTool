@@ -8,7 +8,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-DEFAULT_POPUP_WIDTH = 360
+DEFAULT_POPUP_WIDTH = 300
 DEFAULT_POPUP_HEIGHT = 720
 DETACHED_CHAT_WINDOW_TITLE = "Catalog Tool · Chat"
 
@@ -22,7 +22,7 @@ def open_chat_app_window(
     top: int | None = None,
 ) -> bool:
     """Launch chat in browser app mode (no URL bar). Returns True if a launch was attempted."""
-    width = max(320, min(900, width))
+    width = max(220, min(520, width))
     height = max(320, height)
     if sys.platform == "darwin":
         return _open_chat_app_window_macos(chat_url, width, height, left, top)
@@ -44,7 +44,7 @@ def resize_chat_app_window(
     """Resize the detached chat window (macOS only)."""
     if sys.platform != "darwin":
         return False
-    width = max(320, min(900, width))
+    width = max(220, min(520, width))
     height = max(320, height)
     left = 0 if left is None else max(0, left)
     top = 0 if top is None else max(0, top)

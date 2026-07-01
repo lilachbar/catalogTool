@@ -11,9 +11,9 @@ const CHAT_SESSION_STORAGE_KEY = "catalogTool.chatSession";
 const CHAT_POPUP_CHANNEL = "catalog-tool-chat";
 const CHAT_POPUP_NAME = "catalogToolChatPopup";
 const DETACHED_CHAT_WINDOW_TITLE = "Catalog Tool · Chat";
-const CHAT_WIDTH_MIN = 320;
-const CHAT_WIDTH_MAX = 900;
-const CHAT_WIDTH_DEFAULT = 360;
+const CHAT_WIDTH_MIN = 220;
+const CHAT_WIDTH_MAX = 520;
+const CHAT_WIDTH_DEFAULT = 300;
 const CHAT_DETACHED_HEIGHT_MIN = 320;
 const CHAT_APP_TOP_CHROME = 28;
 const CHAT_MODES = [
@@ -1576,7 +1576,7 @@ function ChatPanel({
       return undefined;
     }
 
-    const stopWidthDrag = () => {
+    const stopWidthDrag = (event) => {
       if (!widthDraggingRef.current) {
         return;
       }
@@ -1586,6 +1586,14 @@ function ChatPanel({
       document.removeEventListener("pointermove", onPointerMove);
       document.removeEventListener("pointerup", stopWidthDrag);
       document.removeEventListener("pointercancel", stopWidthDrag);
+      window.removeEventListener("blur", stopWidthDrag);
+      if (event?.pointerId != null && resizer.hasPointerCapture?.(event.pointerId)) {
+        try {
+          resizer.releasePointerCapture(event.pointerId);
+        } catch {
+          // ignore release failures
+        }
+      }
     };
 
     const onPointerMove = (event) => {
@@ -1596,7 +1604,7 @@ function ChatPanel({
     };
 
     const onPointerDown = (event) => {
-      if (window.matchMedia("(max-width: 768px)").matches || event.button !== 0) {
+      if (window.matchMedia("(max-width: 900px)").matches || event.button !== 0) {
         return;
       }
       const layout = window.catalogToolLayoutCouple;
@@ -1609,16 +1617,38 @@ function ChatPanel({
       document.addEventListener("pointermove", onPointerMove);
       document.addEventListener("pointerup", stopWidthDrag);
       document.addEventListener("pointercancel", stopWidthDrag);
+      window.addEventListener("blur", stopWidthDrag);
+      try {
+        resizer.setPointerCapture(event.pointerId);
+      } catch {
+        // pointer capture is optional; document listeners handle cleanup
+      }
       event.preventDefault();
     };
 
+    const onKeyDown = (event) => {
+      if (window.matchMedia("(max-width: 900px)").matches) {
+        return;
+      }
+      const step = event.shiftKey ? 20 : 8;
+      if (event.key === "ArrowLeft") {
+        persistPanelWidth(panelWidth + step);
+        event.preventDefault();
+      } else if (event.key === "ArrowRight") {
+        persistPanelWidth(panelWidth - step);
+        event.preventDefault();
+      }
+    };
+
     resizer.addEventListener("pointerdown", onPointerDown);
+    resizer.addEventListener("keydown", onKeyDown);
 
     return () => {
       resizer.removeEventListener("pointerdown", onPointerDown);
+      resizer.removeEventListener("keydown", onKeyDown);
       stopWidthDrag();
     };
-  }, [open, isPopup, persistPanelWidth]);
+  }, [isPopup, open, panelWidth, persistPanelWidth]);
 
   useEffect(() => {
     const panel = panelRef.current;
