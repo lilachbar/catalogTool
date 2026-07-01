@@ -179,17 +179,6 @@
         releaseWorkflowMainPin();
       }
     });
-    document.addEventListener(LAYOUT_COUPLE_EVENT, (event) => {
-      if (!shouldPinWorkflowMain()) {
-        releaseWorkflowMainPin();
-      }
-    });
-    const observer = new MutationObserver(() => {
-      if (!shouldPinWorkflowMain()) {
-        releaseWorkflowMainPin();
-      }
-    });
-    observer.observe(document.body, { attributes: true, attributeFilter: ["class"] });
   }
 
   window.catalogToolLayoutCouple = {

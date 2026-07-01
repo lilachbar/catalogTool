@@ -2205,6 +2205,9 @@ function ChatApp() {
 
   useEffect(() => {
     document.body.classList.toggle("is-chat-docked", chatDockedVisible);
+    if (!chatDockedVisible) {
+      window.catalogToolLayoutCouple?.releaseWorkflowMainPin?.();
+    }
     return () => document.body.classList.remove("is-chat-docked");
   }, [chatDockedVisible]);
 

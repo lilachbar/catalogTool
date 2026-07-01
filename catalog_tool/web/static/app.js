@@ -220,13 +220,13 @@ function setSidebarWidth(width, { persist = true } = {}) {
   }
   const nextWidth = clampSidebarWidth(width);
   els.appShell.style.setProperty("--sidebar-width", `${nextWidth}px`);
-  syncEnvRefreshButtonLayout();
+  syncEnvRefreshButtonLayout({ recompute: true });
   if (persist) {
     localStorage.setItem(SIDEBAR_WIDTH_STORAGE_KEY, String(nextWidth));
   }
 }
 
-function syncEnvRefreshButtonLayout() {
+function syncEnvRefreshButtonLayout({ recompute = false } = {}) {
   const head = document.querySelector(
     ".env-sidebar-section:not(.env-sidebar-section--compact) .env-sidebar-head",
   );
@@ -236,33 +236,27 @@ function syncEnvRefreshButtonLayout() {
     return;
   }
 
-  const needsIconOnly = () => (
+  const overflows = () => (
     head.scrollWidth > head.clientWidth + 1
     || title.scrollWidth > title.clientWidth + 1
   );
 
-  refreshBtn.classList.remove("is-icon-only");
-  if (needsIconOnly()) {
+  if (recompute) {
+    refreshBtn.classList.remove("is-icon-only");
+  } else if (refreshBtn.classList.contains("is-icon-only")) {
+    return;
+  }
+
+  if (overflows()) {
     refreshBtn.classList.add("is-icon-only");
   }
 }
 
 function initEnvRefreshButtonLayout() {
-  syncEnvRefreshButtonLayout();
-
-  const head = document.querySelector(
-    ".env-sidebar-section:not(.env-sidebar-section--compact) .env-sidebar-head",
-  );
-  if (!head || typeof ResizeObserver === "undefined") {
-    window.addEventListener("resize", syncEnvRefreshButtonLayout);
-    return;
-  }
-
-  const observer = new ResizeObserver(() => {
-    syncEnvRefreshButtonLayout();
+  syncEnvRefreshButtonLayout({ recompute: true });
+  window.addEventListener("resize", () => {
+    syncEnvRefreshButtonLayout({ recompute: true });
   });
-  observer.observe(head);
-  window.addEventListener("resize", syncEnvRefreshButtonLayout);
 }
 
 function initSidebarResize() {
@@ -1558,9 +1552,6 @@ function syncCompareShellLayout() {
   shell?.classList.toggle("has-compare-open", open);
   document.getElementById("pushView")?.classList.toggle("has-compare-results", open);
   document.getElementById("appShell")?.scrollTo({ top: 0, left: 0, behavior: "auto" });
-  if (open) {
-    window.requestAnimationFrame(syncComparePanelLayout);
-  }
 }
 
 function syncComparePanelLayout() {
