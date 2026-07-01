@@ -2309,19 +2309,34 @@ if (mount) {
 
   let chatRoot = null;
 
+  function renderChat() {
+    if (chatRoot || !isAgenticEnabled()) {
+      return;
+    }
+    mount.hidden = false;
+    chatRoot = createRoot(mount);
+    chatRoot.render(mode === "popup" ? <ChatPopupApp /> : <ChatApp />);
+  }
+
   function mountChatApp() {
     if (!isAgenticEnabled()) {
       mount.hidden = true;
       return;
     }
     mount.hidden = false;
-    if (!chatRoot) {
-      chatRoot = createRoot(mount);
-      chatRoot.render(mode === "popup" ? <ChatPopupApp /> : <ChatApp />);
+    if (chatRoot) {
+      return;
+    }
+
+    if (typeof window.requestIdleCallback === "function") {
+      window.requestIdleCallback(renderChat, { timeout: 1500 });
+    } else {
+      window.setTimeout(renderChat, 50);
     }
   }
 
   mountChatApp();
+  document.getElementById("chatToggleBtn")?.addEventListener("click", renderChat, { capture: true });
   window.addEventListener("catalogTool:agentic-changed", (event) => {
     if (event.detail?.enabled) {
       mountChatApp();

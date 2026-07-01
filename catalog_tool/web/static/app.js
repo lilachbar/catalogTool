@@ -1554,25 +1554,35 @@ function syncCompareShellLayout() {
   document.getElementById("appShell")?.scrollTo({ top: 0, left: 0, behavior: "auto" });
 }
 
+let comparePanelLayoutSyncing = false;
+
 function syncComparePanelLayout() {
-  const section = els.brCompareResultsSection;
-  const panel = els.brComparePanel;
-  const body = els.brCompareReport;
-  syncCompareShellLayout();
-  if (!section || section.hidden || !panel) {
-    if (panel) {
-      panel.style.maxHeight = "";
-      panel.style.height = "";
-    }
-    body?.style.removeProperty("max-height");
-    body?.querySelector(".br-compare-table-wrap")?.style.removeProperty("max-height");
+  if (comparePanelLayoutSyncing) {
     return;
   }
+  comparePanelLayoutSyncing = true;
+  try {
+    const section = els.brCompareResultsSection;
+    const panel = els.brComparePanel;
+    const body = els.brCompareReport;
+    syncCompareShellLayout();
+    if (!section || section.hidden || !panel) {
+      if (panel) {
+        panel.style.maxHeight = "";
+        panel.style.height = "";
+      }
+      body?.style.removeProperty("max-height");
+      body?.querySelector(".br-compare-table-wrap")?.style.removeProperty("max-height");
+      return;
+    }
 
-  panel.style.maxHeight = "";
-  panel.style.height = "";
-  body?.style.removeProperty("max-height");
-  body?.querySelector(".br-compare-table-wrap")?.style.removeProperty("max-height");
+    panel.style.maxHeight = "";
+    panel.style.height = "";
+    body?.style.removeProperty("max-height");
+    body?.querySelector(".br-compare-table-wrap")?.style.removeProperty("max-height");
+  } finally {
+    comparePanelLayoutSyncing = false;
+  }
 }
 
 function openCompareResultsPanel() {
@@ -2254,10 +2264,7 @@ function showBrCompareReport(body, { isError = false } = {}) {
 
   openCompareResultsPanel();
   scrollCompareResultsIntoView();
-  window.requestAnimationFrame(() => {
-    syncComparePanelLayout();
-    window.requestAnimationFrame(syncComparePanelLayout);
-  });
+  window.requestAnimationFrame(syncComparePanelLayout);
 }
 
 async function runBrCompare(compareType, businessRequestId) {
