@@ -1,65 +1,79 @@
 /* ── Design tokens ─────────────────────────────────────────────── */
+/*
+ * Colors use OKLCH (perceptually-uniform, the current industry standard shared
+ * by Tailwind v4 / shadcn). Brand hue = 259 (blue); neutrals use a cool 265 hue
+ * with very low chroma. Dark is the base :root; light overrides via data-theme.
+ */
 :root {
+  color-scheme: dark;
+
   --font: "Inter", system-ui, -apple-system, sans-serif;
   --font-mono: "SF Mono", ui-monospace, "Cascadia Code", Menlo, monospace;
 
-  --bg: #09090b;
-  --bg-elevated: #111113;
-  --surface: #18181b;
-  --surface-hover: #1f1f23;
-  --surface-inset: #0c0c0e;
-  --border: rgba(255, 255, 255, 0.08);
-  --border-strong: rgba(255, 255, 255, 0.14);
-  --text: #fafafa;
-  --text-secondary: #a1a1aa;
-  --text-tertiary: #71717a;
+  --bg: oklch(0.16 0.006 265);
+  --bg-elevated: oklch(0.205 0.008 265);
+  --surface: oklch(0.235 0.009 265);
+  --surface-hover: oklch(0.275 0.011 265);
+  --surface-inset: oklch(0.145 0.006 265);
+  --border: oklch(1 0 0 / 0.09);
+  --border-strong: oklch(1 0 0 / 0.16);
+  --text: oklch(0.98 0.002 265);
+  --text-secondary: oklch(0.72 0.014 265);
+  --text-tertiary: oklch(0.58 0.016 265);
 
-  --accent: #3b82f6;
-  --accent-hover: #2563eb;
-  --accent-muted: rgba(59, 130, 246, 0.12);
-  --accent-glow: rgba(59, 130, 246, 0.25);
+  --accent: oklch(0.64 0.19 259);
+  --accent-hover: oklch(0.70 0.17 259);
+  --accent-muted: oklch(0.64 0.19 259 / 0.16);
+  --accent-glow: oklch(0.64 0.19 259 / 0.28);
 
-  --ok: #22c55e;
-  --ok-muted: rgba(34, 197, 94, 0.12);
-  --warn: #f59e0b;
-  --warn-muted: rgba(245, 158, 11, 0.14);
-  --err: #ef4444;
-  --err-muted: rgba(239, 68, 68, 0.12);
+  --ok: oklch(0.74 0.18 150);
+  --ok-muted: oklch(0.74 0.18 150 / 0.14);
+  --warn: oklch(0.80 0.15 78);
+  --warn-muted: oklch(0.80 0.15 78 / 0.16);
+  --err: oklch(0.64 0.21 25);
+  --err-muted: oklch(0.64 0.21 25 / 0.16);
 
   --radius-sm: 8px;
   --radius: 12px;
   --radius-lg: 16px;
   --radius-full: 999px;
 
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
-  --shadow: 0 4px 24px rgba(0, 0, 0, 0.35);
-  --shadow-lg: 0 12px 48px rgba(0, 0, 0, 0.45);
+  --shadow-sm: 0 1px 2px oklch(0 0 0 / 0.5);
+  --shadow: 0 4px 24px oklch(0 0 0 / 0.4);
+  --shadow-lg: 0 12px 48px oklch(0 0 0 / 0.5);
 
   --transition: 0.18s ease;
 }
 
 :root[data-theme="light"] {
-  --bg: #fafafa;
-  --bg-elevated: #ffffff;
-  --surface: #ffffff;
-  --surface-hover: #f4f4f5;
-  --surface-inset: #f4f4f5;
-  --border: rgba(0, 0, 0, 0.08);
-  --border-strong: rgba(0, 0, 0, 0.14);
-  --text: #09090b;
-  --text-secondary: #52525b;
-  --text-tertiary: #a1a1aa;
+  color-scheme: light;
 
-  --accent-muted: rgba(59, 130, 246, 0.08);
-  --accent-glow: rgba(59, 130, 246, 0.15);
+  --bg: oklch(0.985 0.003 265);
+  --bg-elevated: oklch(1 0 0);
+  --surface: oklch(1 0 0);
+  --surface-hover: oklch(0.965 0.005 265);
+  --surface-inset: oklch(0.965 0.005 265);
+  --border: oklch(0.21 0.02 265 / 0.10);
+  --border-strong: oklch(0.21 0.02 265 / 0.16);
+  --text: oklch(0.21 0.02 265);
+  --text-secondary: oklch(0.45 0.02 265);
+  --text-tertiary: oklch(0.60 0.02 265);
 
-  --ok-muted: rgba(34, 197, 94, 0.1);
-  --warn-muted: rgba(245, 158, 11, 0.12);
-  --err-muted: rgba(239, 68, 68, 0.08);
+  --accent: oklch(0.58 0.20 259);
+  --accent-hover: oklch(0.52 0.21 259);
+  --accent-muted: oklch(0.58 0.20 259 / 0.10);
+  --accent-glow: oklch(0.58 0.20 259 / 0.16);
 
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04);
-  --shadow: 0 4px 24px rgba(0, 0, 0, 0.06);
-  --shadow-lg: 0 12px 48px rgba(0, 0, 0, 0.08);
+  --ok: oklch(0.60 0.16 150);
+  --ok-muted: oklch(0.60 0.16 150 / 0.12);
+  --warn: oklch(0.68 0.15 70);
+  --warn-muted: oklch(0.68 0.15 70 / 0.14);
+  --err: oklch(0.58 0.22 27);
+  --err-muted: oklch(0.58 0.22 27 / 0.10);
+
+  --shadow-sm: 0 1px 2px oklch(0.21 0.02 265 / 0.05);
+  --shadow: 0 4px 24px oklch(0.21 0.02 265 / 0.07);
+  --shadow-lg: 0 12px 48px oklch(0.21 0.02 265 / 0.10);
 }
 
 /* ── Base ──────────────────────────────────────────────────────── */
@@ -87,7 +101,7 @@ body {
   z-index: 0;
   background:
     radial-gradient(ellipse 80% 60% at 50% -20%, var(--accent-glow), transparent),
-    radial-gradient(ellipse 50% 40% at 100% 0%, rgba(99, 102, 241, 0.06), transparent);
+    radial-gradient(ellipse 50% 40% at 100% 0%, oklch(0.59 0.23 277 / 0.06), transparent);
 }
 
 .app-shell {
@@ -265,15 +279,15 @@ body.is-resizing-sidebar * {
 }
 
 .app-nav-item.is-active {
-  border-color: rgba(59, 130, 246, 0.35);
+  border-color: oklch(0.62 0.2 259 / 0.35);
   background: var(--accent-muted);
   color: var(--accent);
-  box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.1);
+  box-shadow: 0 0 0 1px oklch(0.62 0.2 259 / 0.1);
 }
 
 .app-nav-item.is-active:hover {
-  border-color: rgba(59, 130, 246, 0.5);
-  box-shadow: 0 4px 14px rgba(59, 130, 246, 0.12);
+  border-color: oklch(0.62 0.2 259 / 0.5);
+  box-shadow: 0 4px 14px oklch(0.62 0.2 259 / 0.12);
 }
 
 .app-nav-item svg {
@@ -622,7 +636,7 @@ body.is-resizing-sidebar * {
 .btn.env-toolbar-btn:hover,
 .btn.env-add-btn:hover {
   color: var(--accent);
-  border-color: rgba(59, 130, 246, 0.3);
+  border-color: oklch(0.62 0.2 259 / 0.3);
   background: var(--accent-muted);
 }
 
@@ -877,14 +891,14 @@ body.is-resizing-sidebar * {
   justify-content: space-between;
   gap: 1rem;
   margin: 0 0 1rem;
-  padding: 0.875rem 1rem;
+  padding: 0.5rem 1rem;
   border: 1px solid var(--border);
   border-left-width: 4px;
   border-left-color: var(--warn);
   border-radius: var(--radius);
   background: var(--warn-muted);
-  font-size: 0.875rem;
-  line-height: 1.5;
+  font-size: 0.8125rem;
+  line-height: 1.4;
 }
 
 .main-connection-hint-text {
@@ -1067,7 +1081,7 @@ body.is-resizing-sidebar * {
 .connection-modal--login .connection-modal-close:hover {
   border-color: var(--login-blue);
   color: var(--login-blue);
-  background: rgba(59, 130, 246, 0.06);
+  background: oklch(0.62 0.2 259 / 0.06);
 }
 
 .connection-modal--login .connection-form--login {
@@ -1127,7 +1141,7 @@ body.is-resizing-sidebar * {
   flex-shrink: 0;
   border: none;
   border-radius: 999px;
-  background: rgba(59, 130, 246, 0.1);
+  background: oklch(0.62 0.2 259 / 0.1);
   color: var(--login-blue);
   font: inherit;
   font-size: 0.8125rem;
@@ -1138,7 +1152,7 @@ body.is-resizing-sidebar * {
 }
 
 .connection-modal--login .connection-pill-action:hover {
-  background: rgba(59, 130, 246, 0.16);
+  background: oklch(0.62 0.2 259 / 0.16);
   color: var(--login-blue-dark);
 }
 
@@ -1201,7 +1215,7 @@ body.is-resizing-sidebar * {
 .connection-modal--login .connection-modal-ghost-btn:hover {
   border-color: var(--login-blue);
   color: var(--login-blue);
-  background: rgba(59, 130, 246, 0.06);
+  background: oklch(0.62 0.2 259 / 0.06);
 }
 
 /* ── Connection modal (legacy base) ────────────────────────────── */
@@ -2235,7 +2249,7 @@ code {
   z-index: 200;
   display: flex;
   flex-direction: column;
-  width: min(var(--chat-panel-width, 300px), 100vw);
+  width: min(var(--chat-panel-width, 20vw), 100vw);
   height: 100vh;
   border-left: 1px solid var(--border);
   background: var(--bg-elevated);
@@ -3281,14 +3295,14 @@ body.is-resizing-chat-panel.is-moving-chat-panel * {
 }
 
 .mcp-pill-field {
-  --mcp-pill-h: 2.625rem;
+  --mcp-pill-h: 2.375rem;
   display: flex;
   align-items: center;
-  gap: 0.625rem;
+  gap: 0.5rem;
   height: var(--mcp-pill-h);
-  padding: 0 1rem;
+  padding: 0 0.75rem;
   border: 1px solid var(--border);
-  border-radius: 999px;
+  border-radius: var(--radius-sm);
   background: var(--surface-inset);
   transition: border-color var(--transition), box-shadow var(--transition);
 }
@@ -3393,16 +3407,16 @@ body.is-resizing-chat-panel.is-moving-chat-panel * {
 }
 
 .mcp-tool-card-inner.is-active {
-  border-color: rgba(59, 130, 246, 0.35);
+  border-color: oklch(0.62 0.2 259 / 0.35);
   background: var(--accent-muted);
   color: var(--accent);
-  box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.1);
+  box-shadow: 0 0 0 1px oklch(0.62 0.2 259 / 0.1);
   transform: none;
 }
 
 .mcp-tool-card-inner.is-active:hover {
-  border-color: rgba(59, 130, 246, 0.5);
-  box-shadow: 0 4px 14px rgba(59, 130, 246, 0.12);
+  border-color: oklch(0.62 0.2 259 / 0.5);
+  box-shadow: 0 4px 14px oklch(0.62 0.2 259 / 0.12);
 }
 
 .mcp-tool-card-name {
@@ -3776,7 +3790,7 @@ html.session-resetting body {
   bottom: -35%;
   width: 70vmin;
   height: 70vmin;
-  border: 2px solid rgba(59, 130, 246, 0.14);
+  border: 2px solid oklch(0.62 0.2 259 / 0.14);
   border-radius: 50%;
 }
 
@@ -3787,7 +3801,7 @@ html.session-resetting body {
   bottom: -22%;
   width: 48vmin;
   height: 48vmin;
-  border: 2px solid rgba(59, 130, 246, 0.1);
+  border: 2px solid oklch(0.62 0.2 259 / 0.1);
   border-radius: 50%;
 }
 
@@ -3893,14 +3907,14 @@ html.session-resetting body {
   padding: 1rem 1.125rem;
   border: 1px solid var(--login-border, #e2e8f0);
   border-radius: 16px;
-  background: rgba(59, 130, 246, 0.05);
+  background: oklch(0.62 0.2 259 / 0.05);
   cursor: pointer;
   transition: border-color 0.18s ease, background 0.18s ease;
 }
 
 .agentic-settings-toggle:hover {
-  border-color: rgba(59, 130, 246, 0.35);
-  background: rgba(59, 130, 246, 0.08);
+  border-color: oklch(0.62 0.2 259 / 0.35);
+  background: oklch(0.62 0.2 259 / 0.08);
 }
 
 .agentic-settings-toggle input {
@@ -3998,7 +4012,7 @@ html.session-resetting body {
 .agentic-settings-input:focus {
   outline: none;
   border-color: var(--login-blue, #3b82f6);
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+  box-shadow: 0 0 0 3px oklch(0.62 0.2 259 / 0.15);
 }
 
 .agentic-settings-field.is-disabled .agentic-settings-input,
@@ -4058,7 +4072,7 @@ html.session-resetting body {
 
 .login-pill-field:focus-within {
   border-color: var(--login-blue);
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+  box-shadow: 0 0 0 3px oklch(0.62 0.2 259 / 0.15);
 }
 
 .login-pill-icon {
@@ -4458,16 +4472,16 @@ body.is-resizing-workflow-sidebar * {
 }
 
 .workflow-step-btn.is-active {
-  border-color: rgba(59, 130, 246, 0.35);
+  border-color: oklch(0.62 0.2 259 / 0.35);
   background: var(--accent-muted);
   color: var(--accent);
-  box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.1);
+  box-shadow: 0 0 0 1px oklch(0.62 0.2 259 / 0.1);
   transform: none;
 }
 
 .workflow-step-btn.is-active:hover {
-  border-color: rgba(59, 130, 246, 0.5);
-  box-shadow: 0 4px 14px rgba(59, 130, 246, 0.12);
+  border-color: oklch(0.62 0.2 259 / 0.5);
+  box-shadow: 0 4px 14px oklch(0.62 0.2 259 / 0.12);
 }
 
 .workflow-step-btn.is-complete .workflow-step-num {
@@ -4511,7 +4525,7 @@ body.is-resizing-workflow-sidebar * {
 }
 
 .workflow-step-btn.is-active .workflow-step-desc {
-  color: rgba(59, 130, 246, 0.75);
+  color: oklch(0.62 0.2 259 / 0.75);
 }
 
 .workflow-main {
@@ -4634,7 +4648,7 @@ body.is-resizing-workflow-sidebar * {
 }
 
 .merge-compare-section.is-running .br-compare-actions-bar {
-  border-color: rgba(59, 130, 246, 0.35);
+  border-color: oklch(0.62 0.2 259 / 0.35);
 }
 
 .br-compare-actions-bar .btn.is-busy {
@@ -4907,7 +4921,7 @@ body.is-resizing-workflow-sidebar * {
 }
 
 .br-compare-results-section.is-running .br-compare-panel {
-  border-color: rgba(59, 130, 246, 0.35);
+  border-color: oklch(0.62 0.2 259 / 0.35);
 }
 
 .br-compare-results-section .br-compare-toolbar,
@@ -4957,6 +4971,46 @@ body.is-resizing-workflow-sidebar * {
 .br-compare-results-section .br-compare-table {
   width: 100%;
   table-layout: auto;
+}
+
+/* Compact, uniform compare rows regardless of status. Keep status pills on a
+   single line and cap the long text/code columns to one truncated line (full
+   text is available via the title tooltip). This stops multi-word statuses
+   ("New in BR" / "Missing in BR") and long entity names / field paths from
+   inflating row height, so every row matches the compact "Changed"/"Error" look. */
+.br-compare-table td {
+  vertical-align: top;
+}
+
+.br-compare-table td .analyze-badge {
+  white-space: nowrap;
+}
+
+.br-compare-table td:nth-child(3),
+.br-compare-table td:nth-child(5),
+.br-compare-table td:nth-child(6),
+.br-compare-table td:nth-child(7),
+.br-compare-table td:nth-child(8) {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.br-compare-table td:nth-child(3) {
+  max-width: 18rem;
+}
+
+.br-compare-table td:nth-child(5) {
+  max-width: 16rem;
+}
+
+.br-compare-table td:nth-child(6),
+.br-compare-table td:nth-child(7) {
+  max-width: 12rem;
+}
+
+.br-compare-table td:nth-child(8) {
+  max-width: 22rem;
 }
 
 .zip-upload-row + .workflow-step-actions {
@@ -5741,6 +5795,443 @@ body.is-resizing-workflow-sidebar * {
   margin-top: 1.25rem;
 }
 
+/* ---------------------------------------------------------------------------
+   Compare report — grouped two-source diff view
+   Baseline (production/audit) vs BR (local import), field-by-field, with a
+   sticky source header, per-entity groups, change badges, and expandable
+   long values. Uses the shared OKLCH theme tokens (no bespoke colors).
+   --------------------------------------------------------------------------- */
+.br-compare-diff-toolbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem 0.75rem;
+  margin-bottom: 0.625rem;
+}
+
+.br-compare-diff-controls {
+  display: flex;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  gap: 0.5rem 0.625rem;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.br-compare-diff-controls .br-compare-filter-search {
+  flex: 1 1 12rem;
+  min-width: 8rem;
+}
+
+.br-compare-diff-count {
+  margin: 0;
+  padding: 0.3rem 0.7rem;
+  border-radius: 999px;
+  background: var(--surface-inset);
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.br-compare-diff-wrap {
+  --cmp-cols: minmax(150px, 1.35fr) 108px minmax(0, 1fr) minmax(0, 1fr);
+  padding: 0;
+}
+
+/* Sticky "which two things are we comparing" header */
+.br-compare-diff-sources {
+  position: sticky;
+  top: 0;
+  z-index: 4;
+  display: grid;
+  grid-template-columns: var(--cmp-cols);
+  background: var(--surface);
+  border-bottom: 1px solid var(--border-strong);
+}
+
+.br-compare-diff-colhead {
+  display: flex;
+  align-items: center;
+  padding: 0.6rem 0.75rem;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+}
+
+.br-compare-diff-source {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  border-left: 1px solid var(--border);
+  min-width: 0;
+}
+
+.br-compare-diff-source.is-current {
+  background: var(--accent-muted);
+}
+
+.br-compare-diff-source-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.65rem;
+  height: 1.65rem;
+  border-radius: var(--radius-sm);
+  flex: none;
+}
+
+.br-compare-diff-source.is-baseline .br-compare-diff-source-icon {
+  color: var(--text-secondary);
+  background: var(--surface-inset);
+}
+
+.br-compare-diff-source.is-current .br-compare-diff-source-icon {
+  color: var(--accent);
+  background: var(--surface);
+}
+
+.br-compare-diff-source-body {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.br-compare-diff-source-name {
+  font-size: 0.8125rem;
+  font-weight: 700;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.br-compare-diff-source-meta {
+  font-size: 0.6875rem;
+  color: var(--text-tertiary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.br-compare-diff-source-pill {
+  flex: none;
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.625rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.br-compare-diff-source-pill.is-baseline {
+  color: var(--text-secondary);
+  background: var(--surface-inset);
+  border: 1px solid var(--border);
+}
+
+.br-compare-diff-source-pill.is-current {
+  color: var(--accent);
+  background: var(--surface);
+  border: 1px solid oklch(0.62 0.2 259 / 0.35);
+}
+
+/* Per-entity groups */
+.br-compare-diff-group {
+  border-top: 1px solid var(--border);
+}
+
+.br-compare-diff-group:first-child {
+  border-top: 0;
+}
+
+.br-compare-diff-group-head {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.55rem 0.75rem;
+  background: var(--surface-inset);
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+  user-select: none;
+}
+
+.br-compare-diff-group-head:hover {
+  background: var(--surface-inset-strong, var(--border));
+}
+
+.br-compare-diff-group-head:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.br-compare-diff-group.is-collapsed .br-compare-diff-group-head {
+  border-bottom: 0;
+}
+
+.br-compare-diff-group-icon {
+  display: inline-flex;
+  color: var(--text-secondary);
+  flex: none;
+}
+
+.br-compare-diff-group-name {
+  font-size: 0.8125rem;
+  font-weight: 700;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+.br-compare-diff-group-type {
+  flex: none;
+  padding: 0.0625rem 0.45rem;
+  border-radius: 999px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  font-size: 0.6875rem;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.br-compare-diff-group-status {
+  flex: none;
+  white-space: nowrap;
+}
+
+.br-compare-diff-group-count {
+  flex: none;
+  margin-left: auto;
+  font-size: 0.6875rem;
+  color: var(--text-tertiary);
+  white-space: nowrap;
+}
+
+.br-compare-diff-group-chevron {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  color: var(--text-tertiary);
+  transition: transform var(--transition);
+}
+
+/* When there's no field-count chip (which carries margin-left:auto), the
+   chevron sits right after the status badge — pin it to the right instead. */
+.br-compare-diff-group-status + .br-compare-diff-group-chevron {
+  margin-left: auto;
+}
+
+.br-compare-diff-group.is-collapsed .br-compare-diff-group-chevron {
+  transform: rotate(-90deg);
+}
+
+.br-compare-diff-group.is-collapsed .br-compare-diff-row,
+.br-compare-diff-group.is-collapsed .br-compare-diff-note {
+  display: none;
+}
+
+/* Field rows */
+.br-compare-diff-row {
+  display: grid;
+  grid-template-columns: var(--cmp-cols);
+  align-items: start;
+  border-top: 1px solid var(--border);
+}
+
+.br-compare-diff-group-head + .br-compare-diff-row {
+  border-top: 0;
+}
+
+.br-compare-diff-row:hover {
+  background: var(--surface-hover);
+}
+
+.br-compare-diff-field {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.4rem;
+  padding: 0.5rem 0.75rem;
+  min-width: 0;
+}
+
+.br-compare-diff-field-icon {
+  margin-top: 0.2rem;
+  color: var(--text-tertiary);
+  flex: none;
+}
+
+.br-compare-diff-field-label {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--text);
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+.br-compare-diff-change {
+  display: flex;
+  align-items: flex-start;
+  padding: 0.5rem 0.5rem;
+}
+
+.br-compare-diff-badge {
+  white-space: nowrap;
+}
+
+/* Distinct badge tones inside the compare report (the shared .analyze-badge
+   base is green; give Changed/Added/Removed/status their own semantic color
+   so field- and entity-level states read at a glance). Scoped to the diff so
+   other reports keep their existing look. */
+.br-compare-diff .analyze-badge {
+  padding: 0.15rem 0.55rem;
+  font-size: 0.6875rem;
+  font-weight: 700;
+}
+
+.br-compare-diff .analyze-badge.is-ok {
+  background: var(--ok-muted);
+  color: var(--ok);
+  border-color: oklch(0.7 0.16 152 / 0.32);
+}
+
+.br-compare-diff .analyze-badge.is-accent {
+  background: var(--accent-muted);
+  color: var(--accent);
+  border-color: oklch(0.62 0.2 259 / 0.32);
+}
+
+.br-compare-diff .analyze-badge.is-warn {
+  background: var(--warn-muted);
+  color: var(--warn);
+  border-color: oklch(0.78 0.15 76 / 0.36);
+}
+
+.br-compare-diff .analyze-badge.is-err {
+  background: var(--err-muted);
+  color: var(--err);
+  border-color: oklch(0.62 0.21 26 / 0.36);
+}
+
+.br-compare-diff-value {
+  padding: 0.5rem 0.75rem;
+  border-left: 1px solid var(--border);
+  min-width: 0;
+}
+
+.br-compare-diff-value.is-current {
+  background: oklch(0.62 0.2 259 / 0.05);
+}
+
+.br-compare-diff-value.is-empty .br-compare-diff-value-content {
+  color: var(--text-tertiary);
+}
+
+.br-compare-diff-value-content {
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 0.75rem;
+  line-height: 1.5;
+  color: var(--text);
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+/* Clamp long JSON-ish values; expand via the row toggle */
+.br-compare-diff-row.is-clampable .br-compare-diff-value-content {
+  max-height: 7.5em;
+  overflow: hidden;
+  -webkit-mask-image: linear-gradient(to bottom, #000 62%, transparent);
+  mask-image: linear-gradient(to bottom, #000 62%, transparent);
+}
+
+.br-compare-diff-row.is-clampable.is-expanded .br-compare-diff-value-content {
+  max-height: none;
+  -webkit-mask-image: none;
+  mask-image: none;
+}
+
+.br-compare-diff-toggle {
+  grid-column: 3 / -1;
+  justify-self: center;
+  margin: 0 0 0.5rem;
+  padding: 0.2rem 0.65rem;
+  border: 0;
+  background: transparent;
+  color: var(--accent);
+  font-size: 0.75rem;
+  font-weight: 700;
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+}
+
+.br-compare-diff-toggle:hover {
+  background: var(--accent-muted);
+}
+
+.br-compare-diff-note {
+  padding: 0.6rem 0.75rem;
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+  background: var(--surface);
+}
+
+.br-compare-diff-empty {
+  padding: 1.5rem 0.75rem;
+  text-align: center;
+  color: var(--text-tertiary);
+  font-size: 0.8125rem;
+}
+
+@media (max-width: 720px) {
+  .br-compare-diff-wrap {
+    --cmp-cols: minmax(0, 1fr) 92px;
+  }
+
+  .br-compare-diff-sources .br-compare-diff-source {
+    display: none;
+  }
+
+  .br-compare-diff-row {
+    grid-template-columns: minmax(0, 1fr) 92px;
+  }
+
+  .br-compare-diff-value {
+    grid-column: 1 / -1;
+    border-left: 0;
+    border-top: 1px dashed var(--border);
+  }
+
+  .br-compare-diff-value.is-baseline::before {
+    content: "Baseline";
+  }
+
+  .br-compare-diff-value.is-current::before {
+    content: "BR (local)";
+  }
+
+  .br-compare-diff-value::before {
+    display: block;
+    margin-bottom: 0.2rem;
+    font-size: 0.625rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--text-tertiary);
+  }
+
+  .br-compare-diff-toggle {
+    grid-column: 1 / -1;
+  }
+}
+
 .br-compare-entity-detail {
   margin-top: 0.75rem;
   padding-top: 0.75rem;
@@ -6073,7 +6564,7 @@ body.is-resizing-workflow-sidebar * {
   padding: 0.875rem 1rem;
   border-radius: var(--radius);
   background: var(--accent-muted);
-  border: 1px solid rgba(59, 130, 246, 0.25);
+  border: 1px solid oklch(0.62 0.2 259 / 0.25);
   color: var(--text-secondary);
   font-size: 0.875rem;
   line-height: 1.45;
@@ -6136,16 +6627,18 @@ body.is-resizing-workflow-sidebar * {
 
 /* ── Main app (login-flavor light shell) ─────────────────────────── */
 .app-page-body {
-  --app-bg: #dbeafe;
-  --app-blue: #3b82f6;
-  --app-blue-dark: #2563eb;
-  --app-card: #ffffff;
-  --app-text: #0f172a;
-  --app-muted: #64748b;
-  --app-border: #e2e8f0;
-  --app-surface-soft: #f8fafc;
-  --app-shadow: 0 24px 48px rgba(15, 23, 42, 0.12);
-  --app-shadow-sm: 0 8px 24px rgba(15, 23, 42, 0.08);
+  --app-bg: oklch(0.94 0.035 255);
+  --app-shell-padding: 0.875rem;
+  --app-column-gap: 0.5rem;
+  --app-blue: oklch(0.58 0.20 259);
+  --app-blue-dark: oklch(0.52 0.21 259);
+  --app-card: oklch(1 0 0);
+  --app-text: oklch(0.21 0.02 265);
+  --app-muted: oklch(0.52 0.03 258);
+  --app-border: oklch(0.90 0.012 260);
+  --app-surface-soft: oklch(0.975 0.006 260);
+  --app-shadow: 0 24px 48px oklch(0.42 0.05 265 / 0.12);
+  --app-shadow-sm: 0 8px 24px oklch(0.42 0.05 265 / 0.08);
 
   background: var(--app-bg);
   color: var(--app-text);
@@ -6170,7 +6663,7 @@ body.is-resizing-workflow-sidebar * {
   bottom: -35%;
   width: 70vmin;
   height: 70vmin;
-  border: 2px solid rgba(59, 130, 246, 0.14);
+  border: 2px solid oklch(0.62 0.2 259 / 0.14);
   border-radius: 50%;
 }
 
@@ -6181,12 +6674,12 @@ body.is-resizing-workflow-sidebar * {
   bottom: -22%;
   width: 48vmin;
   height: 48vmin;
-  border: 2px solid rgba(59, 130, 246, 0.1);
+  border: 2px solid oklch(0.62 0.2 259 / 0.1);
   border-radius: 50%;
 }
 
 .app-page-body .app-shell {
-  padding: 0.875rem;
+  padding: var(--app-shell-padding);
   gap: 0;
   height: 100vh;
   max-height: 100vh;
@@ -6194,6 +6687,7 @@ body.is-resizing-workflow-sidebar * {
   overflow: hidden;
   grid-template-rows: minmax(0, 1fr);
   align-items: stretch;
+  grid-template-columns: var(--sidebar-width) var(--app-column-gap) minmax(0, 1fr);
 }
 
 .app-page-body .app-shell > .env-sidebar,
@@ -6215,12 +6709,12 @@ body.is-resizing-workflow-sidebar * {
 
 /* Agentic panel — match action sidebar card */
 .app-page-body .chat-panel:not(.chat-panel-popup) {
-  top: calc(0.875rem + 0.25rem);
-  right: 0.875rem;
-  height: calc(100vh - 1.75rem);
-  width: min(var(--chat-panel-width, 300px), calc(100vw - 1.75rem));
+  top: calc(var(--app-shell-padding) + 0.25rem);
+  right: var(--app-shell-padding);
+  height: calc(100vh - (2 * var(--app-shell-padding)));
+  width: min(var(--chat-panel-width, 20vw), calc(100vw - (2 * var(--app-shell-padding)) - var(--app-column-gap)));
   min-width: 220px;
-  max-width: min(520px, calc(100vw - 1.75rem));
+  max-width: min(520px, calc(100vw - (2 * var(--app-shell-padding)) - var(--app-column-gap)));
   border: none;
   border-radius: 24px;
   box-shadow: var(--app-shadow);
@@ -6229,9 +6723,13 @@ body.is-resizing-workflow-sidebar * {
 }
 
 .app-page-body .chat-panel-resizer {
-  top: 0.75rem;
-  bottom: 0.75rem;
-  border-radius: 999px;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 10px;
+  margin-left: -5px;
+  z-index: 12;
+  cursor: col-resize;
 }
 
 .app-page-body .chat-panel-head {
@@ -6272,8 +6770,8 @@ body.is-resizing-workflow-sidebar * {
 }
 
 .app-page-body .chat-message-user {
-  background: rgba(59, 130, 246, 0.08);
-  border-color: rgba(59, 130, 246, 0.2);
+  background: oklch(0.62 0.2 259 / 0.08);
+  border-color: oklch(0.62 0.2 259 / 0.2);
 }
 
 .app-page-body .chat-composer {
@@ -6289,17 +6787,17 @@ body.is-resizing-workflow-sidebar * {
 }
 
 .app-page-body .chat-composer-box:focus-within {
-  border-color: rgba(59, 130, 246, 0.35);
+  border-color: oklch(0.62 0.2 259 / 0.35);
 }
 
 .app-page-body .chat-panel-resizer::after {
-  background: rgba(59, 130, 246, 0.18);
+  background: oklch(0.62 0.2 259 / 0.18);
 }
 
 .app-page-body .chat-panel-resizer:hover::after,
 .app-page-body .chat-panel-resizer:focus-visible::after,
 .app-page-body .chat-panel-resizer.is-dragging::after {
-  background: rgba(59, 130, 246, 0.45);
+  background: oklch(0.62 0.2 259 / 0.45);
 }
 
 .app-page-body .sidebar-brand {
@@ -6329,7 +6827,7 @@ body.is-resizing-workflow-sidebar * {
 }
 
 .app-page-body .app-nav-item:not(.is-active) {
-  box-shadow: var(--app-shadow-sm);
+  box-shadow: none;
 }
 
 .app-page-body .app-nav-item {
@@ -6347,15 +6845,15 @@ body.is-resizing-workflow-sidebar * {
 }
 
 .app-page-body .app-nav-item.is-active {
-  background: rgba(59, 130, 246, 0.1);
-  border-color: rgba(59, 130, 246, 0.25);
+  background: oklch(0.62 0.2 259 / 0.1);
+  border-color: oklch(0.62 0.2 259 / 0.25);
   color: var(--app-blue);
-  box-shadow: var(--app-shadow-sm);
+  box-shadow: none;
 }
 
 .app-page-body .app-nav-item.is-active:hover {
-  background: rgba(59, 130, 246, 0.12);
-  border-color: rgba(59, 130, 246, 0.35);
+  background: oklch(0.62 0.2 259 / 0.12);
+  border-color: oklch(0.62 0.2 259 / 0.35);
 }
 
 .app-page-body .env-sidebar-title {
@@ -6440,13 +6938,13 @@ body.is-resizing-workflow-sidebar * {
 }
 
 .app-page-body .sidebar-resizer::after {
-  background: rgba(59, 130, 246, 0.18);
+  background: oklch(0.62 0.2 259 / 0.18);
 }
 
 .app-page-body .sidebar-resizer:hover::after,
 .app-page-body .sidebar-resizer:focus-visible::after,
 .app-page-body .sidebar-resizer.is-dragging::after {
-  background: rgba(59, 130, 246, 0.45);
+  background: oklch(0.62 0.2 259 / 0.45);
 }
 
 .app-page-body .workflow-sidebar-resizer::after {
@@ -6456,7 +6954,7 @@ body.is-resizing-workflow-sidebar * {
 .app-page-body .workflow-sidebar-resizer:hover::after,
 .app-page-body .workflow-sidebar-resizer:focus-visible::after,
 .app-page-body .workflow-sidebar-resizer.is-dragging::after {
-  background: rgba(59, 130, 246, 0.45);
+  background: oklch(0.62 0.2 259 / 0.45);
 }
 
 .app-page-body .page {
@@ -6470,7 +6968,9 @@ body.is-resizing-workflow-sidebar * {
   height: 100%;
   overflow: hidden;
   overscroll-behavior: contain;
-  padding: 0.25rem 1rem 0.25rem;
+  /* No horizontal padding: the only gutter to the sidebar/assistant is the
+     slim structural column-gap, so the center page uses the full width. */
+  padding: 0.25rem 0;
 }
 
 .app-page-body .main-connection-hint {
@@ -6479,10 +6979,26 @@ body.is-resizing-workflow-sidebar * {
   top: auto;
   z-index: 60;
   margin: 0 0 0.5rem;
+  padding: 0.5rem 0.9rem;
   border-radius: 16px;
-  border: 1px solid var(--app-border);
+  border-width: 1px;
+  border-style: solid;
   border-left-width: 4px;
   box-shadow: var(--app-shadow-sm);
+}
+
+/* Keep the bar a single cohesive tone: all-green when connected, all-amber
+   when disconnected (no mismatched/neutral edge bleeding under the fill). */
+.app-page-body .main-connection-hint-connected {
+  background: var(--ok-muted);
+  border-color: oklch(0.7 0.16 152 / 0.35);
+  border-left-color: var(--ok);
+}
+
+.app-page-body .main-connection-hint-disconnected {
+  background: var(--warn-muted);
+  border-color: oklch(0.78 0.15 76 / 0.4);
+  border-left-color: var(--warn);
 }
 
 .app-page-body .page > .app-view-fill {
@@ -6537,6 +7053,16 @@ body.is-resizing-workflow-sidebar * {
   flex-direction: column;
   justify-content: flex-start;
   gap: 0.5rem;
+}
+
+/* Match the breathing room below the gray workflow cards to the gap above
+   them (steps bar → cards ≈ 12px), so the section isn't cramped at the
+   bottom. */
+.app-page-body #pushView .workflow-shell,
+.app-page-body #dgImportView .workflow-shell,
+.app-page-body #mcpToolsView .workflow-shell,
+.app-page-body #mcpToolsView .mcp-tools-shell {
+  padding-bottom: 0.75rem;
 }
 
 .app-page-body #pushView .workflow-shell.has-compare-open,
@@ -6666,6 +7192,43 @@ body.is-resizing-workflow-sidebar * {
 .app-page-body .mcp-tools-shell .mcp-tools-status-line {
   margin: 0;
   flex-shrink: 0;
+}
+
+/* Scroll the whole workflow area as one: the outer scrollbar rolls the
+   WORKFLOW sidebar together with the main content instead of scrolling only
+   the Business request / main column. Scoped to the upload + DG-import flows
+   in their normal (non compare-open) state so compare mode and the MCP tools
+   library keep their own scroll behavior. */
+.app-page-body #pushView .workflow-shell:not(.has-compare-open) .workflow-workbench,
+.app-page-body #dgImportView .workflow-shell:not(.has-compare-open) .workflow-workbench {
+  grid-template-rows: auto;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-gutter: stable;
+  scroll-padding-bottom: 2.5rem;
+}
+
+.app-page-body #pushView .workflow-shell:not(.has-compare-open) .workflow-main,
+.app-page-body #dgImportView .workflow-shell:not(.has-compare-open) .workflow-main {
+  height: auto;
+  overflow: visible;
+}
+
+.app-page-body #pushView .workflow-shell:not(.has-compare-open) .workflow-sidebar,
+.app-page-body #dgImportView .workflow-shell:not(.has-compare-open) .workflow-sidebar {
+  height: auto;
+  overflow: visible;
+}
+
+.app-page-body #pushView .workflow-shell:not(.has-compare-open) .workflow-main-scroll,
+.app-page-body #dgImportView .workflow-shell:not(.has-compare-open) .workflow-main-scroll {
+  height: auto;
+  max-height: none;
+  overflow: visible;
+  scroll-padding-bottom: 0;
+  padding-bottom: 1rem;
 }
 
 .app-page-body .mcp-tools-empty-detail {
@@ -6804,7 +7367,7 @@ body.is-resizing-workflow-sidebar * {
 
 .app-page-body .main-connection-bar-actions .icon-btn:hover {
   background: var(--app-surface-soft);
-  border-color: rgba(59, 130, 246, 0.35);
+  border-color: oklch(0.62 0.2 259 / 0.35);
   color: var(--app-blue);
 }
 
@@ -6912,7 +7475,7 @@ body.is-resizing-workflow-sidebar * {
 .app-page-body textarea:focus,
 .app-page-body select:focus {
   border-color: var(--app-blue);
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+  box-shadow: 0 0 0 3px oklch(0.62 0.2 259 / 0.15);
 }
 
 .app-page-body .zip-dropzone {
@@ -6924,14 +7487,14 @@ body.is-resizing-workflow-sidebar * {
 .app-page-body .zip-dropzone:hover,
 .app-page-body .zip-dropzone.is-dragover {
   border-color: var(--app-blue);
-  background: rgba(59, 130, 246, 0.06);
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.12);
+  background: oklch(0.62 0.2 259 / 0.06);
+  box-shadow: 0 0 0 3px oklch(0.62 0.2 259 / 0.12);
 }
 
 .app-page-body .merge-safety-banner {
   border-radius: 12px;
-  background: rgba(59, 130, 246, 0.08);
-  border: 1px solid rgba(59, 130, 246, 0.18);
+  background: oklch(0.62 0.2 259 / 0.08);
+  border: 1px solid oklch(0.62 0.2 259 / 0.18);
 }
 
 .app-page-body .br-compare-filter-input,
@@ -6944,7 +7507,7 @@ body.is-resizing-workflow-sidebar * {
 .app-page-body .br-compare-filter-input:focus,
 .app-page-body .br-compare-filter-select:focus {
   border-color: var(--app-blue);
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+  box-shadow: 0 0 0 3px oklch(0.62 0.2 259 / 0.15);
   outline: none;
 }
 
@@ -7009,15 +7572,15 @@ body:has(.connection-modal[open]) .app-bg-shape::after {
 }
 
 .app-page-body .mcp-tool-card-inner.is-active {
-  background: rgba(59, 130, 246, 0.1);
-  border-color: rgba(59, 130, 246, 0.25);
+  background: oklch(0.62 0.2 259 / 0.1);
+  border-color: oklch(0.62 0.2 259 / 0.25);
   color: var(--app-blue);
   box-shadow: var(--app-shadow-sm);
 }
 
 .app-page-body .mcp-tool-card-inner.is-active:hover {
-  background: rgba(59, 130, 246, 0.12);
-  border-color: rgba(59, 130, 246, 0.35);
+  background: oklch(0.62 0.2 259 / 0.12);
+  border-color: oklch(0.62 0.2 259 / 0.35);
 }
 
 .app-page-body .mcp-float-tip {
@@ -7045,8 +7608,16 @@ body:has(.connection-modal[open]) .app-bg-shape::after {
 }
 
 body.app-page-body.is-chat-docked .app-main {
-  padding-right: calc(min(var(--chat-panel-width, 300px), calc(100vw - 1.75rem)) + 1.375rem);
+  padding-right: calc(var(--chat-panel-width, 20vw) + var(--app-column-gap));
+}
+
+body.app-page-body.is-chat-docked:not(.is-resizing-chat-panel) .app-main {
   transition: padding-right 0.15s ease;
+}
+
+body.app-page-body.is-resizing-chat-panel.is-chat-docked .app-main {
+  transition: none;
+  will-change: padding-right;
 }
 
 .app-page-body .workflow-sidebar,
@@ -7077,8 +7648,8 @@ body.app-page-body.is-chat-docked .app-main {
 }
 
 .app-page-body .workflow-step-btn.is-active {
-  background: rgba(59, 130, 246, 0.1);
-  border-color: rgba(59, 130, 246, 0.25);
+  background: oklch(0.62 0.2 259 / 0.1);
+  border-color: oklch(0.62 0.2 259 / 0.25);
   color: var(--app-blue);
 }
 
@@ -7147,7 +7718,7 @@ body.app-page-body.is-chat-docked .app-main {
 
 .app-page-body .mcp-pill-field:focus-within {
   border-color: var(--app-blue);
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+  box-shadow: 0 0 0 3px oklch(0.62 0.2 259 / 0.15);
 }
 
 .app-page-body .mcp-tools-status-line {
@@ -7186,24 +7757,24 @@ body.app-page-body.is-chat-docked .app-main {
 }
 
 :root[data-theme="dark"] .app-page-body {
-  --app-blue: #2563eb;
-  --app-blue-dark: #1d4ed8;
-  --app-card: #18181b;
-  --app-text: #f8fafc;
-  --app-muted: #94a3b8;
-  --app-border: rgba(255, 255, 255, 0.1);
-  --app-surface-soft: #111113;
-  --app-shadow: 0 24px 48px rgba(0, 0, 0, 0.35);
-  --app-shadow-sm: 0 8px 24px rgba(0, 0, 0, 0.25);
-  background: #0c1222;
+  --app-blue: oklch(0.64 0.19 259);
+  --app-blue-dark: oklch(0.58 0.20 259);
+  --app-card: oklch(0.215 0.012 265);
+  --app-text: oklch(0.96 0.004 265);
+  --app-muted: oklch(0.68 0.02 258);
+  --app-border: oklch(1 0 0 / 0.10);
+  --app-surface-soft: oklch(0.185 0.010 265);
+  --app-shadow: 0 24px 48px oklch(0 0 0 / 0.4);
+  --app-shadow-sm: 0 8px 24px oklch(0 0 0 / 0.28);
+  background: oklch(0.16 0.014 265);
 }
 
 :root[data-theme="dark"] .app-page-body .app-bg-shape::before {
-  border-color: rgba(59, 130, 246, 0.2);
+  border-color: oklch(0.64 0.19 259 / 0.2);
 }
 
 :root[data-theme="dark"] .app-page-body .app-bg-shape::after {
-  border-color: rgba(59, 130, 246, 0.12);
+  border-color: oklch(0.64 0.19 259 / 0.12);
 }
 
 :root[data-theme="dark"] .app-page-body .app-nav-item:hover,
@@ -7236,13 +7807,13 @@ body.app-page-body.is-chat-docked .app-main {
     top: 0;
     right: 0;
     height: 100vh;
-    width: min(var(--chat-panel-width, 300px), 100vw);
+    width: min(var(--chat-panel-width, 20vw), 100vw);
     border-radius: 0;
     box-shadow: none;
   }
 
   body.app-page-body.is-chat-docked .app-main {
-    padding-right: min(var(--chat-panel-width, 300px), 100vw);
+    padding-right: min(var(--chat-panel-width, 20vw), 100vw);
   }
 
   .app-page-body .page {

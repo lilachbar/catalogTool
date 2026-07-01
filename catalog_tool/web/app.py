@@ -9,6 +9,7 @@ from catalog_tool.settings import FLASK_DEBUG, FLASK_SECRET_KEY, WEB_SERVER_HOST
 from catalog_tool.web.constants import WEB_ROOT
 from catalog_tool.web.routes import register_routes
 from catalog_tool.web.user_session import register_auth_guard
+from catalog_tool.web.vite import register_vite
 
 
 def create_app() -> Flask:
@@ -19,6 +20,7 @@ def create_app() -> Flask:
     )
     app.secret_key = FLASK_SECRET_KEY
     register_auth_guard(app)
+    register_vite(app)
     register_routes(app)
     return app
 

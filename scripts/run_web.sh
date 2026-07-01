@@ -32,9 +32,11 @@ if [[ ! -d node_modules ]]; then
   npm install
 fi
 
-if [[ ! -f catalog_tool/web/static/chat.bundle.js ]] || [[ server/index.js -nt catalog_tool/web/static/chat.bundle.js ]]; then
-  echo "Building chat UI bundle…"
-  npm run build:chat
+if [[ "${VITE_DEV:-}" == "1" ]]; then
+  echo "VITE_DEV=1 — expecting the Vite dev server (run: npm run dev:ui). Skipping production build."
+else
+  echo "Building web UI (Vite: React + TypeScript + Tailwind)…"
+  npm run build:ui
 fi
 
 export PORT

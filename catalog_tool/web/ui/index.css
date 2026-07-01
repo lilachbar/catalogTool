@@ -1,0 +1,111 @@
+/*
+ * Import Tailwind WITHOUT Preflight. During the incremental migration these
+ * islands render alongside the existing global styles.css, so we must not
+ * inject Tailwind's global resets (which would restyle the whole app).
+ * box-sizing:border-box is already set globally by styles.css.
+ */
+@layer theme, base, components, utilities;
+@import "tailwindcss/theme.css" layer(theme);
+@import "tailwindcss/utilities.css" layer(utilities);
+@import "tw-animate-css";
+
+/* Dark mode driven by the app's existing <html data-theme="dark"> switch. */
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
+/*
+ * Design tokens mirror the existing hand-written palette in styles.css so the
+ * new React/Tailwind islands match the current CatalogOne look ("flavor").
+ * Values use the shadcn/ui variable contract mapped into Tailwind v4 @theme.
+ */
+:root {
+  --radius: 0.75rem;
+
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.21 0.02 265);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.21 0.02 265);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.21 0.02 265);
+  --primary: oklch(0.58 0.20 259);
+  --primary-foreground: oklch(0.985 0.005 265);
+  --secondary: oklch(0.968 0.006 260);
+  --secondary-foreground: oklch(0.21 0.02 265);
+  --muted: oklch(0.975 0.005 260);
+  --muted-foreground: oklch(0.52 0.03 258);
+  /* Namespaced so the shadcn "accent surface" never clobbers styles.css's
+     brand --accent (blue) which is used in 60+ places across the app. */
+  --ui-accent: oklch(0.955 0.020 255);
+  --ui-accent-foreground: oklch(0.45 0.16 259);
+  --destructive: oklch(0.58 0.22 27);
+  --destructive-foreground: oklch(0.985 0.005 265);
+  --border: oklch(0.90 0.012 260);
+  --input: oklch(0.90 0.012 260);
+  --ring: oklch(0.58 0.20 259);
+
+  --app-bg: oklch(0.94 0.035 255);
+  --app-surface-soft: oklch(0.975 0.006 260);
+  --app-shadow: 0 24px 48px oklch(0.42 0.05 265 / 0.12);
+  --app-shadow-sm: 0 8px 24px oklch(0.42 0.05 265 / 0.08);
+}
+
+[data-theme="dark"] {
+  --background: oklch(0.16 0.014 265);
+  --foreground: oklch(0.96 0.004 265);
+  --card: oklch(0.215 0.012 265);
+  --card-foreground: oklch(0.96 0.004 265);
+  --popover: oklch(0.215 0.012 265);
+  --popover-foreground: oklch(0.96 0.004 265);
+  --primary: oklch(0.64 0.19 259);
+  --primary-foreground: oklch(0.16 0.014 265);
+  --secondary: oklch(0.27 0.012 265);
+  --secondary-foreground: oklch(0.96 0.004 265);
+  --muted: oklch(0.27 0.012 265);
+  --muted-foreground: oklch(0.70 0.018 258);
+  --ui-accent: oklch(0.32 0.05 259);
+  --ui-accent-foreground: oklch(0.85 0.06 255);
+  --destructive: oklch(0.64 0.21 25);
+  --destructive-foreground: oklch(0.985 0.005 265);
+  --border: oklch(1 0 0 / 0.10);
+  --input: oklch(1 0 0 / 0.14);
+  --ring: oklch(0.64 0.19 259);
+
+  --app-bg: oklch(0.16 0.014 265);
+  --app-surface-soft: oklch(0.185 0.010 265);
+}
+
+@theme inline {
+  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--ui-accent);
+  --color-accent-foreground: var(--ui-accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  --radius-lg: var(--radius);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-sm: calc(var(--radius) - 4px);
+}
+
+/*
+ * Scope the Tailwind Preflight-adjacent resets so we do NOT clobber the
+ * existing global styles.css. Islands opt in via the `.c1-ui` wrapper class.
+ */
+.c1-ui {
+  font-family: var(--font-sans);
+  color: var(--color-foreground);
+}

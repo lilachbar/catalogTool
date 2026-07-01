@@ -99,10 +99,17 @@ server/
 | `static/app.js` | Environments, Merge & Import, DG Import, BR compare UI |
 | `static/mcp-tools.js` | MCP Tools workbench |
 | `static/page-control.js` | Agentic page context for chat |
-| `src/chat-client.jsx` → `static/chat.bundle.js` | React chat panel (esbuild) |
+| `ui/` (Vite + React + TS + Tailwind) → `static/dist/` | Modern frontend build; entry `ui/main.tsx`. First island: chat (`src/chat-client.jsx`) |
 | `static/styles.css` | Shared theme and layout |
 
-The main UI is vanilla JS (no bundler). Chat is a separate esbuild bundle.
+### Frontend build (incremental migration)
+
+The frontend is migrating incrementally to **Vite + React 19 + TypeScript + Tailwind v4 + shadcn/ui**:
+
+- Source lives in `catalog_tool/web/ui/` (entry `main.tsx`); Vite builds hashed assets + a manifest into `static/dist/`.
+- Flask injects the right tags via the `vite_assets('main.tsx')` Jinja helper (`web/vite.py`): the built manifest in prod, or the Vite dev server (HMR) when `VITE_DEV=1`.
+- Tailwind is loaded **without Preflight** so it coexists with the existing global `styles.css` (no reset conflicts). New islands opt into the design system; legacy vanilla-JS views keep working unchanged.
+- Dev with HMR: `npm run dev:ui` (Vite on :5173) + `VITE_DEV=1 ./scripts/run_web.sh`. Prod: `npm run build` (or `build:ui`).
 
 ## Data on disk
 

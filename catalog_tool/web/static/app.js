@@ -1935,58 +1935,141 @@ function filterAndSortCompareEntities(entities, ui = state.brCompareTableUi) {
   );
 }
 
-function flattenCompareEntityRows(entities) {
-  const rows = [];
-  for (const entity of entities) {
-    const changes = entity.field_changes || [];
-    if (!changes.length) {
-      rows.push({ entity, change: null });
-      continue;
-    }
-    for (const change of changes) {
-      rows.push({ entity, change });
-    }
-  }
-  return rows;
+function compareCellTitle(value) {
+  const text = value == null ? "" : String(value);
+  return text && text !== "—" ? ` title="${escapeHtml(text)}"` : "";
 }
 
-function buildBrCompareUnifiedRow({ entity, change }, { showSummary = false } = {}) {
-  const summaryText = showSummary
-    ? `${entity.summary || ""}${entity.error ? ` — ${entity.error}` : ""}`.trim()
+const COMPARE_ICON_ENTITY =
+  '<svg viewBox="0 0 16 16" width="14" height="14" fill="none" aria-hidden="true"><path d="M3.5 2.5h6L12.5 5.5v8a.5.5 0 0 1-.5.5H3.5a.5.5 0 0 1-.5-.5v-11a.5.5 0 0 1 .5-.5Z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/><path d="M9 2.5V6h3.5" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/></svg>';
+const COMPARE_ICON_FIELD =
+  '<svg viewBox="0 0 16 16" width="12" height="12" fill="none" aria-hidden="true"><path d="M2.5 4.5h11M2.5 8h11M2.5 11.5h7" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>';
+const COMPARE_ICON_SOURCE =
+  '<svg viewBox="0 0 16 16" width="14" height="14" fill="none" aria-hidden="true"><rect x="2.5" y="2.5" width="11" height="11" rx="2" stroke="currentColor" stroke-width="1.2"/><path d="M5.5 8h5M8 5.5v5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>';
+const COMPARE_ICON_CHEVRON =
+  '<svg viewBox="0 0 16 16" width="14" height="14" fill="none" aria-hidden="true"><path d="M4 6.5 8 10.5l4-4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+
+const COMPARE_VALUE_CLAMP = 150;
+
+function compareChangeBadge(change) {
+  const raw = String(change || "").toLowerCase();
+  let label = "Changed";
+  let tone = "warn";
+  if (!raw) {
+    return "";
+  }
+  if (raw.includes("add")) {
+    label = "Added";
+    tone = "ok";
+  } else if (raw.includes("remov") || raw.includes("delet")) {
+    label = "Removed";
+    tone = "err";
+  } else if (raw.includes("modif") || raw.includes("chang") || raw.includes("updat")) {
+    label = "Changed";
+    tone = "warn";
+  } else {
+    label = raw.charAt(0).toUpperCase() + raw.slice(1);
+    tone = "muted";
+  }
+  return `<span class="analyze-badge is-${tone} br-compare-diff-badge">${escapeHtml(label)}</span>`;
+}
+
+function compareValueCell(value, side) {
+  const text = value == null || value === "" ? "" : String(value);
+  const isEmpty = text === "";
+  return `<div class="br-compare-diff-value is-${side}${isEmpty ? " is-empty" : ""}">
+    <div class="br-compare-diff-value-content">${isEmpty ? "—" : escapeHtml(text)}</div>
+  </div>`;
+}
+
+function compareEmptyGroupNote(entity) {
+  if (entity.status === "new_in_br") {
+    return "New entity — not present in the production baseline.";
+  }
+  if (entity.status === "missing_in_br") {
+    return "Present in the baseline but missing from this business request.";
+  }
+  if (entity.status === "errors") {
+    return entity.error || entity.summary || "Comparison could not be completed for this entity.";
+  }
+  return entity.summary || "No field-level differences detected.";
+}
+
+function buildBrCompareDiffRow(change) {
+  const path = change.path || "";
+  const baseline = change.baseline == null ? "" : String(change.baseline);
+  const current = change.current == null ? "" : String(change.current);
+  const clampable = baseline.length > COMPARE_VALUE_CLAMP || current.length > COMPARE_VALUE_CLAMP;
+  return `<div class="br-compare-diff-row${clampable ? " is-clampable" : ""}">
+    <div class="br-compare-diff-field"${compareCellTitle(path)}>
+      <span class="br-compare-diff-field-icon" aria-hidden="true">${COMPARE_ICON_FIELD}</span>
+      <span class="br-compare-diff-field-label">${escapeHtml(path || "—")}</span>
+    </div>
+    <div class="br-compare-diff-change">${compareChangeBadge(change.change)}</div>
+    ${compareValueCell(baseline, "baseline")}
+    ${compareValueCell(current, "current")}
+    ${clampable
+      ? `<button type="button" class="br-compare-diff-toggle" data-compare-expand>Show more</button>`
+      : ""}
+  </div>`;
+}
+
+function buildBrCompareDiffGroup(entity) {
+  const entityName = entity.title || entity.entity_id || "";
+  const changes = entity.field_changes || [];
+  const statusTone = compareStatusTone(entity.status);
+  const statusLabel = compareStatusLabel(entity.status);
+  const typeChip = entity.entity_type
+    ? `<span class="br-compare-diff-group-type">${escapeHtml(entity.entity_type)}</span>`
     : "";
-  return `<tr>
-    <td><span class="analyze-badge is-${compareStatusTone(entity.status)}">${escapeHtml(compareStatusLabel(entity.status))}</span></td>
-    <td>${escapeHtml(entity.entity_type)}</td>
-    <td>${escapeHtml(entity.title || entity.entity_id)}</td>
-    <td>${change ? escapeHtml(change.change) : "—"}</td>
-    <td>${change ? escapeHtml(change.path) : "—"}</td>
-    <td>${change ? escapeHtml(change.baseline ?? "—") : "—"}</td>
-    <td>${change ? escapeHtml(change.current ?? "—") : "—"}</td>
-    <td>${summaryText ? escapeHtml(summaryText) : ""}</td>
-  </tr>`;
+  const countChip = changes.length
+    ? `<span class="br-compare-diff-group-count">${changes.length} ${changes.length === 1 ? "field" : "fields"}</span>`
+    : "";
+  const rows = changes.length
+    ? changes.map((change) => buildBrCompareDiffRow(change)).join("")
+    : `<div class="br-compare-diff-note">${escapeHtml(compareEmptyGroupNote(entity))}</div>`;
+  return `<div class="br-compare-diff-group" data-status="${escapeHtml(entity.status || "")}">
+    <div class="br-compare-diff-group-head" role="button" tabindex="0" aria-expanded="true" data-compare-group-toggle title="Show or hide fields">
+      <span class="br-compare-diff-group-icon" aria-hidden="true">${COMPARE_ICON_ENTITY}</span>
+      <span class="br-compare-diff-group-name"${compareCellTitle(entityName)}>${escapeHtml(entityName)}</span>
+      ${typeChip}
+      <span class="analyze-badge is-${statusTone} br-compare-diff-group-status">${escapeHtml(statusLabel)}</span>
+      ${countChip}
+      <span class="br-compare-diff-group-chevron" aria-hidden="true">${COMPARE_ICON_CHEVRON}</span>
+    </div>
+    ${rows}
+  </div>`;
 }
 
-function buildBrCompareUnifiedRowsHtml(entities) {
-  const rows = [];
-  for (const entity of entities) {
-    const flat = flattenCompareEntityRows([entity]);
-    flat.forEach((row, index) => {
-      rows.push(buildBrCompareUnifiedRow(row, { showSummary: index === 0 }));
-    });
-  }
-  return rows.join("");
+function buildBrCompareDiffGroupsHtml(entities) {
+  return entities.map((entity) => buildBrCompareDiffGroup(entity)).join("");
 }
 
-function buildBrCompareSortButton(sortKey, label, ui) {
-  const active = ui.sortKey === sortKey;
-  const dirLabel = active ? (ui.sortDir === "asc" ? "ascending" : "descending") : "none";
-  const arrow = active ? (ui.sortDir === "asc" ? "↑" : "↓") : "";
-  return `<button
-    type="button"
-    class="br-compare-sort-btn${active ? " is-active" : ""}"
-    data-compare-sort="${sortKey}"
-    aria-sort="${dirLabel}"
-  ><span>${escapeHtml(label)}</span>${arrow ? `<span class="br-compare-sort-arrow" aria-hidden="true">${arrow}</span>` : ""}</button>`;
+function buildBrCompareDiffSources(body) {
+  const isAudit = body.compare_type === "audit";
+  const baselineName = isAudit ? "Audit baseline" : "Production";
+  const baselineMeta = isAudit ? "audit history" : "environment";
+  const brId = body.business_request_id || "current";
+  return `<div class="br-compare-diff-sources">
+    <div class="br-compare-diff-colhead">Field</div>
+    <div class="br-compare-diff-colhead is-change">Change</div>
+    <div class="br-compare-diff-source is-baseline">
+      <span class="br-compare-diff-source-icon" aria-hidden="true">${COMPARE_ICON_SOURCE}</span>
+      <span class="br-compare-diff-source-body">
+        <span class="br-compare-diff-source-name">${escapeHtml(baselineName)}</span>
+        <span class="br-compare-diff-source-meta">${escapeHtml(baselineMeta)}</span>
+      </span>
+      <span class="br-compare-diff-source-pill is-baseline">Baseline</span>
+    </div>
+    <div class="br-compare-diff-source is-current">
+      <span class="br-compare-diff-source-icon" aria-hidden="true">${COMPARE_ICON_SOURCE}</span>
+      <span class="br-compare-diff-source-body">
+        <span class="br-compare-diff-source-name">BR (local import)</span>
+        <span class="br-compare-diff-source-meta"${compareCellTitle(brId)}>${escapeHtml(brId)}</span>
+      </span>
+      <span class="br-compare-diff-source-pill is-current">Draft</span>
+    </div>
+  </div>`;
 }
 
 function buildBrCompareEntitiesSection(body, ui = state.brCompareTableUi) {
@@ -2006,55 +2089,43 @@ function buildBrCompareEntitiesSection(body, ui = state.brCompareTableUi) {
     ["errors", "Errors"],
   ];
 
-  return `<section class="br-compare-entities" id="brCompareEntitiesSection">
-    <div class="br-compare-toolbar">
-      <label class="br-compare-filter br-compare-filter-search">
-        <span class="visually-hidden">Filter entities</span>
-        <input
-          type="search"
-          id="brCompareFilterQuery"
-          class="br-compare-filter-input"
-          placeholder="Filter by name, type, status, field, summary…"
-          value="${escapeHtml(ui.query)}"
-          autocomplete="off"
-        >
-      </label>
-      <label class="br-compare-filter">
-        <span class="br-compare-filter-label">Status</span>
-        <select id="brCompareFilterStatus" class="br-compare-filter-select">
-          ${statusOptions.map(([value, label]) => `<option value="${value}"${ui.status === value ? " selected" : ""}>${escapeHtml(label)}</option>`).join("")}
-        </select>
-      </label>
-      <label class="br-compare-filter">
-        <span class="br-compare-filter-label">Type</span>
-        <select id="brCompareFilterType" class="br-compare-filter-select">
-          <option value="all"${ui.entityType === "all" ? " selected" : ""}>All types</option>
-          ${entityTypes.map((type) => `<option value="${escapeHtml(type)}"${ui.entityType === type ? " selected" : ""}>${escapeHtml(type)}</option>`).join("")}
-        </select>
-      </label>
-      <p id="brCompareFilterCount" class="br-compare-filter-count">Showing ${filtered.length} of ${entities.length} entities</p>
+  return `<section class="br-compare-entities br-compare-diff" id="brCompareEntitiesSection">
+    <div class="br-compare-toolbar br-compare-diff-toolbar">
+      <div class="br-compare-diff-controls">
+        <label class="br-compare-filter">
+          <span class="br-compare-filter-label">Status</span>
+          <select id="brCompareFilterStatus" class="br-compare-filter-select">
+            ${statusOptions.map(([value, label]) => `<option value="${value}"${ui.status === value ? " selected" : ""}>${escapeHtml(label)}</option>`).join("")}
+          </select>
+        </label>
+        <label class="br-compare-filter">
+          <span class="br-compare-filter-label">Type</span>
+          <select id="brCompareFilterType" class="br-compare-filter-select">
+            <option value="all"${ui.entityType === "all" ? " selected" : ""}>All types</option>
+            ${entityTypes.map((type) => `<option value="${escapeHtml(type)}"${ui.entityType === type ? " selected" : ""}>${escapeHtml(type)}</option>`).join("")}
+          </select>
+        </label>
+        <label class="br-compare-filter br-compare-filter-search">
+          <span class="visually-hidden">Filter entities</span>
+          <input
+            type="search"
+            id="brCompareFilterQuery"
+            class="br-compare-filter-input"
+            placeholder="Filter by name, type, field, value…"
+            value="${escapeHtml(ui.query)}"
+            autocomplete="off"
+          >
+        </label>
+      </div>
+      <p id="brCompareFilterCount" class="br-compare-diff-count">${filtered.length} ${filtered.length === 1 ? "item" : "items"}</p>
     </div>
-    <h5 class="analyze-section-title">Compare results (<span id="brCompareEntityCount">${filtered.length}</span> entities)</h5>
-    <div class="analyze-table-wrap br-compare-table-wrap">
-      <table class="analyze-table br-compare-table">
-        <thead>
-          <tr>
-            <th>${buildBrCompareSortButton("status", "Status", ui)}</th>
-            <th>${buildBrCompareSortButton("type", "Type", ui)}</th>
-            <th>${buildBrCompareSortButton("entity", "Entity", ui)}</th>
-            <th>Change</th>
-            <th>Field</th>
-            <th>Production</th>
-            <th>BR (local)</th>
-            <th>${buildBrCompareSortButton("summary", "Summary", ui)}</th>
-          </tr>
-        </thead>
-        <tbody id="brCompareEntitiesTbody">
-          ${filtered.length
-    ? buildBrCompareUnifiedRowsHtml(filtered)
-    : `<tr><td colspan="8" class="br-compare-empty-row">No entities match the current filters.</td></tr>`}
-        </tbody>
-      </table>
+    <div class="br-compare-table-wrap br-compare-diff-wrap">
+      ${buildBrCompareDiffSources(body)}
+      <div class="br-compare-diff-groups" id="brCompareEntitiesTbody">
+        ${filtered.length
+    ? buildBrCompareDiffGroupsHtml(filtered)
+    : `<div class="br-compare-diff-empty">No entities match the current filters.</div>`}
+      </div>
     </div>
   </section>`;
 }
@@ -2094,13 +2165,13 @@ function refreshBrCompareEntitiesTable() {
   const tbody = els.brCompareReport.querySelector("#brCompareEntitiesTbody");
   if (tbody) {
     tbody.innerHTML = filtered.length
-      ? buildBrCompareUnifiedRowsHtml(filtered)
-      : `<tr><td colspan="8" class="br-compare-empty-row">No entities match the current filters.</td></tr>`;
+      ? buildBrCompareDiffGroupsHtml(filtered)
+      : `<div class="br-compare-diff-empty">No entities match the current filters.</div>`;
   }
 
   const countEl = els.brCompareReport.querySelector("#brCompareFilterCount");
   if (countEl) {
-    countEl.textContent = `Showing ${filtered.length} of ${entities.length} entities`;
+    countEl.textContent = `${filtered.length} ${filtered.length === 1 ? "item" : "items"}`;
   }
   const entityCountEl = els.brCompareReport.querySelector("#brCompareEntityCount");
   if (entityCountEl) {
@@ -2143,7 +2214,45 @@ function wireBrCompareTableInteractions() {
     }
   });
 
+  const toggleCompareGroup = (groupHead) => {
+    const group = groupHead.closest(".br-compare-diff-group");
+    if (!group) {
+      return;
+    }
+    const collapsed = group.classList.toggle("is-collapsed");
+    groupHead.setAttribute("aria-expanded", collapsed ? "false" : "true");
+    syncComparePanelLayout();
+  };
+
+  els.brCompareReport.addEventListener("keydown", (event) => {
+    if (event.key !== "Enter" && event.key !== " " && event.key !== "Spacebar") {
+      return;
+    }
+    const groupHead = event.target.closest("[data-compare-group-toggle]");
+    if (groupHead) {
+      event.preventDefault();
+      toggleCompareGroup(groupHead);
+    }
+  });
+
   els.brCompareReport.addEventListener("click", (event) => {
+    const expandBtn = event.target.closest("[data-compare-expand]");
+    if (expandBtn) {
+      const row = expandBtn.closest(".br-compare-diff-row");
+      if (row) {
+        const expanded = row.classList.toggle("is-expanded");
+        expandBtn.textContent = expanded ? "Show less" : "Show more";
+        syncComparePanelLayout();
+      }
+      return;
+    }
+
+    const groupHead = event.target.closest("[data-compare-group-toggle]");
+    if (groupHead) {
+      toggleCompareGroup(groupHead);
+      return;
+    }
+
     const statBtn = event.target.closest("[data-compare-status]");
     if (statBtn) {
       const status = statBtn.dataset.compareStatus;
@@ -4123,11 +4232,13 @@ els.brCompareProductionBtn?.addEventListener("click", () => {
 });
 
 async function initApp() {
+  initSidebarResize();
+  window.catalogToolLayoutCouple?.initChatPanelWidth?.();
+
   if (window.__catalogToolReloadLogout || await logoutAppUserOnReload()) {
     return;
   }
 
-  initSidebarResize();
   initWorkflowSidebarResize();
   initEnvRefreshButtonLayout();
   initSidebarFloatTips();
