@@ -6,7 +6,7 @@
   const WORKFLOW_SIDEBAR_WIDTH_DEFAULT = 300;
   const CHAT_WIDTH_MIN = 320;
   const CHAT_WIDTH_MAX = 900;
-  const CHAT_WIDTH_DEFAULT = 420;
+  const CHAT_WIDTH_DEFAULT = 360;
   const LAYOUT_COUPLE_EVENT = "catalogTool:layout-couple";
   const COUPLED_DESKTOP_MIN_WIDTH = 961;
 
@@ -78,6 +78,10 @@
     }
     const saved = Number(localStorage.getItem(CHAT_WIDTH_STORAGE_KEY));
     if (Number.isFinite(saved) && saved > 0) {
+      if (saved === 420) {
+        localStorage.setItem(CHAT_WIDTH_STORAGE_KEY, String(CHAT_WIDTH_DEFAULT));
+        return clampChatWidth(CHAT_WIDTH_DEFAULT);
+      }
       return clampChatWidth(saved);
     }
     return CHAT_WIDTH_DEFAULT;

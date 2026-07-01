@@ -13,7 +13,7 @@ const CHAT_POPUP_NAME = "catalogToolChatPopup";
 const DETACHED_CHAT_WINDOW_TITLE = "Catalog Tool · Chat";
 const CHAT_WIDTH_MIN = 320;
 const CHAT_WIDTH_MAX = 900;
-const CHAT_WIDTH_DEFAULT = 420;
+const CHAT_WIDTH_DEFAULT = 360;
 const CHAT_DETACHED_HEIGHT_MIN = 320;
 const CHAT_APP_TOP_CHROME = 28;
 const CHAT_MODES = [
@@ -106,6 +106,10 @@ function readSavedChatWidth() {
   }
   const saved = Number(localStorage.getItem(CHAT_WIDTH_STORAGE_KEY));
   if (Number.isFinite(saved) && saved > 0) {
+    if (saved === 420) {
+      localStorage.setItem(CHAT_WIDTH_STORAGE_KEY, String(CHAT_WIDTH_DEFAULT));
+      return clampChatWidth(CHAT_WIDTH_DEFAULT);
+    }
     return clampChatWidth(saved);
   }
   return CHAT_WIDTH_DEFAULT;

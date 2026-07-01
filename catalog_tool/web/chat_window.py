@@ -8,7 +8,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-DEFAULT_POPUP_WIDTH = 420
+DEFAULT_POPUP_WIDTH = 360
 DEFAULT_POPUP_HEIGHT = 720
 DETACHED_CHAT_WINDOW_TITLE = "Catalog Tool · Chat"
 

@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/static/styles.css?v=20260702mcptoolslayout1">
+  <link rel="stylesheet" href="/static/styles.css?v=20260702nofooter2">
   <script>
     (function () {
       var theme = localStorage.getItem("catalogTool.theme");
@@ -224,11 +224,6 @@
             </ol>
 
             <div class="workflow-shell">
-              <p id="pushWorkflowStatus" class="mcp-tools-status-line is-loading">
-                <span class="mcp-tools-status-dot" aria-hidden="true"></span>
-                <span id="pushWorkflowStatusText">Connect to a CatalogOne environment in the sidebar to begin.</span>
-              </p>
-
               <div class="workflow-workbench">
                 <aside class="workflow-sidebar">
                   <div class="workflow-sidebar-head">
@@ -374,23 +369,15 @@
                             <h3 id="mergeCardPublishTitle" class="mcp-tool-detail-title">Publish to catalog</h3>
                             <span class="mcp-tool-category-badge">Step 3</span>
                           </div>
-                          <div class="mcp-tool-form-card-actions">
-                            <button type="button" id="publishBtn" class="btn btn-danger btn-sm" disabled title="Connect to an environment and create a business request first">Publish business request</button>
-                          </div>
-                        </div>
-                        <p class="workflow-panel-lead">When your review is complete, publish the business request to the release queue.</p>
-                        <div class="merge-safety-banner" role="note">
-                          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
-                            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
-                          </svg>
-                          <p>Zip analysis never publishes. You stay in control — publish only when you click the button above.</p>
                         </div>
                         <label class="field merge-publish-br-field">
                           <span class="field-label">Business request ID to publish</span>
                           <input type="text" id="publishBusinessRequestId" placeholder="Paste BR UUID or use ID from Step 2" autocomplete="off">
                           <span class="field-hint" id="publishBusinessRequestIdHint">Filled automatically when you create a BR in Step 2.</span>
                         </label>
-                        <p class="footnote merge-footnote">Queues via <code>releaseQueue/publish</code> on your connected environment.</p>
+                        <div class="workflow-step-actions">
+                          <button type="button" id="publishBtn" class="btn btn-danger btn-sm" disabled title="Connect to an environment and create a business request first">Publish business request</button>
+                        </div>
                       </div>
                       <div id="pushResultCard" class="mcp-tool-result-card" hidden>
                         <div class="mcp-tool-result-card-head">
@@ -462,11 +449,6 @@
             </ol>
 
             <div class="workflow-shell">
-              <p id="dgWorkflowStatus" class="mcp-tools-status-line is-loading">
-                <span class="mcp-tools-status-dot" aria-hidden="true"></span>
-                <span id="dgWorkflowStatusText">Connect to a CatalogOne environment in the sidebar to begin.</span>
-              </p>
-
               <div class="workflow-workbench">
                 <aside class="workflow-sidebar">
                   <div class="workflow-sidebar-head">
@@ -630,23 +612,15 @@
                             <h3 id="dgCardPublishTitle" class="mcp-tool-detail-title">Publish to catalog</h3>
                             <span class="mcp-tool-category-badge">Step 3</span>
                           </div>
-                          <div class="mcp-tool-form-card-actions">
-                            <button type="button" id="dgPublishBtn" class="btn btn-danger btn-sm" disabled title="Connect to an environment and create a business request first">Publish business request</button>
-                          </div>
-                        </div>
-                        <p class="workflow-panel-lead">When import is complete, publish the business request to the release queue.</p>
-                        <div class="merge-safety-banner" role="note">
-                          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
-                            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
-                          </svg>
-                          <p>Excel analysis never publishes. Import entries in Step 2, then publish only when you click the button above.</p>
                         </div>
                         <label class="field merge-publish-br-field">
                           <span class="field-label">Business request ID to publish</span>
                           <input type="text" id="dgPublishBusinessRequestId" placeholder="Paste BR UUID or use ID from Step 2" autocomplete="off">
                           <span class="field-hint" id="dgPublishBusinessRequestIdHint">Filled automatically when you create a BR in Step 2.</span>
                         </label>
-                        <p class="footnote merge-footnote">Queues via <code>releaseQueue/publish</code> on your connected environment.</p>
+                        <div class="workflow-step-actions">
+                          <button type="button" id="dgPublishBtn" class="btn btn-danger btn-sm" disabled title="Connect to an environment and create a business request first">Publish business request</button>
+                        </div>
                       </div>
                       <div id="dgPublishResultCard" class="mcp-tool-result-card" hidden>
                         <div class="mcp-tool-result-card-head">
@@ -700,11 +674,6 @@
             </ol>
 
             <div class="workflow-shell mcp-tools-shell">
-              <p id="mcpToolsStatus" class="mcp-tools-status-line">
-                <span class="mcp-tools-status-dot" aria-hidden="true"></span>
-                <span id="mcpToolsStatusText">Loading CatalogOne MCP tools…</span>
-              </p>
-
               <div id="mcpToolsPanel" class="workflow-workbench mcp-tools-workbench">
                 <aside class="workflow-sidebar mcp-tools-sidebar">
               <div class="workflow-sidebar-head mcp-tools-sidebar-head">
@@ -796,12 +765,6 @@
           </section>
           </div>
         </div>
-
-        <footer class="footer">
-          <span>Catalog Tool</span>
-          <span class="footer-dot" aria-hidden="true"></span>
-          <span>CatalogOne Authoring</span>
-        </footer>
       </div>
     </div>
   </div>
@@ -991,10 +954,10 @@
 
   <script id="tablesConfig" type="application/json">{{ defaults.tables | tojson }}</script>
   <script id="defaultsConfig" type="application/json">{{ defaults | tojson }}</script>
-  <script src="/static/layout-couple.js?v=20260702freezeloop2"></script>
+  <script src="/static/layout-couple.js?v=20260702chatnarrow1"></script>
   <script src="/static/page-control.js?v=20260702app68"></script>
   <script src="/static/app.js?v=20260702freezeloop2"></script>
   <script src="/static/mcp-tools.js?v=20260702app57"></script>
-  <script type="module" src="/static/chat.bundle.js?v=20260702freezeloop2"></script>
+  <script type="module" src="/static/chat.bundle.js?v=20260702chatnarrow1"></script>
 </body>
 </html>
