@@ -131,7 +131,7 @@ body {
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
-  padding: 0.5rem 0.875rem;
+  padding: 0.3rem 0.75rem;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 16px;
@@ -191,7 +191,7 @@ body {
 .app-topbar-divider {
   flex: 0 0 auto;
   width: 1px;
-  height: 1.75rem;
+  height: 1.5rem;
   background: var(--border);
   margin: 0 0.25rem;
 }
@@ -206,7 +206,7 @@ body {
   display: inline-flex;
   align-items: center;
   gap: 0.5rem;
-  height: 2.25rem;
+  height: 2rem;
   max-width: 15rem;
   padding: 0 0.75rem;
   border: 1px solid var(--border);
@@ -313,7 +313,7 @@ body {
   align-self: center;
   justify-content: flex-start;
   gap: 0.45rem;
-  height: 2.25rem;
+  height: 2rem;
   padding: 0 0.85rem;
   border-width: 1px;
   border-left-width: 1px;
@@ -6971,8 +6971,8 @@ body.is-resizing-workflow-sidebar * {
   background: var(--app-card);
   border: none;
   box-shadow: var(--app-shadow-sm);
-  border-radius: 20px;
-  padding: 0.5rem 0.75rem 0.5rem 0.875rem;
+  border-radius: 16px;
+  padding: 0.3rem 0.75rem 0.3rem 0.875rem;
 }
 
 .app-page-body .app-topbar-title {
