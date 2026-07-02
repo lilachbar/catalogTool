@@ -302,6 +302,10 @@ body {
   border-color: var(--err);
 }
 
+/* Scope with .app-page-body so this beats the later, equal-specificity
+   `.app-page-body .main-connection-hint` rule that would otherwise re-apply a
+   bottom margin (visually pushing the pill up in the align-items:center row). */
+.app-page-body .app-topbar .main-connection-hint,
 .app-topbar .main-connection-hint {
   position: static;
   z-index: auto;
