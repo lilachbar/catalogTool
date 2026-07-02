@@ -236,7 +236,17 @@ def _compare_entity_production(
             diagnostics=diagnostics,
         )
 
-    field_changes = _diff_entities(published, local)
+    is_generic = (
+        entity_type in _C1_GENERIC_TYPES
+        or _looks_like_c1_entity(published)
+        or _looks_like_c1_entity(local)
+    )
+    field_changes = _diff_entities(
+        _normalize_for_compare(published, entity_type),
+        _normalize_for_compare(local, entity_type),
+    )
+    if is_generic:
+        field_changes = _condense_generic_changes(field_changes)
     if not field_changes:
         return EntityCompareResult(
             entity_id=entity_id,
@@ -415,6 +425,10 @@ def _spaced_label(text: str) -> str:
     return spaced[:1].upper() + spaced[1:]
 
 
+def _label_for_token(token: str) -> str | None:
+    return _KNOWN_FIELD_LABELS.get(token.lower())
+
+
 def _humanize_field_path(path: str) -> str:
     if not path:
         return "—"
@@ -426,24 +440,23 @@ def _humanize_field_path(path: str) -> str:
     if lowered in _KNOWN_FIELD_LABELS:
         return _KNOWN_FIELD_LABELS[lowered]
 
-    last = cleaned.rsplit(".", 1)[-1]
+    # Non-numeric identities in brackets (row keys such as a reason code) form a
+    # breadcrumb so nested inner-table changes stay attributable.
+    idents = [i for i in re.findall(r"\[([^\]]+)\]", cleaned) if not i.isdigit()]
 
-    # Identity-matched row: word[identity] -> prefer the identity's own label.
+    last = cleaned.rsplit(".", 1)[-1]
     bracket = re.match(r"^([A-Za-z0-9_]*)\[([^\]]+)\]$", last)
     if bracket:
         base, ident = bracket.group(1), bracket.group(2)
-        if ident.lower() in _KNOWN_FIELD_LABELS:
-            return _KNOWN_FIELD_LABELS[ident.lower()]
-        if base.lower() in _KNOWN_FIELD_LABELS:
-            return _KNOWN_FIELD_LABELS[base.lower()]
-        if ident and not ident.isdigit():
-            return _spaced_label(ident)
-        return _spaced_label(base) if base else last
+        if not ident.isdigit():
+            return _label_for_token(ident) or _spaced_label(ident)
+        return _label_for_token(base) or _spaced_label(base) if base else last
 
-    if last.lower() in _KNOWN_FIELD_LABELS:
-        return _KNOWN_FIELD_LABELS[last.lower()]
-
-    return _spaced_label(last)
+    final = _label_for_token(last) or _spaced_label(last)
+    row = idents[-1] if idents else None
+    if row:
+        return f"{row} › {final}"
+    return final
 
 
 def _field_changes_from_audit_compare(payload: Any) -> list[FieldChange]:
@@ -482,6 +495,100 @@ def _field_changes_from_audit_compare(payload: Any) -> list[FieldChange]:
 
 _IDENTITY_KEYS = ("id", "name", "key", "code")
 _SKIP_KEYS = {"policy", "uniqueIds"}
+
+# Generic element entities store their data in a nested field/entry/parameter
+# tree. Comparing that raw tree is unreadable, so we first collapse it into a
+# plain semantic model (field name -> value, inner tables -> rows keyed by their
+# own "name", key/value tables -> maps) and diff that instead.
+_C1_GENERIC_TYPES = {
+    "genericElement",
+    "genericElementEntry",
+    "genericEntitySpecification",
+}
+_C1_MAP_RECORD_KEYS = {"name", "value", "metaType", "valueType"}
+
+
+def _normalize_for_compare(entity: Any, entity_type: str) -> Any:
+    if entity is None:
+        return None
+    if entity_type in _C1_GENERIC_TYPES or _looks_like_c1_entity(entity):
+        return _c1_semantic(entity)
+    return entity
+
+
+def _looks_like_c1_entity(entity: Any) -> bool:
+    if not isinstance(entity, dict):
+        return False
+    fields = entity.get("field")
+    if not isinstance(fields, list) or not fields:
+        return False
+    first = fields[0]
+    return isinstance(first, dict) and "name" in first and "entry" in first
+
+
+def _c1_semantic(node: Any) -> Any:
+    if isinstance(node, dict) and isinstance(node.get("field"), list):
+        record: dict[str, Any] = {}
+        for field in node["field"]:
+            if isinstance(field, dict) and field.get("name"):
+                record[str(field["name"])] = _c1_field_value(field)
+        return record
+    return node
+
+
+def _c1_field_value(field: dict) -> Any:
+    entries = field.get("entry") or []
+    if len(entries) == 1:
+        only = entries[0]
+        if isinstance(only, dict) and not only.get("field"):
+            return _c1_param_value(only.get("parameter") or [])
+    records = [_c1_entry_record(entry) for entry in entries if isinstance(entry, dict)]
+    as_map = _c1_records_as_map(records)
+    return as_map if as_map is not None else records
+
+
+def _c1_entry_record(entry: dict) -> Any:
+    nested = entry.get("field")
+    if isinstance(nested, list) and nested:
+        record: dict[str, Any] = {}
+        for field in nested:
+            if isinstance(field, dict) and field.get("name"):
+                record[str(field["name"])] = _c1_field_value(field)
+        return record
+    return _c1_param_value(entry.get("parameter") or [])
+
+
+def _c1_param_value(parameters: list) -> Any:
+    chosen = None
+    for param in parameters:
+        if isinstance(param, dict) and param.get("key") == "value":
+            chosen = param
+            break
+    if chosen is None and parameters and isinstance(parameters[0], dict):
+        chosen = parameters[0]
+    if not isinstance(chosen, dict):
+        return None
+    values = chosen.get("value") or []
+    if len(values) == 1:
+        return _normalize_scalar(values[0])
+    if not values:
+        return None
+    return [_normalize_scalar(value) for value in values]
+
+
+def _c1_records_as_map(records: list) -> dict[str, Any] | None:
+    if not records:
+        return None
+    result: dict[str, Any] = {}
+    for record in records:
+        if not isinstance(record, dict):
+            return None
+        if "name" not in record or "value" not in record:
+            return None
+        if not set(record).issubset(_C1_MAP_RECORD_KEYS):
+            return None
+        result[str(record["name"])] = record.get("value")
+    return result
 
 
 def _diff_entities(baseline: Any, current: Any) -> list[FieldChange]:
@@ -598,6 +705,86 @@ def _missing_in_local(path: str, value: Any) -> FieldChange:
         current=None,
         change="not_in_local",
     )
+
+
+def _condense_generic_changes(changes: list[FieldChange]) -> list[FieldChange]:
+    """Concise generic-element view.
+
+    Keeps the changes made in the BR (value edits and BR-only rows/keys) as
+    detailed lines, and folds "only in production" drift into one or two summary
+    lines so the compare stays scannable instead of dumping every prod-only key.
+    """
+    kept: list[FieldChange] = []
+    prod_only_rows: list[str] = []
+    prod_only_fields: list[str] = []
+    for change in changes:
+        if change.change != "not_in_local":
+            kept.append(change)
+            continue
+        if _is_row_level_path(change.path):
+            prod_only_rows.append(_bracket_identity(change.path) or change.label)
+        else:
+            prod_only_fields.append(_leaf_name(change.path))
+
+    summaries: list[FieldChange] = []
+    if prod_only_rows:
+        names = _unique_preserve(prod_only_rows)
+        summaries.append(
+            FieldChange(
+                path="(production-only rows)",
+                baseline=_join_sample(names),
+                current=None,
+                change="not_in_local",
+                label=f"{len(names)} row(s) only in production",
+            )
+        )
+    if prod_only_fields:
+        names = _unique_preserve(prod_only_fields)
+        summaries.append(
+            FieldChange(
+                path="(production-only fields)",
+                baseline=_join_sample(names),
+                current=None,
+                change="not_in_local",
+                label=f"{len(prod_only_fields)} field(s) only in production",
+            )
+        )
+    return kept + summaries
+
+
+def _is_row_level_path(path: str) -> bool:
+    return "." not in path and path.endswith("]")
+
+
+def _bracket_identity(path: str) -> str | None:
+    matches = re.findall(r"\[([^\]]+)\]", path)
+    return matches[-1] if matches else None
+
+
+def _leaf_name(path: str) -> str:
+    last = path.rsplit(".", 1)[-1]
+    bracket = re.match(r"^([A-Za-z0-9_]*)\[([^\]]+)\]$", last)
+    if bracket and not bracket.group(2).isdigit():
+        return bracket.group(2)
+    return last
+
+
+def _unique_preserve(items: list[str]) -> list[str]:
+    seen: set[str] = set()
+    out: list[str] = []
+    for item in items:
+        if item not in seen:
+            seen.add(item)
+            out.append(item)
+    return out
+
+
+def _join_sample(items: list[str], limit: int = 8) -> str:
+    shown = items[:limit]
+    text = ", ".join(shown)
+    if len(items) > limit:
+        text += f", +{len(items) - limit} more"
+    return text
 
 
 def _display_value(value: Any) -> Any:

@@ -106,7 +106,7 @@ def test_inner_table_rows_matched_by_identity():
         client,
         business_request_id="br-1",
         compare_type="production",
-        entities=[{"entity_id": "table-1", "entity_type": "genericElement", "title": "Table"}],
+        entities=[{"entity_id": "table-1", "entity_type": "productOffering", "title": "Table"}],
     )
     result = report.entities[0]
     assert result.status == "changed"
@@ -146,9 +146,106 @@ def test_inner_table_row_reorder_is_not_a_change():
         client,
         business_request_id="br-1",
         compare_type="production",
-        entities=[{"entity_id": "table-1", "entity_type": "genericElement", "title": "Table"}],
+        entities=[{"entity_id": "table-1", "entity_type": "productOffering", "title": "Table"}],
     )
     assert report.entities[0].status == "identical"
+
+
+def _c1_scalar_field(name, value):
+    return {
+        "name": name,
+        "entry": [{"parameter": [{"key": "value", "value": [value]}], "field": []}],
+    }
+
+
+def _c1_metadata_field(pairs):
+    """Build a CatalogOne metadata field from {key: value} pairs."""
+    entries = []
+    for key, value in pairs.items():
+        entries.append(
+            {
+                "field": [
+                    _c1_scalar_field("name", key),
+                    _c1_scalar_field("value", value),
+                ]
+            }
+        )
+    return {"name": "metadata", "entry": entries}
+
+
+def _c1_reason_row(code, metadata):
+    return {
+        "id": f"row-{code}",
+        "field": [
+            _c1_scalar_field("name", code),
+            _c1_metadata_field(metadata),
+        ],
+    }
+
+
+def test_generic_element_semantic_inner_table():
+    """action/reason generic elements compare by reason code and metadata key."""
+    published = {
+        "id": "ge-1",
+        "field": [
+            _c1_scalar_field("name", "TerminateReasons"),
+            {
+                "name": "relatedModifyReason",
+                "entry": [
+                    _c1_reason_row("TERM-PRICE", {"displayOrder": "600"}),
+                    _c1_reason_row("TERM-INITBRE", {"BREDuration": "7"}),
+                    _c1_reason_row("TERM-COMP-BRE", {"displayOrder": "800"}),
+                ],
+            },
+        ],
+    }
+    local = {
+        "id": "ge-1",
+        "field": [
+            _c1_scalar_field("name", "TerminateReasons"),
+            {
+                "name": "relatedModifyReason",
+                "entry": [
+                    # displayOrder reshuffle
+                    _c1_reason_row("TERM-PRICE", {"displayOrder": "200"}),
+                    # metadata key renamed
+                    _c1_reason_row("TERM-INITBRE", {"BREDuration MRC": "7"}),
+                    # brand new reason code only in BR
+                    _c1_reason_row("TERM-NS", {"displayOrder": "400"}),
+                    # TERM-COMP-BRE exists only in production
+                ],
+            },
+        ],
+    }
+    client = FakeClient(local=local, published=published)
+    report = compare_business_request(
+        client,
+        business_request_id="br-1",
+        compare_type="production",
+        entities=[{"entity_id": "ge-1", "entity_type": "genericElementEntry", "title": "Reasons"}],
+    )
+    result = report.entities[0]
+    assert result.status == "changed"
+    by_change = {}
+    for change in result.field_changes:
+        by_change.setdefault(change.change, []).append(change)
+
+    # displayOrder reshuffle surfaces as a clean modified value keyed by reason code
+    order = next(
+        c for c in by_change["modified"] if "TERM-PRICE" in c.path and "displayOrder" in c.path
+    )
+    assert order.baseline == "600" and order.current == "200"
+
+    # prod-only rows/keys are folded into a concise summary line (not per-leaf)
+    prod_only = by_change.get("not_in_local", [])
+    assert any(
+        "TERM-COMP-BRE" in str(c.baseline) or "TERM-COMP-BRE" in c.label for c in prod_only
+    )
+    # the summary stays short instead of one line per prod-only difference
+    assert len(prod_only) <= 2
+
+    # reason row only in BR shows its content as added
+    assert any("TERM-NS" in c.path for c in by_change.get("added", []))
 
 
 def test_audit_compare_uses_audit_api_when_multiple_versions():
