@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from typing import Any, Literal
@@ -20,6 +21,11 @@ class FieldChange:
     baseline: Any
     current: Any
     change: str
+    label: str = ""
+
+    def __post_init__(self) -> None:
+        if not self.label:
+            self.label = _humanize_field_path(self.path)
 
 
 @dataclass
@@ -32,6 +38,7 @@ class EntityCompareResult:
     field_changes: list[FieldChange] = field(default_factory=list)
     audit_versions: list[dict[str, Any]] = field(default_factory=list)
     error: str | None = None
+    diagnostics: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -72,6 +79,7 @@ class BrCompareReport:
                     "field_changes": [
                         {
                             "path": change.path,
+                            "label": change.label,
                             "baseline": change.baseline,
                             "current": change.current,
                             "change": change.change,
@@ -80,6 +88,7 @@ class BrCompareReport:
                     ],
                     "audit_versions": item.audit_versions,
                     "error": item.error,
+                    "diagnostics": item.diagnostics,
                 }
                 for item in self.entities
             ],
@@ -195,8 +204,15 @@ def _compare_entity_production(
             summary="Entity is not present in the business request.",
         )
 
+    prod_status: int | None = None
+    prod_path: str | None = None
     try:
-        published = client.get_entity_published(entity_type, entity_id)
+        if hasattr(client, "get_entity_published_with_status"):
+            prod_status, prod_path, published = client.get_entity_published_with_status(
+                entity_type, entity_id
+            )
+        else:
+            published = client.get_entity_published(entity_type, entity_id)
     except Exception as exc:
         return EntityCompareResult(
             entity_id=entity_id,
@@ -205,20 +221,19 @@ def _compare_entity_production(
             status="errors",
             summary="Could not load production baseline.",
             error=str(exc),
+            diagnostics=_production_diagnostics(prod_status, prod_path),
         )
 
+    diagnostics = _production_diagnostics(prod_status, prod_path)
+
     if published is None:
-        changes = _flatten_entity(local)
         return EntityCompareResult(
             entity_id=entity_id,
             entity_type=entity_type,
             title=title,
             status="new_in_br",
-            summary="No production version found — entity exists only in this business request.",
-            field_changes=[
-                FieldChange(path=path, baseline=None, current=value, change="added")
-                for path, value in sorted(changes.items())
-            ],
+            summary="New — not in production (added by this business request).",
+            diagnostics=diagnostics,
         )
 
     field_changes = _diff_entities(published, local)
@@ -229,6 +244,7 @@ def _compare_entity_production(
             title=title,
             status="identical",
             summary="Matches production — no differences detected.",
+            diagnostics=diagnostics,
         )
 
     return EntityCompareResult(
@@ -238,7 +254,19 @@ def _compare_entity_production(
         status="changed",
         summary=_summarize_production_changes(field_changes),
         field_changes=field_changes,
+        diagnostics=diagnostics,
     )
+
+
+def _production_diagnostics(status: int | None, path: str | None) -> dict[str, Any]:
+    if status is None and path is None:
+        return {}
+    diagnostics: dict[str, Any] = {}
+    if status is not None:
+        diagnostics["production_status"] = status
+    if path is not None:
+        diagnostics["production_path"] = path
+    return diagnostics
 
 
 def _compare_entity_audit(
@@ -360,18 +388,46 @@ def _summarize_production_changes(field_changes: list[FieldChange]) -> str:
     )
 
 
+_KNOWN_FIELD_LABELS = {
+    "code": "Code",
+    "name": "Name",
+    "localizedname": "Name",
+    "displayname": "Display name",
+    "description": "Description",
+    "localizeddescription": "Description",
+    "validfor.enddatetime": "Expires on",
+    "validfor.startdatetime": "Effective from",
+    "enddatetime": "Expires on",
+    "startdatetime": "Effective from",
+    "priority": "Priority",
+    "status": "Status",
+    "lifecyclestatus": "Lifecycle status",
+    "value": "Value",
+    "benefits": "Benefits",
+}
+
+
 def _humanize_field_path(path: str) -> str:
-    known = {
-        "validFor.endDateTime": "Expiration date",
-        "validFor.startDateTime": "Start date",
-        "localizedName": "Name",
-        "description": "Description",
-    }
-    if path in known:
-        return known[path]
-    if path.startswith("validFor."):
-        return path.replace("validFor.", "Valid for ").replace("DateTime", " date")
-    return path.rsplit(".", 1)[-1]
+    if not path:
+        return "—"
+
+    # Drop list indices (e.g. localizedName[0].value -> localizedName.value)
+    cleaned = re.sub(r"\[\d+\]", "", path)
+
+    lowered = cleaned.lower()
+    if lowered in _KNOWN_FIELD_LABELS:
+        return _KNOWN_FIELD_LABELS[lowered]
+
+    last = cleaned.rsplit(".", 1)[-1]
+    if last.lower() in _KNOWN_FIELD_LABELS:
+        return _KNOWN_FIELD_LABELS[last.lower()]
+
+    # Split camelCase / PascalCase into words and title-case the result.
+    spaced = re.sub(r"(?<=[a-z0-9])(?=[A-Z])", " ", last).replace("_", " ").strip()
+    spaced = spaced.replace("DateTime", "date").replace("Date Time", "date")
+    if not spaced:
+        return last
+    return spaced[:1].upper() + spaced[1:]
 
 
 def _field_changes_from_audit_compare(payload: Any) -> list[FieldChange]:
@@ -384,6 +440,12 @@ def _field_changes_from_audit_compare(payload: Any) -> list[FieldChange]:
             continue
         ui_path = str(item.get("uiPath") or item.get("path") or "field")
         display = item.get("displayDetails") or {}
+        field_label = str(
+            display.get("displayName")
+            or display.get("label")
+            or item.get("displayName")
+            or ui_path
+        )
         field_values = display.get("fieldValues") or {}
         oldest = field_values.get("oldestData") or {}
         newest = field_values.get("newestData") or {}
@@ -393,6 +455,7 @@ def _field_changes_from_audit_compare(payload: Any) -> list[FieldChange]:
         changes.append(
             FieldChange(
                 path=ui_path,
+                label=field_label,
                 baseline=oldest.get("label") or oldest.get("value") or oldest,
                 current=newest.get("label") or newest.get("value") or newest,
                 change=str(action).lower(),

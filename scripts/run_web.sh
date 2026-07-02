@@ -27,8 +27,8 @@ if [[ ! -d .venv ]]; then
 fi
 .venv/bin/pip install -q -e .
 
-if [[ ! -d node_modules ]]; then
-  echo "Installing Node dependencies for chat agent…"
+if [[ ! -x node_modules/.bin/vite ]] || [[ ! -x node_modules/.bin/tsc ]]; then
+  echo "Installing Node dependencies (Vite UI + chat agent)…"
   npm install
 fi
 

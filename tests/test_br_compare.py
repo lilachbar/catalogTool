@@ -41,7 +41,7 @@ def test_summarize_single_valid_for_change():
     ]
     summary = _summarize_production_changes(changes)
     assert "1 difference" in summary
-    assert "Expiration date" in summary
+    assert "Expires on" in summary
 
 
 def test_production_compare_identical():

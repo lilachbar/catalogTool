@@ -1885,6 +1885,7 @@ function entityMatchesCompareFilter(entity, ui) {
     ...(entity.field_changes || []).flatMap((change) => [
       change.change,
       change.path,
+      change.label,
       change.baseline,
       change.current,
     ]),
@@ -1997,13 +1998,14 @@ function compareEmptyGroupNote(entity) {
 
 function buildBrCompareDiffRow(change) {
   const path = change.path || "";
+  const label = change.label || path;
   const baseline = change.baseline == null ? "" : String(change.baseline);
   const current = change.current == null ? "" : String(change.current);
   const clampable = baseline.length > COMPARE_VALUE_CLAMP || current.length > COMPARE_VALUE_CLAMP;
   return `<div class="br-compare-diff-row${clampable ? " is-clampable" : ""}">
     <div class="br-compare-diff-field"${compareCellTitle(path)}>
       <span class="br-compare-diff-field-icon" aria-hidden="true">${COMPARE_ICON_FIELD}</span>
-      <span class="br-compare-diff-field-label">${escapeHtml(path || "—")}</span>
+      <span class="br-compare-diff-field-label">${escapeHtml(label || "—")}</span>
     </div>
     <div class="br-compare-diff-change">${compareChangeBadge(change.change)}</div>
     ${compareValueCell(baseline, "baseline")}
