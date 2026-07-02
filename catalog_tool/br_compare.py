@@ -407,11 +407,19 @@ _KNOWN_FIELD_LABELS = {
 }
 
 
+def _spaced_label(text: str) -> str:
+    spaced = re.sub(r"(?<=[a-z0-9])(?=[A-Z])", " ", text).replace("_", " ").strip()
+    spaced = spaced.replace("DateTime", "date").replace("Date Time", "date")
+    if not spaced:
+        return text
+    return spaced[:1].upper() + spaced[1:]
+
+
 def _humanize_field_path(path: str) -> str:
     if not path:
         return "—"
 
-    # Drop list indices (e.g. localizedName[0].value -> localizedName.value)
+    # Drop positional list indices (e.g. localizedName[0].value -> localizedName.value)
     cleaned = re.sub(r"\[\d+\]", "", path)
 
     lowered = cleaned.lower()
@@ -419,15 +427,23 @@ def _humanize_field_path(path: str) -> str:
         return _KNOWN_FIELD_LABELS[lowered]
 
     last = cleaned.rsplit(".", 1)[-1]
+
+    # Identity-matched row: word[identity] -> prefer the identity's own label.
+    bracket = re.match(r"^([A-Za-z0-9_]*)\[([^\]]+)\]$", last)
+    if bracket:
+        base, ident = bracket.group(1), bracket.group(2)
+        if ident.lower() in _KNOWN_FIELD_LABELS:
+            return _KNOWN_FIELD_LABELS[ident.lower()]
+        if base.lower() in _KNOWN_FIELD_LABELS:
+            return _KNOWN_FIELD_LABELS[base.lower()]
+        if ident and not ident.isdigit():
+            return _spaced_label(ident)
+        return _spaced_label(base) if base else last
+
     if last.lower() in _KNOWN_FIELD_LABELS:
         return _KNOWN_FIELD_LABELS[last.lower()]
 
-    # Split camelCase / PascalCase into words and title-case the result.
-    spaced = re.sub(r"(?<=[a-z0-9])(?=[A-Z])", " ", last).replace("_", " ").strip()
-    spaced = spaced.replace("DateTime", "date").replace("Date Time", "date")
-    if not spaced:
-        return last
-    return spaced[:1].upper() + spaced[1:]
+    return _spaced_label(last)
 
 
 def _field_changes_from_audit_compare(payload: Any) -> list[FieldChange]:
@@ -464,25 +480,157 @@ def _field_changes_from_audit_compare(payload: Any) -> list[FieldChange]:
     return changes
 
 
+_IDENTITY_KEYS = ("id", "name", "key", "code")
+_SKIP_KEYS = {"policy", "uniqueIds"}
+
+
 def _diff_entities(baseline: Any, current: Any) -> list[FieldChange]:
-    base_flat = _flatten_entity(baseline)
-    current_flat = _flatten_entity(current)
+    """Structural diff of two entity snapshots (production baseline vs BR local).
+
+    Lists (inner tables) are matched by a stable identity key (``id``/``name``/
+    ``key``/``code``) instead of positional index, so added, removed, or
+    reordered rows are detected correctly. A row present in production but
+    missing from the BR is reported concisely as "not in local"; a row present
+    only in the BR is expanded so its new content is visible.
+    """
+    return _diff_values(baseline, current, "")
+
+
+def _diff_values(baseline: Any, current: Any, path: str) -> list[FieldChange]:
+    if _canonical(baseline) == _canonical(current):
+        return []
+    if isinstance(baseline, dict) and isinstance(current, dict):
+        return _diff_dicts(baseline, current, path)
+    if isinstance(baseline, list) and isinstance(current, list):
+        return _diff_lists(baseline, current, path)
+    return [
+        FieldChange(
+            path=path or "value",
+            baseline=_display_value(baseline),
+            current=_display_value(current),
+            change="modified",
+        )
+    ]
+
+
+def _diff_dicts(baseline: dict, current: dict, path: str) -> list[FieldChange]:
     changes: list[FieldChange] = []
-    paths = sorted(set(base_flat) | set(current_flat))
-    for path in paths:
-        base_val = base_flat.get(path)
-        cur_val = current_flat.get(path)
-        if base_val == cur_val:
+    for key in sorted(set(baseline) | set(current)):
+        if key in _SKIP_KEYS:
             continue
-        if path not in base_flat:
-            changes.append(FieldChange(path=path, baseline=None, current=cur_val, change="added"))
-        elif path not in current_flat:
-            changes.append(FieldChange(path=path, baseline=base_val, current=None, change="removed"))
+        child = f"{path}.{key}" if path else str(key)
+        if key in baseline and key in current:
+            changes.extend(_diff_values(baseline[key], current[key], child))
+        elif key in current:
+            changes.extend(_added_changes(child, current[key]))
         else:
-            changes.append(
-                FieldChange(path=path, baseline=base_val, current=cur_val, change="modified")
-            )
+            changes.append(_missing_in_local(child, baseline[key]))
     return changes
+
+
+def _diff_lists(baseline: list, current: list, path: str) -> list[FieldChange]:
+    base_by_id = _index_by_identity(baseline)
+    cur_by_id = _index_by_identity(current)
+    changes: list[FieldChange] = []
+
+    if base_by_id is not None and cur_by_id is not None:
+        ordered = list(base_by_id) + [i for i in cur_by_id if i not in base_by_id]
+        for ident in ordered:
+            child = f"{path}[{ident}]"
+            if ident in base_by_id and ident in cur_by_id:
+                changes.extend(_diff_values(base_by_id[ident], cur_by_id[ident], child))
+            elif ident in cur_by_id:
+                changes.extend(_added_changes(child, cur_by_id[ident]))
+            else:
+                changes.append(_missing_in_local(child, base_by_id[ident]))
+        return changes
+
+    # No stable identity — fall back to positional comparison.
+    for index in range(max(len(baseline), len(current))):
+        child = f"{path}[{index}]"
+        if index < len(baseline) and index < len(current):
+            changes.extend(_diff_values(baseline[index], current[index], child))
+        elif index < len(current):
+            changes.extend(_added_changes(child, current[index]))
+        else:
+            changes.append(_missing_in_local(child, baseline[index]))
+    return changes
+
+
+def _index_by_identity(items: list) -> dict[str, Any] | None:
+    """Index list items by a stable identity, or None if not uniquely identifiable."""
+    indexed: dict[str, Any] = {}
+    for item in items:
+        if not isinstance(item, dict):
+            return None
+        ident = _identity_of(item)
+        if ident is None or ident in indexed:
+            return None
+        indexed[ident] = item
+    return indexed or None
+
+
+def _identity_of(item: dict) -> str | None:
+    for key in _IDENTITY_KEYS:
+        value = item.get(key)
+        if isinstance(value, (str, int)) and str(value).strip():
+            return str(value).strip()
+    return None
+
+
+def _added_changes(path: str, value: Any) -> list[FieldChange]:
+    """Expand a BR-only value into per-leaf "added" changes so the content shows."""
+    if isinstance(value, (dict, list)):
+        leaves = _flatten_entity(value, path)
+        if leaves:
+            return [
+                FieldChange(path=leaf, baseline=None, current=leaf_value, change="added")
+                for leaf, leaf_value in sorted(leaves.items())
+            ]
+    return [FieldChange(path=path, baseline=None, current=_display_value(value), change="added")]
+
+
+def _missing_in_local(path: str, value: Any) -> FieldChange:
+    """A production value with no counterpart in the BR — reported concisely."""
+    return FieldChange(
+        path=path,
+        baseline=_display_value(value),
+        current=None,
+        change="not_in_local",
+    )
+
+
+def _display_value(value: Any) -> Any:
+    if isinstance(value, dict):
+        return _readable_name(value) or _identity_of(value) or json.dumps(
+            _canonical(value), sort_keys=True, ensure_ascii=False
+        )
+    if isinstance(value, list):
+        count = len(value)
+        return f"{count} item{'s' if count != 1 else ''}"
+    return _normalize_scalar(value)
+
+
+def _readable_name(value: dict) -> str | None:
+    localized = value.get("localizedName")
+    if isinstance(localized, list) and localized:
+        first = localized[0]
+        if isinstance(first, dict) and first.get("value"):
+            return str(first["value"]).strip()
+    name = value.get("name")
+    if isinstance(name, str) and name.strip():
+        return name.strip()
+    return None
+
+
+def _canonical(value: Any) -> Any:
+    if isinstance(value, dict):
+        return {k: _canonical(v) for k, v in value.items() if k not in _SKIP_KEYS}
+    if isinstance(value, list):
+        return [_canonical(item) for item in value]
+    if isinstance(value, str):
+        return value.strip()
+    return value
 
 
 def _flatten_entity(value: Any, prefix: str = "") -> dict[str, Any]:

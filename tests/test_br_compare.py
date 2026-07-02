@@ -85,6 +85,72 @@ def test_production_compare_new_in_br():
     assert report.entities[0].status == "new_in_br"
 
 
+def test_inner_table_rows_matched_by_identity():
+    published = {
+        "id": "table-1",
+        "field": [
+            {"name": "rowA", "value": ["1"]},
+            {"name": "rowB", "value": ["2"]},
+        ],
+    }
+    local = {
+        "id": "table-1",
+        "field": [
+            {"name": "rowA", "value": ["9"]},  # modified in local
+            {"name": "rowC", "value": ["3"]},  # only in local
+        ],
+        # rowB exists in production but not in local
+    }
+    client = FakeClient(local=local, published=published)
+    report = compare_business_request(
+        client,
+        business_request_id="br-1",
+        compare_type="production",
+        entities=[{"entity_id": "table-1", "entity_type": "genericElement", "title": "Table"}],
+    )
+    result = report.entities[0]
+    assert result.status == "changed"
+    by_change = {}
+    for change in result.field_changes:
+        by_change.setdefault(change.change, []).append(change)
+
+    # rowB is present in production but not local -> concise "not in local"
+    not_in_local = by_change.get("not_in_local", [])
+    assert any("rowB" in change.path for change in not_in_local)
+    assert all("rowB" not in c.path for c in by_change.get("added", []))
+
+    # rowC exists only in local -> its content is shown as added
+    assert any("rowC" in change.path for change in by_change.get("added", []))
+
+    # rowA changed value -> modified, matched by identity (not by index)
+    assert any("rowA" in change.path for change in by_change.get("modified", []))
+
+
+def test_inner_table_row_reorder_is_not_a_change():
+    published = {
+        "id": "table-1",
+        "field": [
+            {"name": "rowA", "value": ["1"]},
+            {"name": "rowB", "value": ["2"]},
+        ],
+    }
+    local = {
+        "id": "table-1",
+        "field": [
+            {"name": "rowB", "value": ["2"]},
+            {"name": "rowA", "value": ["1"]},
+        ],
+    }
+    client = FakeClient(local=local, published=published)
+    report = compare_business_request(
+        client,
+        business_request_id="br-1",
+        compare_type="production",
+        entities=[{"entity_id": "table-1", "entity_type": "genericElement", "title": "Table"}],
+    )
+    assert report.entities[0].status == "identical"
+
+
 def test_audit_compare_uses_audit_api_when_multiple_versions():
     client = FakeClient(
         local={"field": [{"name": "name"}]},

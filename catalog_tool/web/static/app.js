@@ -2074,7 +2074,10 @@ function compareChangeBadge(change) {
   if (!raw) {
     return "";
   }
-  if (raw.includes("add")) {
+  if (raw.includes("not_in_local") || raw.includes("missing")) {
+    label = "Not in local";
+    tone = "muted";
+  } else if (raw.includes("add")) {
     label = "Added";
     tone = "ok";
   } else if (raw.includes("remov") || raw.includes("delet")) {
