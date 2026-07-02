@@ -108,9 +108,269 @@ body {
   position: relative;
   z-index: 1;
   --sidebar-width: 300px;
-  display: grid;
-  grid-template-columns: var(--sidebar-width) 5px minmax(0, 1fr);
+  --sidebar-section-gap: 0.625rem;
+  --sidebar-blocks-gap: 0.75rem;
+  --sidebar-list-gap: 0.375rem;
+  --sidebar-row-min-h: 2.25rem;
+  --sidebar-row-py: 0.5rem;
+  --sidebar-row-px: 0.75rem;
+  --sidebar-row-pl: 0.625rem;
+  --sidebar-row-font: 0.8125rem;
+  --sidebar-icon-slot: 15px;
+  display: flex;
+  flex-direction: column;
   min-height: 100vh;
+}
+
+/* ── Top bar ─────────────────────────────────────────────────────── */
+.app-topbar {
+  flex: 0 0 auto;
+  position: relative;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.5rem 0.875rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+}
+
+.app-topbar-left,
+.app-topbar-right {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.app-topbar-left {
+  flex: 1 1 auto;
+}
+
+.app-topbar-right {
+  flex: 0 0 auto;
+}
+
+.app-topbar-brand {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  padding-right: 0.25rem;
+  min-width: 0;
+}
+
+.app-topbar-logo {
+  flex-shrink: 0;
+  border-radius: 8px;
+}
+
+.app-topbar-brand-copy {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.15;
+  min-width: 0;
+}
+
+.app-topbar-eyebrow {
+  font-size: 0.625rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+}
+
+.app-topbar-title {
+  font-size: 0.9375rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--text);
+}
+
+.app-topbar-divider {
+  flex: 0 0 auto;
+  width: 1px;
+  height: 1.75rem;
+  background: var(--border);
+  margin: 0 0.25rem;
+}
+
+.topbar-menu {
+  position: relative;
+  flex: 0 0 auto;
+}
+
+.topbar-menu-trigger {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  height: 2.25rem;
+  max-width: 15rem;
+  padding: 0 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--bg-elevated);
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background var(--transition), border-color var(--transition), color var(--transition);
+}
+
+.topbar-menu-trigger:hover {
+  background: var(--surface-hover);
+  border-color: var(--border-strong);
+  color: var(--text);
+}
+
+.topbar-menu.is-open .topbar-menu-trigger {
+  border-color: oklch(0.62 0.2 259 / 0.4);
+  background: var(--accent-muted);
+  color: var(--accent);
+}
+
+.topbar-menu-icon {
+  flex-shrink: 0;
+  opacity: 0.8;
+}
+
+.topbar-menu-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.topbar-menu-caret {
+  flex-shrink: 0;
+  opacity: 0.6;
+  transition: transform var(--transition);
+}
+
+.topbar-menu.is-open .topbar-menu-caret {
+  transform: rotate(180deg);
+}
+
+.topbar-menu-panel {
+  position: absolute;
+  top: calc(100% + 0.5rem);
+  left: 0;
+  z-index: 200;
+  width: 20rem;
+  max-width: min(22rem, calc(100vw - 2rem));
+  max-height: min(70vh, 32rem);
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sidebar-section-gap);
+  padding: 0.875rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  box-shadow: 0 16px 40px rgba(15, 23, 42, 0.18);
+}
+
+.topbar-menu-panel[hidden] {
+  display: none;
+}
+
+.topbar-menu-panel--actions {
+  width: 17rem;
+}
+
+.app-topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  flex-shrink: 0;
+}
+
+.app-topbar-actions .icon-btn {
+  width: 2rem;
+  height: 2rem;
+}
+
+.app-topbar-actions .icon-btn[hidden] {
+  display: none !important;
+}
+
+.app-topbar-logout:hover {
+  color: var(--err);
+  border-color: var(--err);
+}
+
+.app-topbar .main-connection-hint {
+  position: static;
+  z-index: auto;
+  margin: 0;
+  align-self: center;
+  justify-content: flex-start;
+  gap: 0.45rem;
+  height: 2.25rem;
+  padding: 0 0.85rem;
+  border-width: 1px;
+  border-left-width: 1px;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  line-height: 1;
+  max-width: 24rem;
+}
+
+.app-topbar .main-connection-hint[hidden] {
+  display: none;
+}
+
+.app-topbar .main-connection-hint-text {
+  flex: 0 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+  font-size: 0.75rem;
+}
+
+.topbar-status-dot {
+  flex: 0 0 auto;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--warn);
+}
+
+.main-connection-hint-connected .topbar-status-dot {
+  background: var(--ok);
+  box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.2);
+}
+
+.main-connection-hint-disconnected .topbar-status-dot {
+  background: var(--warn);
+  box-shadow: 0 0 0 3px var(--warn-muted);
+}
+
+@media (max-width: 720px) {
+  .app-topbar {
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+
+  .app-topbar-eyebrow {
+    display: none;
+  }
+
+  .app-topbar .main-connection-hint-text {
+    display: none;
+  }
+
+  .topbar-menu-trigger {
+    max-width: 10rem;
+  }
+
+  .topbar-menu-panel {
+    width: min(20rem, calc(100vw - 2rem));
+  }
 }
 
 .sidebar-resizer {
@@ -984,11 +1244,11 @@ body.is-resizing-sidebar * {
   --login-text: var(--app-text, #0f172a);
   --login-muted: var(--app-muted, #64748b);
   --login-border: var(--app-border, #e2e8f0);
-  --login-pill-h: 3rem;
-  width: min(440px, calc(100vw - 2rem));
+  --login-pill-h: 2.5rem;
+  width: min(384px, calc(100vw - 2rem));
   padding: 0;
   border: none;
-  border-radius: 24px;
+  border-radius: 18px;
   background: var(--login-card);
   color: var(--login-text);
   box-shadow: var(--app-shadow, 0 24px 48px rgba(15, 23, 42, 0.18));
@@ -999,6 +1259,12 @@ body.is-resizing-sidebar * {
   backdrop-filter: blur(4px);
 }
 
+/* Keep the environment editor compact: the base .connection-modal (640px)
+   is declared later with equal specificity, so scope the narrow width here. */
+#connectionModal.connection-modal--login {
+  width: min(360px, calc(100vw - 2rem));
+}
+
 .connection-modal--login .connection-modal-form {
   display: flex;
   flex-direction: column;
@@ -1007,38 +1273,38 @@ body.is-resizing-sidebar * {
 
 .connection-modal--login .connection-modal-head {
   align-items: flex-start;
-  padding: 2rem 2rem 0;
+  padding: 1.375rem 1.375rem 0;
   border: none;
 }
 
 .connection-modal--login .connection-modal-head-copy {
   min-width: 0;
-  padding-right: 2rem;
+  padding-right: 1.5rem;
 }
 
 .connection-modal--login .connection-modal-eyebrow {
-  margin: 0 0 0.5rem;
-  font-size: 0.75rem;
+  margin: 0 0 0.25rem;
+  font-size: 0.625rem;
   font-weight: 600;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--login-blue);
 }
 
 .connection-modal--login .connection-modal-head h2 {
   margin: 0;
-  font-size: 1.75rem;
+  font-size: 1.25rem;
   font-weight: 700;
-  letter-spacing: -0.03em;
-  line-height: 1.15;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
   color: var(--login-text);
 }
 
 .connection-modal--login .connection-modal-desc {
-  margin: 0.5rem 0 0;
-  font-size: 0.9375rem;
+  margin: 0.3125rem 0 0;
+  font-size: 0.8125rem;
   color: var(--login-muted);
-  line-height: 1.45;
+  line-height: 1.4;
 }
 
 .connection-float-tip {
@@ -1067,9 +1333,9 @@ body.is-resizing-sidebar * {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 2rem;
-  height: 2rem;
-  margin: -0.25rem -0.25rem 0 0;
+  width: 1.75rem;
+  height: 1.75rem;
+  margin: -0.125rem -0.125rem 0 0;
   border: 1px solid var(--login-border);
   border-radius: 999px;
   background: var(--login-card);
@@ -1087,31 +1353,32 @@ body.is-resizing-sidebar * {
 .connection-modal--login .connection-form--login {
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
-  padding: 1.5rem 2rem 0.5rem;
+  gap: 0.5rem;
+  padding: 1.125rem 1.375rem 0.25rem;
   overflow-y: auto;
 }
 
 .connection-modal--login .connection-section-label {
-  margin: 0.5rem 0 0;
-  font-size: 0.75rem;
+  margin: 0.375rem 0 0;
+  font-size: 0.6875rem;
   font-weight: 600;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--login-blue);
 }
 
 .connection-modal--login .connection-field-hint {
-  margin: -0.375rem 0 0;
-  font-size: 0.8125rem;
+  margin: -0.25rem 0 0;
+  font-size: 0.75rem;
   color: var(--login-muted);
   line-height: 1.4;
 }
 
 .connection-modal--login .login-pill-field {
-  --login-pill-icon-size: 18px;
-  --login-pill-gap: 0.75rem;
-  --login-pill-pad-x: 1.125rem;
+  --login-pill-icon-size: 16px;
+  --login-pill-gap: 0.625rem;
+  --login-pill-pad-x: 0.875rem;
+  border-radius: 12px;
 }
 
 .connection-modal--login .login-pill-field .login-pill-input,
@@ -1124,6 +1391,7 @@ body.is-resizing-sidebar * {
   box-shadow: none;
   min-height: 0;
   padding: 0;
+  font-size: 0.875rem;
 }
 
 .connection-modal--login .login-pill-field input:hover,
@@ -1144,9 +1412,9 @@ body.is-resizing-sidebar * {
   background: oklch(0.62 0.2 259 / 0.1);
   color: var(--login-blue);
   font: inherit;
-  font-size: 0.8125rem;
+  font-size: 0.75rem;
   font-weight: 600;
-  padding: 0.375rem 0.75rem;
+  padding: 0.3125rem 0.625rem;
   cursor: pointer;
   transition: background 0.18s ease, color 0.18s ease;
 }
@@ -1157,17 +1425,17 @@ body.is-resizing-sidebar * {
 }
 
 .connection-modal--login .connection-modal-result {
-  margin: 0 2rem;
+  margin: 0 1.375rem;
 }
 
 .connection-modal--login .connection-modal-actions--login {
   display: flex;
   flex-direction: row;
   flex-wrap: nowrap;
-  justify-content: space-between;
+  justify-content: flex-end;
   align-items: center;
-  gap: 0.75rem;
-  padding: 1rem 2rem 2rem;
+  gap: 0.5rem;
+  padding: 0.875rem 1.375rem 1.375rem;
   border-top: none;
 }
 
@@ -1178,16 +1446,16 @@ body.is-resizing-sidebar * {
   align-items: center;
   justify-content: center;
   width: auto;
-  min-width: 6.5rem;
+  min-width: 5rem;
   height: var(--login-pill-h);
   margin: 0;
   flex-shrink: 0;
-  padding: 0 1.25rem;
+  padding: 0 1.125rem;
   font: inherit;
-  font-size: 0.9375rem;
+  font-size: 0.875rem;
   font-weight: 600;
   line-height: 1;
-  border-radius: 999px;
+  border-radius: 10px;
   cursor: pointer;
   transition: background 0.18s ease, border-color 0.18s ease, color 0.18s ease, transform 0.12s ease, opacity 0.18s ease;
 }
@@ -6680,31 +6948,79 @@ body.is-resizing-workflow-sidebar * {
 
 .app-page-body .app-shell {
   padding: var(--app-shell-padding);
-  gap: 0;
+  gap: var(--app-column-gap);
   height: 100vh;
   max-height: 100vh;
   min-height: 0;
   overflow: hidden;
-  grid-template-rows: minmax(0, 1fr);
+  display: flex;
+  flex-direction: column;
   align-items: stretch;
-  grid-template-columns: var(--sidebar-width) var(--app-column-gap) minmax(0, 1fr);
 }
 
-.app-page-body .app-shell > .env-sidebar,
-.app-page-body .app-shell > .sidebar-resizer,
+.app-page-body .app-shell > .app-topbar,
 .app-page-body .app-shell > .app-main {
   min-height: 0;
 }
 
-.app-page-body .env-sidebar {
-  margin: 0.25rem 0;
-  height: 100%;
-  max-height: calc(100vh - 1.75rem);
+.app-page-body .app-topbar {
   background: var(--app-card);
   border: none;
-  border-radius: 24px;
+  box-shadow: var(--app-shadow-sm);
+  border-radius: 20px;
+  padding: 0.5rem 0.75rem 0.5rem 0.875rem;
+}
+
+.app-page-body .app-topbar-title {
+  color: var(--app-text);
+}
+
+.app-page-body .app-topbar-eyebrow {
+  color: var(--app-muted);
+}
+
+.app-page-body .app-topbar-divider {
+  background: var(--app-border);
+}
+
+.app-page-body .topbar-menu-trigger {
+  background: var(--app-surface-soft);
+  border-color: var(--app-border);
+  color: var(--app-text);
+}
+
+.app-page-body .topbar-menu-trigger:hover {
+  border-color: oklch(0.62 0.2 259 / 0.35);
+  color: var(--app-blue);
+}
+
+.app-page-body .topbar-menu.is-open .topbar-menu-trigger {
+  border-color: var(--app-blue);
+  color: var(--app-blue);
+}
+
+.app-page-body .topbar-menu-panel {
+  background: var(--app-card);
+  border-color: var(--app-border);
   box-shadow: var(--app-shadow);
-  padding: 1.25rem 1rem;
+}
+
+.app-page-body .app-topbar-actions .icon-btn {
+  background: var(--app-card);
+  border-color: var(--app-border);
+  color: var(--app-muted);
+}
+
+.app-page-body .app-topbar-actions .icon-btn:hover {
+  background: var(--app-surface-soft);
+  border-color: oklch(0.62 0.2 259 / 0.35);
+  color: var(--app-blue);
+}
+
+.app-page-body .app-topbar-actions .chat-toggle.is-active {
+  background: var(--accent-muted);
+  border-color: oklch(0.62 0.2 259 / 0.45);
+  color: var(--app-blue);
 }
 
 /* Agentic panel — match action sidebar card */
@@ -7394,10 +7710,17 @@ body.is-resizing-workflow-sidebar * {
 }
 
 .app-page-body .merge-hero-icon {
+  width: 2.375rem;
+  height: 2.375rem;
   background: var(--app-surface-soft);
   border-color: var(--app-border);
   color: var(--app-blue);
-  border-radius: 16px;
+  border-radius: 12px;
+}
+
+.app-page-body .merge-hero-icon svg {
+  width: 20px;
+  height: 20px;
 }
 
 .app-page-body .merge-hero-eyebrow {
@@ -7407,8 +7730,8 @@ body.is-resizing-workflow-sidebar * {
 
 .app-page-body .merge-hero-title {
   color: var(--app-text);
-  font-size: 1.625rem;
-  line-height: 1.2;
+  font-size: 1.25rem;
+  line-height: 1.25;
 }
 
 .app-page-body .merge-hero-lead {
@@ -7545,7 +7868,7 @@ body:has(.connection-modal[open]) .app-bg-shape::after {
 
 .app-page-body .connection-modal--login {
   border: none;
-  border-radius: 24px;
+  border-radius: 18px;
   box-shadow: var(--app-shadow);
 }
 
@@ -7593,9 +7916,10 @@ body:has(.connection-modal[open]) .app-bg-shape::after {
 .app-page-body .merge-hero.workflow-page-hero {
   background: transparent;
   border-bottom: 1px solid var(--app-border);
-  padding: 1.25rem 1.25rem 1rem;
+  padding: 0.75rem 1.25rem;
   flex-shrink: 0;
-  gap: 1rem;
+  gap: 0.75rem;
+  align-items: center;
 }
 
 .app-page-body .merge-steps.mcp-page-steps,
