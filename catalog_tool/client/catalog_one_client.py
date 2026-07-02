@@ -309,14 +309,19 @@ class CatalogOneClient:
             raise RuntimeError(f"Get business request failed ({status}): {body}")
         return json.loads(body)
 
-    def _get_entity_snapshot(
+    def _get_entity_snapshot_meta(
         self,
         entity_type: str,
         entity_id: str,
         *,
         business_request_id: str | None = None,
-    ) -> dict[str, Any] | None:
-        """Load an entity using the same CatalogOne API shape (with or without BR context)."""
+    ) -> tuple[int, str, dict[str, Any] | None]:
+        """Load an entity and also return the HTTP status and request path used.
+
+        Returns ``(status, path, entity)``. ``entity`` is ``None`` on 404 or when the
+        body is empty/unexpected. Non-404 error statuses raise ``RuntimeError`` so the
+        caller can distinguish "not found" from "failed".
+        """
         normalized = (entity_type or "").strip()
         spec = resolve_entity_get_spec(normalized)
         if spec is None:
@@ -329,30 +334,49 @@ class CatalogOneClient:
             query = f"?businessRequestId={urllib.parse.quote(business_request_id)}"
 
         if spec.method == "POST":
+            path = f"/{spec.api_base}/{spec.version}/{spec.post_path or spec.path_template}"
             status, body = self._api_request(
                 "POST",
-                f"/{spec.api_base}/{spec.version}/{spec.post_path or spec.path_template}",
+                path,
                 query=query,
                 body={spec.post_body_key: [entity_id]},
             )
         else:
-            path = spec.path_template.format(entity_id=entity_id)
+            path = f"/{spec.api_base}/{spec.version}/{spec.path_template.format(entity_id=entity_id)}"
             status, body = self._api_request(
                 "GET",
-                f"/{spec.api_base}/{spec.version}/{path}",
+                path,
                 query=query,
             )
 
+        request_path = f"{path}{query}"
         if status == 404:
-            return None
+            return status, request_path, None
         if status < 200 or status >= 300:
             context = f" in BR {business_request_id}" if business_request_id else " in production"
             raise RuntimeError(f"Get entity{context} failed ({status}): {body}")
 
         parsed = json.loads(body) if body else None
         if isinstance(parsed, list):
-            return parsed[0] if parsed else None
-        return parsed if isinstance(parsed, dict) else None
+            entity = parsed[0] if parsed else None
+        else:
+            entity = parsed if isinstance(parsed, dict) else None
+        return status, request_path, entity
+
+    def _get_entity_snapshot(
+        self,
+        entity_type: str,
+        entity_id: str,
+        *,
+        business_request_id: str | None = None,
+    ) -> dict[str, Any] | None:
+        """Load an entity using the same CatalogOne API shape (with or without BR context)."""
+        _status, _path, entity = self._get_entity_snapshot_meta(
+            entity_type,
+            entity_id,
+            business_request_id=business_request_id,
+        )
+        return entity
 
     def get_entity_in_business_request(
         self,
@@ -374,6 +398,14 @@ class CatalogOneClient:
     ) -> dict[str, Any] | None:
         """Load the entity as it currently exists in production (no BR context)."""
         return self._get_entity_snapshot(entity_type, entity_id)
+
+    def get_entity_published_with_status(
+        self,
+        entity_type: str,
+        entity_id: str,
+    ) -> tuple[int, str, dict[str, Any] | None]:
+        """Production read that also reports the HTTP status and request path used."""
+        return self._get_entity_snapshot_meta(entity_type, entity_id)
 
     def search_entity_audit_records(
         self,
