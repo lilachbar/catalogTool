@@ -10,6 +10,7 @@ data/catalog-pr/
 catalog_tool/web/static/chat.bundle.js
 catalog_tool/web/static/dist/
 .catalog-tool/
+.preview-tmp/
 *.egg-info/
 archive_candidate/*
 !archive_candidate/README.md
