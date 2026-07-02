@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/static/styles.css?v=20260702cmpgrp1">
+  <link rel="stylesheet" href="/static/styles.css?v=20260702topbar3">
   <script>
     (function () {
       var theme = localStorage.getItem("catalogTool.theme");
@@ -80,110 +80,131 @@
   <div class="app-bg-shape" aria-hidden="true"></div>
 
   <div class="app-shell" id="appShell">
-    <aside class="env-sidebar" aria-label="Sidebar">
-      <div class="sidebar-brand">
-        <img class="sidebar-brand-logo" src="/static/logo.svg" width="36" height="36" alt="">
-        <div class="sidebar-brand-copy">
-          <span class="sidebar-brand-eyebrow">AI Catalog Tool</span>
-          <span class="sidebar-brand-title">CatalogOne</span>
+    <header class="app-topbar" aria-label="Top bar">
+      <div class="app-topbar-left">
+        <div class="app-topbar-brand">
+          <img class="app-topbar-logo" src="/static/logo.svg" width="30" height="30" alt="">
+          <span class="app-topbar-brand-copy">
+            <span class="app-topbar-eyebrow">AI Catalog Tool</span>
+            <span class="app-topbar-title">CatalogOne</span>
+          </span>
         </div>
-      </div>
 
-      <div class="env-sidebar-section env-sidebar-section--compact">
-        <div class="env-sidebar-head">
-          <h2 class="env-sidebar-title">Actions</h2>
-        </div>
-        <nav class="app-nav env-list" aria-label="Main">
-        <button type="button" class="app-nav-item is-active" data-view="push" id="navPushView">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-            <polyline points="17 11 12 16 7 11"/>
-            <line x1="12" x2="12" y1="3" y2="16"/>
-          </svg>
-          <span>Upload, Review &amp; Publish</span>
-        </button>
-        <button type="button" class="app-nav-item" data-view="dg-import" id="navDgImportView">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-            <polyline points="14 2 14 8 20 8"/>
-            <line x1="8" x2="16" y1="13" y2="13"/>
-            <line x1="8" x2="16" y1="17" y2="17"/>
-          </svg>
-          <span>DG Import</span>
-        </button>
-        <button type="button" class="app-nav-item" data-view="mcp-tools" id="navMcpToolsView">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>
-          </svg>
-          <span>CatalogOne MCP tools</span>
-        </button>
-        </nav>
-      </div>
+        <span class="app-topbar-divider" aria-hidden="true"></span>
 
-      <div class="env-sidebar-section">
-        <div class="env-sidebar-head">
-          <h2 class="env-sidebar-title">Environments</h2>
-          <div class="env-sidebar-actions">
-            <button type="button" id="refreshEnvironmentsBtn" class="btn btn-ghost env-toolbar-btn env-refresh-btn" title="Reload environments from disk (data/environments/*.json)" aria-label="Refresh environments">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                <path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/>
-              </svg>
-              <span class="env-toolbar-label">Refresh</span>
-            </button>
-            <button type="button" id="addEnvironmentBtn" class="btn btn-ghost env-toolbar-btn" title="Add Environment" aria-label="Add Environment">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true">
-                <path d="M12 5v14M5 12h14"/>
-              </svg>
-            </button>
+        <div class="topbar-menu" data-topbar-menu="environments">
+          <button type="button" class="topbar-menu-trigger" id="envMenuTrigger" aria-haspopup="true" aria-expanded="false">
+            <svg class="topbar-menu-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14a9 3 0 0 0 18 0V5"/><path d="M3 12a9 3 0 0 0 18 0"/>
+            </svg>
+            <span class="topbar-menu-label" id="envMenuLabel">Environments</span>
+            <svg class="topbar-menu-caret" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+          </button>
+          <div class="topbar-menu-panel topbar-menu-panel--env" role="menu" hidden>
+            <div class="env-sidebar-head">
+              <h2 class="env-sidebar-title">Environments</h2>
+              <div class="env-sidebar-actions">
+                <button type="button" id="refreshEnvironmentsBtn" class="btn btn-ghost env-toolbar-btn env-refresh-btn" title="Reload environments from disk (data/environments/*.json)" aria-label="Refresh environments">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/>
+                  </svg>
+                  <span class="env-toolbar-label">Refresh</span>
+                </button>
+                <button type="button" id="addEnvironmentBtn" class="btn btn-ghost env-toolbar-btn" title="Add Environment" aria-label="Add Environment">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true">
+                    <path d="M12 5v14M5 12h14"/>
+                  </svg>
+                </button>
+              </div>
+            </div>
+            <p id="envSidebarEmpty" class="env-sidebar-empty">No environments yet.<br>Add one to get started.</p>
+            <ul id="environmentSidebarList" class="env-list" role="list"></ul>
           </div>
         </div>
-        <p id="envSidebarEmpty" class="env-sidebar-empty">No environments yet.<br>Add one to get started.</p>
-        <ul id="environmentSidebarList" class="env-list" role="list"></ul>
+
+        <div class="topbar-menu" data-topbar-menu="actions">
+          <button type="button" class="topbar-menu-trigger" id="actionsMenuTrigger" aria-haspopup="true" aria-expanded="false">
+            <svg class="topbar-menu-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>
+            </svg>
+            <span class="topbar-menu-label" id="actionsMenuLabel">Upload, Review &amp; Publish</span>
+            <svg class="topbar-menu-caret" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+          </button>
+          <div class="topbar-menu-panel topbar-menu-panel--actions" role="menu" hidden>
+            <nav class="app-nav env-list" aria-label="Main">
+              <button type="button" class="app-nav-item is-active" data-view="push" id="navPushView">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                  <polyline points="17 11 12 16 7 11"/>
+                  <line x1="12" x2="12" y1="3" y2="16"/>
+                </svg>
+                <span>Upload, Review &amp; Publish</span>
+              </button>
+              <button type="button" class="app-nav-item" data-view="dg-import" id="navDgImportView">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                  <polyline points="14 2 14 8 20 8"/>
+                  <line x1="8" x2="16" y1="13" y2="13"/>
+                  <line x1="8" x2="16" y1="17" y2="17"/>
+                </svg>
+                <span>DG Import</span>
+              </button>
+              <button type="button" class="app-nav-item" data-view="mcp-tools" id="navMcpToolsView">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>
+                </svg>
+                <span>CatalogOne MCP tools</span>
+              </button>
+            </nav>
+          </div>
+        </div>
       </div>
-    </aside>
+
+      <div class="app-topbar-right">
+        <div id="mainConnectionHint" class="main-connection-hint main-connection-hint-disconnected" hidden role="status">
+          <span class="topbar-status-dot" aria-hidden="true"></span>
+          <span class="main-connection-hint-text" id="mainConnectionHintText"></span>
+        </div>
+        <div class="app-topbar-actions" aria-label="App controls">
+          <button type="button" id="chatToggleBtn" class="icon-btn chat-toggle" aria-label="Agentic assistant" title="Agentic assistant">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+            </svg>
+          </button>
+          <button type="button" id="chatAttachBtn" class="icon-btn chat-attach-btn" hidden aria-label="Attach chat" title="Attach chat to main window">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+              <rect x="3" y="3" width="18" height="18" rx="2"/><path d="M15 3v18"/>
+            </svg>
+          </button>
+          <button type="button" id="agenticSettingsBtn" class="icon-btn" aria-label="Agentic settings" title="Agentic settings — change assistant provider">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <circle cx="12" cy="12" r="3"/>
+              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+            </svg>
+          </button>
+          <button type="button" id="themeToggleBtn" class="icon-btn theme-toggle" aria-label="Toggle theme" title="Toggle theme">
+            <svg class="theme-icon theme-icon-sun" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+              <circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/>
+            </svg>
+            <svg class="theme-icon theme-icon-moon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+              <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+            </svg>
+          </button>
+          {% if ldap_auth_enabled %}
+          <button type="button" id="appLogoutBtn" class="icon-btn app-topbar-logout" aria-label="Log out" title="Sign out of AI Catalog Tool">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/>
+            </svg>
+          </button>
+          {% endif %}
+        </div>
+      </div>
+    </header>
 
     <div id="sidebarFloatTip" class="sidebar-float-tip" role="tooltip" hidden></div>
 
-    <div
-      id="sidebarResizer"
-      class="sidebar-resizer"
-      role="separator"
-      aria-orientation="vertical"
-      aria-label="Resize sidebar"
-      tabindex="0"
-      title="Drag to resize sidebar"
-    ></div>
-
     <div class="app-main">
       <div class="page" id="appPage">
-        <div id="mainConnectionHint" class="main-connection-hint main-connection-hint-disconnected" hidden role="status">
-          <div class="main-connection-hint-text" id="mainConnectionHintText"></div>
-          <div class="main-connection-bar-actions" aria-label="App controls">
-            <button type="button" id="agenticSettingsBtn" class="btn btn-ghost btn-sm main-connection-bar-btn" title="Change agentic assistant provider">Agentic settings</button>
-            <button type="button" id="chatAttachBtn" class="icon-btn chat-attach-btn" hidden aria-label="Attach chat" title="Attach chat to main window">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
-                <rect x="3" y="3" width="18" height="18" rx="2"/><path d="M15 3v18"/>
-              </svg>
-            </button>
-            <button type="button" id="chatToggleBtn" class="icon-btn chat-toggle" aria-label="Open catalog assistant" title="Catalog assistant">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
-              </svg>
-            </button>
-            <button type="button" id="themeToggleBtn" class="icon-btn theme-toggle" aria-label="Toggle theme" title="Toggle theme">
-              <svg class="theme-icon theme-icon-sun" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
-                <circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/>
-              </svg>
-              <svg class="theme-icon theme-icon-moon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
-                <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
-              </svg>
-            </button>
-            {% if ldap_auth_enabled %}
-            <button type="button" id="appLogoutBtn" class="btn btn-ghost btn-sm main-connection-bar-btn" title="Sign out of AI Catalog Tool">Log out</button>
-            {% endif %}
-          </div>
-        </div>
-
         <div id="pushView" class="app-view app-view-fill">
           <div class="app-view-body">
           <section class="panel panel-wide workflow-panel">
@@ -196,12 +217,7 @@
                 </svg>
               </div>
               <div class="merge-hero-text">
-                <p class="merge-hero-eyebrow">CatalogOne export</p>
                 <h2 class="merge-hero-title">Upload, review, and publish with confidence</h2>
-                <p class="merge-hero-lead">
-                  Upload a CatalogOne export zip to build a review-only PR package.
-                  Nothing is published until you explicitly choose to.
-                </p>
               </div>
             </header>
 
@@ -420,13 +436,7 @@
                 </svg>
               </div>
               <div class="merge-hero-text">
-                <p class="merge-hero-eyebrow">CatalogOne design guide</p>
                 <h2 class="merge-hero-title">Import Actions &amp; Reasons from Excel</h2>
-                <p class="merge-hero-lead">
-                  Upload a WLS Actions and Reasons workbook. We parse each tab, preview the
-                  genericElementEntry JSON, and load changes into a business request.
-                  Nothing is published until you explicitly choose to.
-                </p>
               </div>
             </header>
 
@@ -646,12 +656,7 @@
                 </svg>
               </div>
               <div class="merge-hero-text">
-                <p class="merge-hero-eyebrow">CatalogOne MCP</p>
                 <h2 class="merge-hero-title">Browse and run CatalogOne MCP tools</h2>
-                <p class="merge-hero-lead">
-                  Search the tool library, fill in parameters, and execute against your connected environment.
-                  Tools use the same CatalogOne session as the sidebar — connect first, then run.
-                </p>
               </div>
             </header>
 
@@ -955,7 +960,7 @@
   <script id="defaultsConfig" type="application/json">{{ defaults | tojson }}</script>
   <script src="/static/layout-couple.js?v=20260702chat20gap1"></script>
   <script src="/static/page-control.js?v=20260702app68"></script>
-  <script src="/static/app.js?v=20260702cmpgrp1"></script>
+  <script src="/static/app.js?v=20260702topbar1"></script>
   <script src="/static/mcp-tools.js?v=20260702app57"></script>
   {{ vite_assets('main.tsx') }}
 </body>

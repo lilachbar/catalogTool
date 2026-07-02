@@ -208,6 +208,8 @@ const els = {
   cancelAgenticSettingsBtn: document.getElementById("cancelAgenticSettingsBtn"),
   appShell: document.getElementById("appShell"),
   sidebarResizer: document.getElementById("sidebarResizer"),
+  envMenuLabel: document.getElementById("envMenuLabel"),
+  actionsMenuLabel: document.getElementById("actionsMenuLabel"),
 };
 
 function clampSidebarWidth(width) {
@@ -435,24 +437,30 @@ function setActiveView(view) {
     button.classList.toggle("is-active", button.dataset.view === nextView);
   });
 
+  if (els.actionsMenuLabel) {
+    els.actionsMenuLabel.textContent = VIEW_META[nextView]?.title || "Actions";
+  }
+
   updateMainConnectionHint();
 }
 
 function connectionHintForView() {
   if (state.loggedIn) {
-    const label = escapeHtml(state.currentEnvironmentLabel || "Unknown");
+    const rawLabel = state.currentEnvironmentLabel || "Unknown";
     return {
       connected: true,
-      html: `The AI Catalog Tool is connected to environment: ${label}`,
+      html: `Connected · ${escapeHtml(rawLabel)}`,
+      title: `Connected to environment: ${rawLabel}`,
     };
   }
   return {
     connected: false,
-    html: "The AI Catalog Tool is not connected to any environment yet — connect to get started.",
+    html: "Not connected",
+    title: "Not connected to any environment yet — connect to get started.",
   };
 }
 
-function setMainConnectionHintState(connected, html) {
+function setMainConnectionHintState(connected, html, title) {
   if (!els.mainConnectionHint) {
     return;
   }
@@ -460,8 +468,20 @@ function setMainConnectionHintState(connected, html) {
   els.mainConnectionHint.className = connected
     ? "main-connection-hint main-connection-hint-connected"
     : "main-connection-hint main-connection-hint-disconnected";
+  if (title) {
+    els.mainConnectionHint.title = title;
+  }
   if (els.mainConnectionHintText) {
     els.mainConnectionHintText.innerHTML = html;
+  }
+}
+
+function updateTopbarMenuLabels() {
+  if (els.envMenuLabel) {
+    els.envMenuLabel.textContent = getConnectedEnvironmentLabel() || "Environments";
+  }
+  if (els.actionsMenuLabel) {
+    els.actionsMenuLabel.textContent = VIEW_META[state.activeView]?.title || "Actions";
   }
 }
 
@@ -471,7 +491,8 @@ function updateMainConnectionHint() {
   }
 
   const hint = connectionHintForView();
-  setMainConnectionHintState(hint.connected, hint.html);
+  setMainConnectionHintState(hint.connected, hint.html, hint.title);
+  updateTopbarMenuLabels();
   updateWorkflowStatusLines();
 }
 
@@ -738,8 +759,85 @@ async function refreshMcpToolsNavStatus() {
   }
 }
 
+let closeAllTopbarMenus = () => {};
+
+function initTopbarMenus() {
+  const menus = [...document.querySelectorAll(".topbar-menu")];
+  if (!menus.length) {
+    return;
+  }
+
+  const closeMenu = (menu) => {
+    const trigger = menu.querySelector(".topbar-menu-trigger");
+    const panel = menu.querySelector(".topbar-menu-panel");
+    menu.classList.remove("is-open");
+    trigger?.setAttribute("aria-expanded", "false");
+    if (panel) {
+      panel.hidden = true;
+    }
+  };
+
+  const openMenu = (menu) => {
+    menus.forEach((other) => {
+      if (other !== menu) {
+        closeMenu(other);
+      }
+    });
+    const trigger = menu.querySelector(".topbar-menu-trigger");
+    const panel = menu.querySelector(".topbar-menu-panel");
+    menu.classList.add("is-open");
+    trigger?.setAttribute("aria-expanded", "true");
+    if (panel) {
+      panel.hidden = false;
+    }
+  };
+
+  closeAllTopbarMenus = () => menus.forEach(closeMenu);
+
+  menus.forEach((menu) => {
+    const trigger = menu.querySelector(".topbar-menu-trigger");
+    const panel = menu.querySelector(".topbar-menu-panel");
+
+    trigger?.addEventListener("click", (event) => {
+      event.stopPropagation();
+      if (menu.classList.contains("is-open")) {
+        closeMenu(menu);
+      } else {
+        openMenu(menu);
+      }
+    });
+
+    // Close after picking an action/view or connecting to an environment,
+    // but keep the panel open for refresh / add / edit / delete controls.
+    panel?.addEventListener("click", (event) => {
+      const keepsOpen = event.target.closest(
+        ".env-sidebar-actions, .env-action-edit, .env-action-delete",
+      );
+      const shouldClose = event.target.closest(
+        ".app-nav-item, .env-action-connect, .env-action-disconnect, .env-card-body",
+      );
+      if (shouldClose && !keepsOpen) {
+        closeMenu(menu);
+      }
+    });
+  });
+
+  document.addEventListener("click", (event) => {
+    if (event.target.closest(".topbar-menu")) {
+      return;
+    }
+    closeAllTopbarMenus();
+  });
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      closeAllTopbarMenus();
+    }
+  });
+}
+
 function initSidebarFloatTips() {
-  const sidebar = document.querySelector(".env-sidebar");
+  const sidebar = document.querySelector(".app-topbar");
   const tip = document.getElementById("sidebarFloatTip");
   if (!sidebar || !tip) {
     return;
@@ -3345,6 +3443,7 @@ function setLoggedIn(loggedIn, username = "", environmentLabel = "") {
   renderEnvironmentSidebar();
   updateMainConnectionHint();
   updateWorkflowStatusLines();
+  closeAllTopbarMenus();
   window.catalogTool?.reloadMcpTools?.();
   window.catalogTool?.refreshMcpRunState?.();
   window.catalogTool?.notifyEnvironmentsChanged?.();
@@ -4240,6 +4339,7 @@ async function initApp() {
   }
 
   initWorkflowSidebarResize();
+  initTopbarMenus();
   initEnvRefreshButtonLayout();
   initSidebarFloatTips();
   initConnectionModalFloatTips();
