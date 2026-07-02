@@ -60,12 +60,23 @@ CHAT_SERVER_URL = os.environ.get(
 ).rstrip("/")
 
 # --- Amdocs LDAP (application login) ---
-LDAP_AUTH_ENABLED = os.environ.get("LDAP_AUTH_ENABLED", "true").strip().lower() not in {
-    "0",
-    "false",
-    "no",
-    "off",
-}
+# USE_LDAP controls whether the LDAP login page gates access to the web app.
+# Default is False: no login page is shown and users land straight in the UI.
+# Set USE_LDAP=true in .env to require an Amdocs LDAP sign-in before the UI loads.
+# The legacy LDAP_AUTH_ENABLED env var is still honored as a fallback.
+_LDAP_FALSE_VALUES = {"", "0", "false", "no", "off"}
+
+
+def _env_flag(name: str, default: bool) -> bool:
+    raw = os.environ.get(name)
+    if raw is None:
+        return default
+    return raw.strip().lower() not in _LDAP_FALSE_VALUES
+
+
+USE_LDAP = _env_flag("USE_LDAP", _env_flag("LDAP_AUTH_ENABLED", False))
+# Backwards-compatible alias consumed across the codebase and tests.
+LDAP_AUTH_ENABLED = USE_LDAP
 LDAP_URI = os.environ.get("LDAP_URI", "ldap://corp.amdocs.com:389").strip()
 LDAP_DOMAIN = os.environ.get("LDAP_DOMAIN", "corp.amdocs.com").strip()
 LDAP_BIND_FORMAT = os.environ.get("LDAP_BIND_FORMAT", "upn").strip() or "upn"

@@ -195,7 +195,7 @@ The script will:
 
 ### 5. Typical workflow
 
-1. **Sign in** — Amdocs LDAP at `/login` (when `LDAP_AUTH_ENABLED=true`).
+1. **Sign in** — Amdocs LDAP at `/login` (only when `USE_LDAP=true`; disabled by default).
 2. **Environments** (sidebar) — Add an environment (+), enter APIGW / Keycloak / credentials, **Connect**. Up to 12 per user; stored in `data/environments/{username}.json` (passwords base64-encoded). Each signed-in user sees only their own environments.
 3. **Merge & Import** — Upload a CatalogOne export zip → **Analyze & preview** → create BR → optional **Compare vs production** → publish when ready.
 4. **DG Import** — Upload WLS Actions & Reasons Excel → **Analyze & preview** → create BR → **Import entries to catalog** → publish when ready.
@@ -370,7 +370,7 @@ catalogTool/
 
 | Variable | Purpose | Default |
 |----------|---------|---------|
-| `LDAP_AUTH_ENABLED` | Require LDAP sign-in at `/login` | `true` (set `false` for local dev without login) |
+| `USE_LDAP` | Require LDAP sign-in at `/login` | `false` (set `true` to enable the login page; legacy `LDAP_AUTH_ENABLED` still honored as a fallback) |
 | `LDAP_URI` | Corporate LDAP server (`ldap://host:389` or `ldaps://…`) | `ldap://corp.amdocs.com:389` |
 | `LDAP_DOMAIN` | Domain for UPN bind (`user@corp.amdocs.com`) | `corp.amdocs.com` |
 | `LDAP_BIND_FORMAT` | `upn`, `sam` (`CORP\user`), or `dn` (with template) | `upn` |
