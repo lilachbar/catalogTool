@@ -7589,12 +7589,11 @@ body.is-resizing-workflow-sidebar * {
   padding-bottom: 1rem;
 }
 
-/* Center the wizard content vertically so short steps (e.g. Upload) don't
-   leave a large empty band below. `safe` reverts to top-aligned when the
-   content is tall enough to need scrolling. */
+/* Top-align the wizard content so the working area starts near the top of the
+   page instead of floating in the vertical center. */
 .app-page-body #pushView .workflow-shell:not(.has-compare-open) .workflow-workbench,
 .app-page-body #dgImportView .workflow-shell:not(.has-compare-open) .workflow-workbench {
-  align-content: safe center;
+  align-content: start;
 }
 
 .app-page-body .mcp-tools-empty-detail {
