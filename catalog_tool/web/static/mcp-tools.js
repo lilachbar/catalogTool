@@ -295,6 +295,37 @@
     });
   }
 
+  const HUMANIZE_ACRONYMS = new Set([
+    "id", "url", "api", "json", "uri", "sku", "br", "ui", "ip", "mcp", "dg",
+  ]);
+
+  // Turn a snake_case / camelCase identifier into a human, standard-cased
+  // label (e.g. "get_product_offering" -> "Get product offering"). Display
+  // only — the raw name is still used for API calls and lookups.
+  function humanizeName(raw) {
+    const words = String(raw || "")
+      .replace(/[_-]+/g, " ")
+      .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+      .replace(/\s+/g, " ")
+      .trim();
+    if (!words) {
+      return "";
+    }
+    return words
+      .split(" ")
+      .map((word, index) => {
+        const lower = word.toLowerCase();
+        if (HUMANIZE_ACRONYMS.has(lower)) {
+          return lower.toUpperCase();
+        }
+        if (index === 0) {
+          return lower.charAt(0).toUpperCase() + lower.slice(1);
+        }
+        return lower;
+      })
+      .join(" ");
+  }
+
   function renderToolList() {
     const tools = filteredTools();
     updateToolCount(tools.length);
@@ -336,7 +367,7 @@
         if (tipParts.length) {
           btn.dataset.tipDesc = tipParts.join(" — ");
         }
-        btn.innerHTML = `<span class="mcp-tool-card-name">${tool.name}</span>`;
+        btn.innerHTML = `<span class="mcp-tool-card-name">${humanizeName(tool.title || tool.name)}</span>`;
         btn.addEventListener("click", () => selectTool(tool.name));
         li.appendChild(btn);
         ul.appendChild(li);
@@ -377,7 +408,7 @@
 
     const label = document.createElement("span");
     label.className = "field-label mcp-tool-field-name";
-    label.textContent = name;
+    label.textContent = humanizeName(name);
     if (required) {
       const mark = document.createElement("span");
       mark.className = "mcp-tool-field-required";
@@ -492,7 +523,7 @@
       els.detail.hidden = false;
     }
     if (els.detailTitle) {
-      els.detailTitle.textContent = tool.title || tool.name;
+      els.detailTitle.textContent = humanizeName(tool.title || tool.name);
     }
     if (els.detailCategory) {
       els.detailCategory.textContent = categorizeTool(tool.name);

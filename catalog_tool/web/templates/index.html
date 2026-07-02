@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/static/styles.css?v=20260702topbar6">
+  <link rel="stylesheet" href="/static/styles.css?v=20260702worktop1">
   <script>
     (function () {
       var theme = localStorage.getItem("catalogTool.theme");
@@ -85,8 +85,7 @@
         <div class="app-topbar-brand">
           <img class="app-topbar-logo" src="/static/logo.svg" width="30" height="30" alt="">
           <span class="app-topbar-brand-copy">
-            <span class="app-topbar-eyebrow">AI Catalog Tool</span>
-            <span class="app-topbar-title">CatalogOne</span>
+            <span class="app-topbar-title">AI Catalog Tool</span>
           </span>
         </div>
 
@@ -220,26 +219,9 @@
                 </svg>
               </div>
               <div class="merge-hero-text">
-                <h2 class="merge-hero-title">Upload, review, and publish with confidence</h2>
+                <h2 class="merge-hero-title">Upload, review and publish with confidence</h2>
               </div>
             </header>
-
-            <ol class="merge-steps workflow-page-steps" aria-label="Upload workflow">
-              <li class="merge-step">
-                <span class="merge-step-num">1</span>
-                <span class="merge-step-label">Upload zip</span>
-              </li>
-              <li class="merge-step-connector" aria-hidden="true"></li>
-              <li class="merge-step">
-                <span class="merge-step-num">2</span>
-                <span class="merge-step-label">Review changes</span>
-              </li>
-              <li class="merge-step-connector" aria-hidden="true"></li>
-              <li class="merge-step">
-                <span class="merge-step-num">3</span>
-                <span class="merge-step-label">Publish when ready</span>
-              </li>
-            </ol>
 
             <div class="workflow-shell">
               <div class="workflow-workbench">
@@ -411,11 +393,21 @@
               <div id="brCompareResultsSection" class="br-compare-results-section br-compare-results-full" hidden>
                 <div id="brComparePanel" class="br-compare-panel">
                   <div class="br-compare-panel-head">
+                    <button type="button" id="brCompareBackBtn" class="br-compare-back-btn" title="Return to the workflow steps">
+                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>
+                      <span>Back to steps</span>
+                    </button>
                     <h4 id="brCompareTitle" class="br-compare-panel-title">Compare results</h4>
-                    <label class="checkbox analyze-json-toggle">
-                      <input type="checkbox" id="brCompareShowJson">
-                      <span>Raw JSON</span>
-                    </label>
+                    <div class="br-compare-head-actions">
+                      <label class="checkbox analyze-json-toggle">
+                        <input type="checkbox" id="brCompareShowJson">
+                        <span>Raw JSON</span>
+                      </label>
+                      <button type="button" id="brComparePublishBtn" class="btn btn-danger btn-sm br-compare-publish-btn" title="Go to publish this business request">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
+                        <span>Publish BR</span>
+                      </button>
+                    </div>
                   </div>
                   <div id="brCompareReport" class="br-compare-panel-body"></div>
                   <pre id="brCompareJson" class="analyze-json br-compare-json" hidden></pre>
@@ -442,23 +434,6 @@
                 <h2 class="merge-hero-title">Import Actions &amp; Reasons from Excel</h2>
               </div>
             </header>
-
-            <ol class="merge-steps workflow-page-steps" aria-label="DG import workflow">
-              <li class="merge-step">
-                <span class="merge-step-num">1</span>
-                <span class="merge-step-label">Upload workbook</span>
-              </li>
-              <li class="merge-step-connector" aria-hidden="true"></li>
-              <li class="merge-step">
-                <span class="merge-step-num">2</span>
-                <span class="merge-step-label">Import to catalog</span>
-              </li>
-              <li class="merge-step-connector" aria-hidden="true"></li>
-              <li class="merge-step">
-                <span class="merge-step-num">3</span>
-                <span class="merge-step-label">Publish when ready</span>
-              </li>
-            </ol>
 
             <div class="workflow-shell">
               <div class="workflow-workbench">
@@ -662,23 +637,6 @@
                 <h2 class="merge-hero-title">Browse and run CatalogOne MCP tools</h2>
               </div>
             </header>
-
-            <ol class="merge-steps workflow-page-steps mcp-page-steps" aria-label="MCP tools workflow">
-              <li class="merge-step">
-                <span class="merge-step-num">1</span>
-                <span class="merge-step-label">Choose tool</span>
-              </li>
-              <li class="merge-step-connector" aria-hidden="true"></li>
-              <li class="merge-step">
-                <span class="merge-step-num">2</span>
-                <span class="merge-step-label">Set parameters</span>
-              </li>
-              <li class="merge-step-connector" aria-hidden="true"></li>
-              <li class="merge-step">
-                <span class="merge-step-num">3</span>
-                <span class="merge-step-label">Run tool</span>
-              </li>
-            </ol>
 
             <div class="workflow-shell mcp-tools-shell">
               <div id="mcpToolsPanel" class="workflow-workbench mcp-tools-workbench">
@@ -963,8 +921,8 @@
   <script id="defaultsConfig" type="application/json">{{ defaults | tojson }}</script>
   <script src="/static/layout-couple.js?v=20260702chat20gap1"></script>
   <script src="/static/page-control.js?v=20260702app68"></script>
-  <script src="/static/app.js?v=20260702topbar4-cmpgrp4"></script>
-  <script src="/static/mcp-tools.js?v=20260702app57"></script>
+  <script src="/static/app.js?v=20260702workflow1-cmpgrp4"></script>
+  <script src="/static/mcp-tools.js?v=20260702mcphuman1"></script>
   {{ vite_assets('main.tsx') }}
 </body>
 </html>

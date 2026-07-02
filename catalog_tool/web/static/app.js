@@ -182,6 +182,8 @@ const els = {
   brCompareReport: document.getElementById("brCompareReport"),
   brCompareJson: document.getElementById("brCompareJson"),
   brCompareShowJson: document.getElementById("brCompareShowJson"),
+  brCompareBackBtn: document.getElementById("brCompareBackBtn"),
+  brComparePublishBtn: document.getElementById("brComparePublishBtn"),
   keycloakUrlInput: document.getElementById("keycloakUrlInput"),
   keycloakRealmInput: document.getElementById("keycloakRealmInput"),
   usernameInput: document.getElementById("usernameInput"),
@@ -4350,6 +4352,20 @@ els.brCompareProductionBtn?.addEventListener("click", () => {
     return;
   }
   void runBrCompare("production");
+});
+
+els.brCompareBackBtn?.addEventListener("click", () => {
+  closeCompareResultsPanel();
+  pushWorkflowNav?.showStep("review");
+});
+
+els.brComparePublishBtn?.addEventListener("click", () => {
+  closeCompareResultsPanel();
+  pushWorkflowNav?.showStep("publish");
+  window.requestAnimationFrame(() => {
+    els.publishBusinessRequestId?.focus();
+    els.publishBtn?.scrollIntoView({ block: "center", behavior: "smooth" });
+  });
 });
 
 async function initApp() {
