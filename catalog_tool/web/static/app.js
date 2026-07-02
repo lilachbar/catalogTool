@@ -86,6 +86,7 @@ const state = {
 };
 
 let pushWorkflowNav = null;
+let dgWorkflowNav = null;
 
 const els = {
   connectionForm: document.getElementById("connectionForm"),
@@ -779,6 +780,7 @@ async function refreshMcpToolsNavStatus() {
 }
 
 let closeAllTopbarMenus = () => {};
+let openEnvironmentsMenu = () => {};
 
 function initTopbarMenus() {
   const menus = [...document.querySelectorAll(".topbar-menu")];
@@ -812,6 +814,12 @@ function initTopbarMenus() {
   };
 
   closeAllTopbarMenus = () => menus.forEach(closeMenu);
+  openEnvironmentsMenu = () => {
+    const envMenu = menus.find((menu) => menu.dataset.topbarMenu === "environments") || menus[0];
+    if (envMenu) {
+      openMenu(envMenu);
+    }
+  };
 
   menus.forEach((menu) => {
     const trigger = menu.querySelector(".topbar-menu-trigger");
@@ -890,7 +898,8 @@ function initSidebarFloatTips() {
   }
 
   function showSidebarFloatTip(html, clientX, clientY) {
-    tip.innerHTML = html;
+    tip.className = "sidebar-float-tip app-tooltip app-tooltip--info";
+    tip.innerHTML = appTooltipFlavorHtml(html, "info");
     tipActive = true;
     positionSidebarFloatTipAtPointer(clientX, clientY);
   }
@@ -906,6 +915,11 @@ function initSidebarFloatTips() {
   }
 
   function tipTargetForEvent(event) {
+    // Per-button tooltips (Connect/Edit/Delete…) are handled by the unified
+    // tooltip system, so the env name/desc tip stays out of their way.
+    if (event.target.closest(".env-card-actions, .env-card-btn")) {
+      return null;
+    }
     const navItem = event.target.closest(".app-nav-item[data-view]");
     if (navItem) {
       const meta = VIEW_META[navItem.dataset.view];
@@ -961,6 +975,114 @@ function initSidebarFloatTips() {
   window.addEventListener("resize", hideSidebarFloatTip);
 }
 
+const CONNECT_FLOAT_TIP_HTML = `
+  <div class="action-float-tip-row">
+    <span class="action-float-tip-icon" aria-hidden="true">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>
+    </span>
+    <div>
+      <p class="sidebar-float-tip-title">Not connected</p>
+      <p class="sidebar-float-tip-desc">Connect to a CatalogOne environment first, then try again.</p>
+    </div>
+  </div>`;
+
+let connectFloatTipEl = null;
+
+function getConnectFloatTip() {
+  if (!connectFloatTipEl) {
+    connectFloatTipEl = document.getElementById("actionFloatTip");
+    if (!connectFloatTipEl) {
+      connectFloatTipEl = document.createElement("div");
+      connectFloatTipEl.id = "actionFloatTip";
+      connectFloatTipEl.className = "sidebar-float-tip action-float-tip";
+      connectFloatTipEl.setAttribute("role", "tooltip");
+      connectFloatTipEl.hidden = true;
+      document.body.appendChild(connectFloatTipEl);
+    }
+  }
+  return connectFloatTipEl;
+}
+
+function positionConnectFloatTip(clientX, clientY) {
+  const tip = getConnectFloatTip();
+  if (!tip) {
+    return;
+  }
+  tip.hidden = false;
+  const rect = tip.getBoundingClientRect();
+  const offset = 14;
+  let left = clientX + offset;
+  let top = clientY + offset;
+  if (left + rect.width > window.innerWidth - 8) {
+    left = clientX - rect.width - offset;
+  }
+  if (top + rect.height > window.innerHeight - 8) {
+    top = clientY - rect.height - offset;
+  }
+  left = Math.max(8, Math.min(left, window.innerWidth - rect.width - 8));
+  top = Math.max(8, Math.min(top, window.innerHeight - rect.height - 8));
+  tip.style.left = `${left}px`;
+  tip.style.top = `${top}px`;
+}
+
+function showConnectFloatTip(clientX, clientY) {
+  const tip = getConnectFloatTip();
+  if (!tip) {
+    return;
+  }
+  if (tip.dataset.kind !== "connect") {
+    tip.innerHTML = CONNECT_FLOAT_TIP_HTML;
+    tip.dataset.kind = "connect";
+  }
+  positionConnectFloatTip(clientX, clientY);
+}
+
+function hideConnectFloatTip() {
+  const tip = getConnectFloatTip();
+  if (tip) {
+    tip.hidden = true;
+  }
+}
+
+function flashConnectAttention() {
+  // Defer so the click that triggered this doesn't immediately bubble to the
+  // global "close menus on outside click" handler and shut the menu again.
+  window.setTimeout(() => openEnvironmentsMenu(), 0);
+  const trigger = document.getElementById("envMenuTrigger");
+  if (!trigger) {
+    return;
+  }
+  trigger.classList.remove("connect-attention");
+  void trigger.offsetWidth;
+  trigger.classList.add("connect-attention");
+  window.setTimeout(() => trigger.classList.remove("connect-attention"), 1500);
+}
+
+function initConnectRequiredHints() {
+  const buttons = [els.createBrBtn, els.brCompareProductionBtn].filter(Boolean);
+  if (!buttons.length) {
+    return;
+  }
+  buttons.forEach((btn) => {
+    btn.addEventListener("mouseenter", (event) => {
+      if (btn.classList.contains("needs-connect")) {
+        showConnectFloatTip(event.clientX, event.clientY);
+      }
+    });
+    btn.addEventListener("mousemove", (event) => {
+      if (!btn.classList.contains("needs-connect")) {
+        hideConnectFloatTip();
+        return;
+      }
+      showConnectFloatTip(event.clientX, event.clientY);
+    });
+    btn.addEventListener("mouseleave", hideConnectFloatTip);
+  });
+  window.addEventListener("scroll", hideConnectFloatTip, true);
+  window.addEventListener("blur", hideConnectFloatTip);
+  window.addEventListener("resize", hideConnectFloatTip);
+}
+
 function initConnectionModalFloatTips() {
   const modal = els.connectionModal;
   const tip = document.getElementById("connectionFloatTip");
@@ -1013,13 +1135,18 @@ function initConnectionModalFloatTips() {
     return { html: connectionTipHtml(field), field };
   }
 
+  function renderConnectionTip(html) {
+    tip.className = "sidebar-float-tip connection-float-tip app-tooltip app-tooltip--info";
+    tip.innerHTML = appTooltipFlavorHtml(html, "info");
+  }
+
   modal.addEventListener("mouseover", (event) => {
     const target = tipTargetForEvent(event);
     if (!target) {
       hideConnectionFloatTip();
       return;
     }
-    tip.innerHTML = target.html;
+    renderConnectionTip(target.html);
     tipActive = true;
     positionConnectionFloatTipAtPointer(event.clientX, event.clientY);
   });
@@ -1033,7 +1160,7 @@ function initConnectionModalFloatTips() {
       return;
     }
     if (!tipActive || tip.hidden) {
-      tip.innerHTML = target.html;
+      renderConnectionTip(target.html);
       tipActive = true;
     }
     positionConnectionFloatTipAtPointer(event.clientX, event.clientY);
@@ -1042,6 +1169,208 @@ function initConnectionModalFloatTips() {
   modal.addEventListener("mouseleave", hideConnectionFloatTip);
   modal.addEventListener("close", hideConnectionFloatTip);
   modal.addEventListener("scroll", hideConnectionFloatTip, true);
+}
+
+const APP_TOOLTIP_INFO_ICON =
+  '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>';
+const APP_TOOLTIP_WARN_ICON =
+  '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>';
+const APP_TOOLTIP_DANGER_ICON =
+  '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 8v4"/><path d="M12 16h.01"/></svg>';
+
+function appTooltipIcon(variant) {
+  if (variant === "warn") return APP_TOOLTIP_WARN_ICON;
+  if (variant === "danger") return APP_TOOLTIP_DANGER_ICON;
+  return APP_TOOLTIP_INFO_ICON;
+}
+
+// Wraps tooltip body markup (title/desc paragraphs) in the shared "flavor":
+// a relevant icon next to the text. Used by every float-tip in the app so they
+// all look consistent.
+function appTooltipFlavorHtml(bodyHtml, variant = "info") {
+  return (
+    `<div class="action-float-tip-row"><span class="action-float-tip-icon" aria-hidden="true">${appTooltipIcon(variant)}</span>` +
+    `<div>${bodyHtml}</div></div>`
+  );
+}
+
+// Expose the info icon so the standalone MCP tools script can render the same
+// flavor without duplicating the SVG.
+window.__catalogTooltipInfoIcon = APP_TOOLTIP_INFO_ICON;
+
+// Elements that already have a dedicated, nicely styled float-tip system, so
+// the generic tooltip must not fight with them.
+const APP_TOOLTIP_SKIP_SELECTOR =
+  ".app-nav-item, .connection-modal, [data-tip-title], .sidebar-float-tip, .env-card-inner > .env-card-body";
+
+let appTooltipEl = null;
+
+function getAppTooltip() {
+  if (!appTooltipEl) {
+    appTooltipEl = document.createElement("div");
+    appTooltipEl.id = "appTooltip";
+    appTooltipEl.className = "sidebar-float-tip app-tooltip";
+    appTooltipEl.setAttribute("role", "tooltip");
+    appTooltipEl.hidden = true;
+    document.body.appendChild(appTooltipEl);
+  }
+  return appTooltipEl;
+}
+
+// Upgrades the browser's plain gray `title` tooltips into a single unified,
+// cursor-following popup that matches the "connect first" popup look (relevant
+// icon, tidy typography). Any element with a `title` or `data-tooltip` opts in
+// automatically, so the styling stays consistent across the whole app.
+function initUnifiedTooltips() {
+  const tip = getAppTooltip();
+  const OFFSET = 14;
+  let activeEl = null;
+
+  function restoreNativeTitle(el) {
+    if (el && el.dataset.appTipNative != null) {
+      if (!el.getAttribute("title")) {
+        el.setAttribute("title", el.dataset.appTipNative);
+      }
+      delete el.dataset.appTipNative;
+    }
+  }
+
+  function resolveTarget(node) {
+    if (!(node instanceof Element)) {
+      return null;
+    }
+    // Also match elements whose native title we already stashed away, so the
+    // tip keeps following the pointer instead of flickering off once the
+    // `title` attribute has been removed to suppress the gray browser tooltip.
+    const host = node.closest("[data-tooltip], [title], [data-app-tip-native]");
+    if (!host || host === tip || tip.contains(host)) {
+      return null;
+    }
+    if (host.closest(APP_TOOLTIP_SKIP_SELECTOR)) {
+      return null;
+    }
+    // While an action is blocked purely by "not connected", the dedicated
+    // amber "connect first" popup owns the hover. Still stash the native title
+    // so the gray browser tooltip never sneaks in behind it.
+    if (host.classList.contains("needs-connect")) {
+      if (host.hasAttribute("title")) {
+        host.dataset.appTipNative = host.getAttribute("title");
+        host.removeAttribute("title");
+      }
+      return null;
+    }
+    let text = (host.dataset.tooltip || "").trim();
+    if (!text) {
+      const nativeTitle = host.getAttribute("title");
+      if (nativeTitle) {
+        // Adopt the native title and suppress the gray browser tooltip while
+        // ours is shown; it is restored when the pointer leaves.
+        host.dataset.appTipNative = nativeTitle;
+        host.removeAttribute("title");
+        text = nativeTitle.trim();
+      } else if (host.dataset.appTipNative != null) {
+        text = host.dataset.appTipNative.trim();
+      }
+    }
+    if (!text) {
+      return null;
+    }
+    const title = (host.dataset.tooltipTitle || "").trim();
+    let variant = (host.dataset.tooltipVariant || "").trim().toLowerCase();
+    if (!variant) {
+      const disabled =
+        host.disabled === true || host.getAttribute("aria-disabled") === "true";
+      // Instructional "do X first" guidance stays amber even on red buttons.
+      if (disabled || /connect|first|before|must|need|require|can.?t|cannot|unavailable|not installed/i.test(text)) {
+        variant = "warn";
+      } else if (/\b(delete|remove|sign out|log ?out|disconnect)\b/i.test(text) || host.classList.contains("btn-danger")) {
+        variant = "danger";
+      } else {
+        variant = "info";
+      }
+    }
+    return { host, text, title, variant };
+  }
+
+  function render(info) {
+    tip.className = `sidebar-float-tip app-tooltip app-tooltip--${info.variant}`;
+    const icon =
+      info.variant === "warn"
+        ? APP_TOOLTIP_WARN_ICON
+        : info.variant === "danger"
+          ? APP_TOOLTIP_DANGER_ICON
+          : APP_TOOLTIP_INFO_ICON;
+    const titleHtml = info.title
+      ? `<p class="sidebar-float-tip-title">${escapeHtml(info.title)}</p>`
+      : "";
+    tip.innerHTML =
+      `<div class="action-float-tip-row"><span class="action-float-tip-icon" aria-hidden="true">${icon}</span>` +
+      `<div>${titleHtml}<p class="sidebar-float-tip-desc">${escapeHtml(info.text)}</p></div></div>`;
+  }
+
+  function position(clientX, clientY) {
+    tip.hidden = false;
+    const rect = tip.getBoundingClientRect();
+    let left = clientX + OFFSET;
+    let top = clientY + OFFSET;
+    if (left + rect.width > window.innerWidth - 8) {
+      left = clientX - rect.width - OFFSET;
+    }
+    if (top + rect.height > window.innerHeight - 8) {
+      top = clientY - rect.height - OFFSET;
+    }
+    left = Math.max(8, Math.min(left, window.innerWidth - rect.width - 8));
+    top = Math.max(8, Math.min(top, window.innerHeight - rect.height - 8));
+    tip.style.left = `${left}px`;
+    tip.style.top = `${top}px`;
+  }
+
+  function show(info, clientX, clientY) {
+    if (activeEl && activeEl !== info.host) {
+      restoreNativeTitle(activeEl);
+    }
+    activeEl = info.host;
+    render(info);
+    position(clientX, clientY);
+  }
+
+  function hide() {
+    if (!tip.hidden) {
+      tip.hidden = true;
+    }
+    if (activeEl) {
+      restoreNativeTitle(activeEl);
+      activeEl = null;
+    }
+  }
+
+  document.addEventListener("mouseover", (event) => {
+    const info = resolveTarget(event.target);
+    if (info) {
+      show(info, event.clientX, event.clientY);
+    }
+  });
+
+  document.addEventListener("mousemove", (event) => {
+    const info = resolveTarget(event.target);
+    if (!info) {
+      if (!tip.hidden || activeEl) {
+        hide();
+      }
+      return;
+    }
+    if (tip.hidden || info.host !== activeEl) {
+      show(info, event.clientX, event.clientY);
+      return;
+    }
+    position(event.clientX, event.clientY);
+  });
+
+  document.addEventListener("mouseleave", hide);
+  document.addEventListener("click", hide, true);
+  window.addEventListener("blur", hide);
+  window.addEventListener("scroll", hide, true);
+  window.addEventListener("resize", hide);
 }
 
 function initAppNavigation() {
@@ -1358,11 +1687,10 @@ function updatePushWorkflowStepStates() {
     return;
   }
   const hasZip = isZipFile(els.catalogZipInput?.files?.[0]);
-  const hasValidatedZip = Boolean(state.zipAnalyzeResult);
   const hasBr = Boolean(els.businessRequestId?.value.trim());
   const importDone = Boolean(state.zipImportCompleted);
   els.pushStepNav.querySelector('[data-workflow-step="upload"]')
-    ?.classList.toggle("is-complete", hasValidatedZip && !state.zipAnalyzeResult?.has_blocking_issues);
+    ?.classList.toggle("is-complete", hasZip);
   els.pushStepNav.querySelector('[data-workflow-step="review"]')
     ?.classList.toggle("is-complete", importDone || hasBr);
   els.pushStepNav.querySelector('[data-workflow-step="publish"]')
@@ -1629,23 +1957,26 @@ function updateCompareUi() {
   }
 
   const hasBr = !!els.businessRequestId?.value.trim();
-  const canCompare = state.zipImportCompleted && hasBr;
+  const connected = isCatalogOneConnected();
+  const needsConnect = hasBr && !connected;
 
   els.brCompareProductionBtn.hidden = !hasBr;
-  els.brCompareProductionBtn.disabled = !canCompare;
-  els.brCompareProductionBtn.title = canCompare
-    ? "Compare imported entities with production"
-    : state.zipImportError || "Complete Create BR and Import before comparing";
+  // Keep the button interactive when a BR ID is present: it either runs the
+  // compare (connected) or, when disconnected, shows the "connect first" popup
+  // on hover/click instead of being fully disabled.
+  els.brCompareProductionBtn.classList.toggle("needs-connect", needsConnect);
+  els.brCompareProductionBtn.disabled = !hasBr;
+  els.brCompareProductionBtn.title = !hasBr
+    ? "Enter a business request ID to compare"
+    : connected
+      ? "Compare this business request with production"
+      : "Connect to CatalogOne first";
 
+  // The "connect first" guidance is surfaced by the cursor popup on hover/click,
+  // so the inline hint below the buttons stays hidden.
   if (els.brCompareHint) {
-    if (!hasBr || canCompare) {
-      els.brCompareHint.hidden = true;
-      els.brCompareHint.textContent = "";
-    } else {
-      els.brCompareHint.hidden = false;
-      els.brCompareHint.textContent = state.zipImportError
-        || "Zip import did not complete successfully. Compare is unavailable until import succeeds.";
-    }
+    els.brCompareHint.hidden = true;
+    els.brCompareHint.textContent = "";
   }
 }
 
@@ -1851,7 +2182,7 @@ function setCompareRunningUi(compareType, running) {
     idleText: "Run compare",
   });
   if (els.brCompareProductionBtn) {
-    els.brCompareProductionBtn.disabled = running || !(state.zipImportCompleted && getCompareBusinessRequestId());
+    els.brCompareProductionBtn.disabled = running || !getCompareBusinessRequestId() || !isCatalogOneConnected();
   }
   if (!running || !els.brCompareTitle) {
     return;
@@ -2506,6 +2837,73 @@ function showBrCompareReport(body, { isError = false } = {}) {
   openCompareResultsPanel();
   scrollCompareResultsIntoView();
   window.requestAnimationFrame(syncComparePanelLayout);
+}
+
+function normalizeCatalogName(raw) {
+  if (raw == null) {
+    return "";
+  }
+  if (typeof raw === "string") {
+    return raw.trim();
+  }
+  if (Array.isArray(raw)) {
+    const preferred = raw.find((entry) => /en/i.test(entry?.locale || "")) || raw[0];
+    return normalizeCatalogName(preferred?.value ?? preferred);
+  }
+  if (typeof raw === "object") {
+    return normalizeCatalogName(raw.value ?? raw.text ?? raw.name ?? "");
+  }
+  return String(raw).trim();
+}
+
+function extractBusinessRequestName(businessRequest) {
+  if (!businessRequest || typeof businessRequest !== "object") {
+    return "";
+  }
+  const candidates = [
+    businessRequest.name,
+    businessRequest.brName,
+    businessRequest.businessRequestName,
+    businessRequest.title,
+    businessRequest.displayName,
+  ];
+  for (const candidate of candidates) {
+    const value = normalizeCatalogName(candidate);
+    if (value) {
+      return value;
+    }
+  }
+  return "";
+}
+
+// Look up the real business request by ID (via the get_business_request MCP
+// tool behind /api/business-request/<id>) and replace the Name field with the
+// true name before comparing. Best-effort: a lookup failure never blocks the
+// compare.
+async function applyTrueBusinessRequestName(brId) {
+  if (!brId || !els.businessRequestName) {
+    return;
+  }
+  try {
+    const data = await api(`/api/business-request/${encodeURIComponent(brId)}`, { method: "GET" });
+    const trueName = extractBusinessRequestName(data?.business_request);
+    if (trueName) {
+      els.businessRequestName.value = trueName;
+    }
+  } catch (error) {
+    console.warn("Could not resolve the business request's true name:", error);
+  }
+}
+
+async function runComparePrimary(compareType) {
+  const brId = getCompareBusinessRequestId();
+  if (!brId) {
+    showBrCompareReport("No business request ID available for compare.", { isError: true });
+    return;
+  }
+  setCompareRunningUi(compareType, true);
+  await applyTrueBusinessRequestName(brId);
+  await runBrCompare(compareType, brId);
 }
 
 async function runBrCompare(compareType, businessRequestId) {
@@ -3273,15 +3671,18 @@ function updateMergeBrUi() {
   if (els.clearBrBtn) {
     els.clearBrBtn.hidden = !hasBr;
   }
-  if (els.businessRequestId) {
-    els.businessRequestId.readOnly = hasBr;
-  }
   if (els.createBrBtn) {
     const busy = els.createBrBtn.classList.contains("is-busy");
-    els.createBrBtn.disabled = busy || hasBr || !connected || !hasZip || !hasName;
+    // When the only blocker is connection, keep the button interactive (not
+    // disabled) so hover/click can surface the "connect first" popup. A typed
+    // BR ID no longer blocks Create — it is ignored and replaced by the newly
+    // generated ID once the business request is created.
+    els.createBrBtn.classList.toggle("needs-connect", !connected);
+    els.createBrBtn.disabled = connected
+      ? (busy || !hasZip || !hasName)
+      : busy;
     const reasons = [];
-    if (hasBr) reasons.push("Clear the business request ID to create another");
-    else if (!connected) reasons.push("Connect to CatalogOne first");
+    if (!connected) reasons.push("Connect to CatalogOne first");
     else if (!hasZip) reasons.push("Choose a zip file in Step 1 first");
     else if (!hasName) reasons.push("Enter a business request name");
     els.createBrBtn.title = reasons.join(" · ") || "Create a business request and import the zip";
@@ -3340,7 +3741,7 @@ function updateDgBrUi() {
   }
   if (els.dgBrConnectHintText) {
     if (!analyzed) {
-      els.dgBrConnectHintText.innerHTML = "Analyze your workbook in Step 1 first, then connect and create a business request.";
+      els.dgBrConnectHintText.innerHTML = "Upload your workbook in Step 1 first, then connect and create a business request.";
     } else if (!connected) {
       els.dgBrConnectHintText.innerHTML = 'Connect to an environment in the sidebar (click <strong>Connect</strong>), then create your business request below.';
     } else {
@@ -3364,7 +3765,7 @@ function updateDgBrUi() {
   if (els.dgImportEntriesHint) {
     const entryCount = state.dgAnalyzeResult?.planned_entries?.length || 0;
     if (!analyzed) {
-      els.dgImportEntriesHint.textContent = "Analyze the workbook first to load entry payloads.";
+      els.dgImportEntriesHint.textContent = "Upload a workbook in Step 1 to load entry payloads.";
     } else if (!connected) {
       els.dgImportEntriesHint.textContent = "Connect to CatalogOne before importing entries.";
     } else if (!hasBr) {
@@ -3404,7 +3805,7 @@ function syncDgBusinessRequestFields() {
         "Name suggested from workbook — edit if needed, then click <strong>Create business request</strong>.";
     } else {
       els.dgBusinessRequestNameHint.innerHTML =
-        "Filled automatically after analyze — edit if needed.";
+        "Filled automatically after upload — edit if needed.";
     }
   }
   setDgActionButtonsEnabled();
@@ -3601,6 +4002,12 @@ async function apiForm(path, formData) {
 
 els.themeToggleBtn?.addEventListener("click", toggleTheme);
 
+document.getElementById("userGuideBtn")?.addEventListener("click", () => {
+  const resolvedTheme = document.documentElement.getAttribute("data-theme") || "";
+  const url = resolvedTheme ? `/guide?theme=${encodeURIComponent(resolvedTheme)}` : "/guide";
+  window.open(url, "catalogToolGuide", "noopener");
+});
+
 applyTheme(getTheme());
 
 els.addEnvironmentBtn?.addEventListener("click", () => openConnectionModal("create"));
@@ -3765,12 +4172,38 @@ function updateZipDropzoneLabel() {
   updateMergeBrUi();
 }
 
+function handleZipFileSelected() {
+  updateZipDropzoneLabel();
+  const file = els.catalogZipInput?.files?.[0];
+  if (!isZipFile(file)) {
+    updatePushWorkflowStepStates();
+    return;
+  }
+  // No zip validation: just load the file and move straight to the business
+  // request step. The zip is imported (and its entities remembered for compare)
+  // when the BR is created, so a separate analyze/validation pass is not needed.
+  state.importType = "zip";
+  state.importFilename = file.name;
+  state.dgAnalyzeResult = null;
+  state.zipAnalyzeResult = null;
+  if (els.zipAnalyzeReport) {
+    els.zipAnalyzeReport.hidden = true;
+  }
+  updatePushWorkflowStepStates();
+  pushWorkflowNav?.showStep("review");
+  updateMergeBrUi();
+}
+
 function initZipDropzone() {
   const dropzone = els.zipDropzone;
   const input = els.catalogZipInput;
   if (!dropzone || !input) {
     return;
   }
+
+  // The file input is pointer-events:none (so it never shows the browser's
+  // "No file chosen" tooltip), so the dropzone forwards clicks to open it.
+  dropzone.addEventListener("click", () => input.click());
 
   input.addEventListener("change", () => {
     const file = input.files?.[0];
@@ -3780,8 +4213,7 @@ function initZipDropzone() {
       updateZipValidateButton();
       return;
     }
-    updateZipDropzoneLabel();
-    updatePushWorkflowStepStates();
+    handleZipFileSelected();
   });
 
   ["dragenter", "dragover"].forEach((eventName) => {
@@ -3807,7 +4239,7 @@ function initZipDropzone() {
     const transfer = new DataTransfer();
     transfer.items.add(file);
     input.files = transfer.files;
-    updateZipDropzoneLabel();
+    handleZipFileSelected();
   });
 }
 
@@ -3833,12 +4265,25 @@ function updateExcelDropzoneLabel() {
   setDgActionButtonsEnabled();
 }
 
+function handleExcelFileSelected() {
+  updateExcelDropzoneLabel();
+  if (!isExcelFile(els.catalogExcelInput?.files?.[0])) {
+    return;
+  }
+  dgWorkflowNav?.showStep("import");
+  void analyzeSelectedExcel();
+}
+
 function initExcelDropzone() {
   const dropzone = els.excelDropzone;
   const input = els.catalogExcelInput;
   if (!dropzone || !input) {
     return;
   }
+
+  // The file input is pointer-events:none (so it never shows the browser's
+  // "No file chosen" tooltip), so the dropzone forwards clicks to open it.
+  dropzone.addEventListener("click", () => input.click());
 
   input.addEventListener("change", () => {
     const file = input.files?.[0];
@@ -3851,8 +4296,9 @@ function initExcelDropzone() {
         toggleEl: els.excelAnalyzeShowJson,
         message: "DG Import requires an .xlsx or .xlsm workbook.",
       });
+      return;
     }
-    updateExcelDropzoneLabel();
+    handleExcelFileSelected();
   });
 
   ["dragenter", "dragover"].forEach((eventName) => {
@@ -3877,35 +4323,22 @@ function initExcelDropzone() {
     const transfer = new DataTransfer();
     transfer.items.add(file);
     input.files = transfer.files;
-    updateExcelDropzoneLabel();
+    handleExcelFileSelected();
   });
 }
 
-els.analyzeExcelBtn?.addEventListener("click", async () => {
+async function analyzeSelectedExcel() {
   const file = els.catalogExcelInput?.files?.[0];
-  if (!file) {
-    showAnalyzeError({
-      reportEl: els.excelAnalyzeReport,
-      panelEl: els.excelAnalyzePanel,
-      jsonEl: els.excelAnalyzeJson,
-      toggleEl: els.excelAnalyzeShowJson,
-      message: "Choose a DG Excel workbook first.",
-    });
-    return;
-  }
   if (!isExcelFile(file)) {
-    showAnalyzeError({
-      reportEl: els.excelAnalyzeReport,
-      panelEl: els.excelAnalyzePanel,
-      jsonEl: els.excelAnalyzeJson,
-      toggleEl: els.excelAnalyzeShowJson,
-      message: "DG import requires an .xlsx or .xlsm workbook.",
-    });
     return;
   }
 
-  els.analyzeExcelBtn.disabled = true;
-  els.excelAnalyzeReport.hidden = true;
+  if (els.excelAnalyzeReport) {
+    els.excelAnalyzeReport.hidden = true;
+  }
+  if (els.dgImportEntriesHint) {
+    els.dgImportEntriesHint.textContent = "Reading workbook…";
+  }
 
   const formData = new FormData();
   formData.append("excel_file", file);
@@ -3920,15 +4353,6 @@ els.analyzeExcelBtn?.addEventListener("click", async () => {
       throw new Error(body.error || `Request failed (${response.status})`);
     }
 
-    wireAnalyzeReport({
-      reportEl: els.excelAnalyzeReport,
-      panelEl: els.excelAnalyzePanel,
-      jsonEl: els.excelAnalyzeJson,
-      toggleEl: els.excelAnalyzeShowJson,
-      panelHtml: buildExcelAnalyzePanel(body),
-      rawData: body,
-      isError: false,
-    });
     state.dgAnalyzeResult = body;
     state.dgImportCompleted = false;
     state.importType = body.import_type || "excel";
@@ -3938,77 +4362,27 @@ els.analyzeExcelBtn?.addEventListener("click", async () => {
     syncDgBusinessRequestFields();
     updateDgWorkflowStepStates();
   } catch (error) {
+    const message = error.message || "Could not read the workbook.";
     showAnalyzeError({
       reportEl: els.excelAnalyzeReport,
       panelEl: els.excelAnalyzePanel,
       jsonEl: els.excelAnalyzeJson,
       toggleEl: els.excelAnalyzeShowJson,
-      message: error.message || "Excel analysis failed.",
+      message,
     });
-  } finally {
-    els.analyzeExcelBtn.disabled = false;
-  }
-});
-
-els.analyzeZipBtn?.addEventListener("click", async () => {
-  const file = els.catalogZipInput?.files?.[0];
-  if (!file) {
-    showZipValidateError("Choose a zip file first.");
-    return;
-  }
-  if (!isZipFile(file)) {
-    showZipValidateError("Please choose a CatalogOne export .zip file.");
-    return;
-  }
-
-  setWorkflowButtonBusy(els.analyzeZipBtn, els.analyzeZipBtnLabel, true, {
-    busyText: "Analyzing…",
-    idleText: "Analyze & preview",
-  });
-  els.zipAnalyzeReport.hidden = true;
-
-  const formData = new FormData();
-  formData.append("zip_file", file);
-
-  try {
-    const response = await fetch("/api/zip/analyze", {
-      method: "POST",
-      body: formData,
-      credentials: "same-origin",
-    });
-    const body = await response.json();
-    if (!response.ok) {
-      throw new Error(body.error || `Request failed (${response.status})`);
+    setDgActionButtonsEnabled();
+    if (els.dgImportEntriesHint) {
+      els.dgImportEntriesHint.textContent = message;
     }
-
-    wireZipValidateReport({
-      body,
-      defaultCollapsed: !body.has_blocking_issues,
-    });
-    state.zipAnalyzeResult = body;
-    rememberCompareEntityPayload(body);
-    state.importType = body.import_type || "zip";
-    state.importFilename = body.import_filename || file.name;
-    state.dgAnalyzeResult = null;
-    updateMergeBrUi();
-    if (!body.has_blocking_issues) {
-      pushWorkflowNav?.showStep("review");
-    }
-  } catch (error) {
-    showZipValidateError(error.message || "Zip validation failed.");
-  } finally {
-    setWorkflowButtonBusy(els.analyzeZipBtn, els.analyzeZipBtnLabel, false, {
-      idleText: "Analyze & preview",
-    });
-    updateZipValidateButton();
   }
-});
+}
 
-els.createBrBtn?.addEventListener("click", async () => {
+els.createBrBtn?.addEventListener("click", async (event) => {
   const name = els.businessRequestName.value.trim();
   const zipFile = els.catalogZipInput?.files?.[0];
-  if (!state.loggedIn) {
-    showBrCreateResult("Connect to CatalogOne first.", { isError: true });
+  if (!isCatalogOneConnected()) {
+    showConnectFloatTip(event.clientX, event.clientY);
+    flashConnectAttention();
     return;
   }
   if (!isZipFile(zipFile)) {
@@ -4020,10 +4394,9 @@ els.createBrBtn?.addEventListener("click", async () => {
     els.businessRequestName?.focus();
     return;
   }
-  if (els.businessRequestId.value.trim()) {
-    showBrCreateResult("Clear the business request ID to create another.", { isError: true });
-    return;
-  }
+  // A manually typed BR ID is intentionally ignored here: creating a new
+  // business request always generates a fresh ID, which replaces whatever was
+  // in the field (see applyBusinessRequestIdFromResult below).
 
   setWorkflowButtonBusy(els.createBrBtn, null, true, {
     busyText: "Working…",
@@ -4161,7 +4534,7 @@ els.dgCreateBrBtn?.addEventListener("click", async () => {
 
 els.dgImportEntriesBtn?.addEventListener("click", async () => {
   if (!state.dgAnalyzeResult) {
-    showResult(els.dgImportResult, "Analyze the workbook in Step 1 first.", true);
+    showResult(els.dgImportResult, "Upload a workbook in Step 1 first.", true);
     return;
   }
 
@@ -4357,11 +4730,16 @@ initTableDrafts();
 syncBusinessRequestFields();
 syncDgBusinessRequestFields();
 
-els.brCompareProductionBtn?.addEventListener("click", () => {
-  if (!state.zipImportCompleted) {
+els.brCompareProductionBtn?.addEventListener("click", (event) => {
+  if (!getCompareBusinessRequestId()) {
     return;
   }
-  void runBrCompare("production");
+  if (!isCatalogOneConnected()) {
+    showConnectFloatTip(event.clientX, event.clientY);
+    flashConnectAttention();
+    return;
+  }
+  void runComparePrimary("production");
 });
 
 els.brCompareBackBtn?.addEventListener("click", () => {
@@ -4391,13 +4769,15 @@ async function initApp() {
   initEnvRefreshButtonLayout();
   initSidebarFloatTips();
   initConnectionModalFloatTips();
+  initConnectRequiredHints();
+  initUnifiedTooltips();
   initZipDropzone();
   updateZipValidateButton();
   initExcelDropzone();
   pushWorkflowNav = initWorkflowStepNav(els.pushStepNav, "upload");
   initComparePanelLayout();
   wireCompareJsonToggle();
-  initWorkflowStepNav(els.dgStepNav, "upload");
+  dgWorkflowNav = initWorkflowStepNav(els.dgStepNav, "upload");
   updateWorkflowStatusLines();
   updatePushWorkflowStepStates();
   updateDgWorkflowStepStates();

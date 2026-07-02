@@ -26,6 +26,10 @@ import {
 } from "../ui/islands/chat/session";
 
 const CHAT_WIDTH_STORAGE_KEY = "catalogTool.chatPanelWidth";
+const CHAT_PANEL_POSITION_KEY = "catalogTool.chatPanelPosition";
+const CHAT_PANEL_HEIGHT_KEY = "catalogTool.chatPanelHeight";
+const CHAT_PANEL_HEIGHT_MIN = 320;
+const CHAT_PANEL_RESIZE_MARGIN = 8;
 const CHAT_DETACHED_LAYOUT_KEY = "catalogTool.detachedLayout";
 const CHAT_POPUP_CHANNEL = "catalog-tool-chat";
 const CHAT_POPUP_NAME = "catalogToolChatPopup";
@@ -525,6 +529,363 @@ function ChatPanel({
     };
   }, [isPopup, open, panelWidth, persistPanelWidth, setPanelWidthLive]);
 
+  // Drag-to-move: the header acts as a grab handle so the docked panel can be
+  // repositioned anywhere inside the browser window. A small threshold keeps a
+  // plain click from turning the panel into a floating one, and double-clicking
+  // the header snaps it back to its docked spot on the right.
+  useEffect(() => {
+    if (!open || isPopup || visuallyHidden) {
+      return undefined;
+    }
+    const panel = panelRef.current;
+    const header = panel?.querySelector(".chat-panel-head");
+    if (!panel || !header) {
+      return undefined;
+    }
+
+    const MOVE_MARGIN = 8;
+    const DRAG_THRESHOLD = 4;
+    let armed = false;
+    let moving = false;
+    let startX = 0;
+    let startY = 0;
+    let startLeft = 0;
+    let startTop = 0;
+
+    const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
+
+    const applyPosition = (left, top) => {
+      const rect = panel.getBoundingClientRect();
+      const maxLeft = Math.max(MOVE_MARGIN, window.innerWidth - rect.width - MOVE_MARGIN);
+      const maxTop = Math.max(MOVE_MARGIN, window.innerHeight - rect.height - MOVE_MARGIN);
+      panel.style.left = `${clamp(left, MOVE_MARGIN, maxLeft)}px`;
+      panel.style.top = `${clamp(top, MOVE_MARGIN, maxTop)}px`;
+      panel.style.right = "auto";
+      panel.style.bottom = "auto";
+    };
+
+    const persistPosition = () => {
+      const left = Number.parseFloat(panel.style.left);
+      const top = Number.parseFloat(panel.style.top);
+      if (Number.isFinite(left) && Number.isFinite(top)) {
+        const payload = { left, top };
+        const width = Number.parseFloat(panel.style.width);
+        if (Number.isFinite(width)) {
+          payload.width = width;
+        }
+        try {
+          localStorage.setItem(CHAT_PANEL_POSITION_KEY, JSON.stringify(payload));
+        } catch {
+          // Persisting the position is best-effort.
+        }
+      }
+    };
+
+    const isControl = (target) => (
+      target instanceof Element
+      && Boolean(target.closest(".chat-panel-actions") || target.closest("button") || target.closest(".chat-panel-resizer"))
+    );
+
+    const endMove = (event) => {
+      document.removeEventListener("pointermove", onPointerMove);
+      document.removeEventListener("pointerup", endMove);
+      document.removeEventListener("pointercancel", endMove);
+      window.removeEventListener("blur", endMove);
+      if (event?.pointerId != null && header.hasPointerCapture?.(event.pointerId)) {
+        try {
+          header.releasePointerCapture(event.pointerId);
+        } catch {
+          // ignore release failures
+        }
+      }
+      if (moving) {
+        document.body.classList.remove("is-resizing-chat-panel", "is-moving-chat-panel");
+        persistPosition();
+      }
+      armed = false;
+      moving = false;
+    };
+
+    const onPointerMove = (event) => {
+      if (!armed) {
+        return;
+      }
+      if (!moving) {
+        if (Math.hypot(event.clientX - startX, event.clientY - startY) < DRAG_THRESHOLD) {
+          return;
+        }
+        moving = true;
+        panel.classList.add("chat-panel-floating");
+        document.body.classList.add("is-resizing-chat-panel", "is-moving-chat-panel");
+        try {
+          header.setPointerCapture(event.pointerId);
+        } catch {
+          // pointer capture is optional; document listeners handle cleanup
+        }
+        applyPosition(startLeft, startTop);
+      }
+      applyPosition(startLeft + (event.clientX - startX), startTop + (event.clientY - startY));
+    };
+
+    const onPointerDown = (event) => {
+      if (event.button !== 0 || isControl(event.target)) {
+        return;
+      }
+      const rect = panel.getBoundingClientRect();
+      startX = event.clientX;
+      startY = event.clientY;
+      startLeft = rect.left;
+      startTop = rect.top;
+      armed = true;
+      document.addEventListener("pointermove", onPointerMove);
+      document.addEventListener("pointerup", endMove);
+      document.addEventListener("pointercancel", endMove);
+      window.addEventListener("blur", endMove);
+    };
+
+    const onDoubleClick = (event) => {
+      if (isControl(event.target)) {
+        return;
+      }
+      panel.classList.remove("chat-panel-floating");
+      ["left", "top", "right", "bottom", "width", "height"].forEach((prop) => {
+        panel.style.removeProperty(prop);
+      });
+      try {
+        localStorage.removeItem(CHAT_PANEL_POSITION_KEY);
+        localStorage.removeItem(CHAT_PANEL_HEIGHT_KEY);
+      } catch {
+        // ignore storage failures
+      }
+    };
+
+    const onWindowResize = () => {
+      if (!panel.classList.contains("chat-panel-floating")) {
+        return;
+      }
+      applyPosition(Number.parseFloat(panel.style.left) || 0, Number.parseFloat(panel.style.top) || 0);
+    };
+
+    header.addEventListener("pointerdown", onPointerDown);
+    header.addEventListener("dblclick", onDoubleClick);
+    window.addEventListener("resize", onWindowResize);
+
+    let restoreFrame = null;
+    try {
+      const saved = JSON.parse(localStorage.getItem(CHAT_PANEL_POSITION_KEY) || "null");
+      if (saved && Number.isFinite(saved.left) && Number.isFinite(saved.top)) {
+        panel.classList.add("chat-panel-floating");
+        if (Number.isFinite(saved.width)) {
+          panel.style.width = `${saved.width}px`;
+        }
+        restoreFrame = window.requestAnimationFrame(() => applyPosition(saved.left, saved.top));
+      }
+    } catch {
+      // A malformed saved position simply leaves the panel docked.
+    }
+
+    return () => {
+      header.removeEventListener("pointerdown", onPointerDown);
+      header.removeEventListener("dblclick", onDoubleClick);
+      window.removeEventListener("resize", onWindowResize);
+      if (restoreFrame) {
+        window.cancelAnimationFrame(restoreFrame);
+      }
+      endMove();
+    };
+  }, [isPopup, open, visuallyHidden]);
+
+  // Edge/corner resize: the bottom handle changes height in either docked or
+  // floating mode, while the right/corner handles change width once the panel
+  // is floating (docked width stays on the left-edge resizer). Sizes persist
+  // and are re-clamped when the browser window changes size.
+  useEffect(() => {
+    if (!open || isPopup || visuallyHidden) {
+      return undefined;
+    }
+    const panel = panelRef.current;
+    if (!panel) {
+      return undefined;
+    }
+    const handles = Array.from(panel.querySelectorAll("[data-resize-dir]"));
+    if (!handles.length) {
+      return undefined;
+    }
+
+    const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
+    let dir = null;
+    let axisClass = null;
+    let startX = 0;
+    let startY = 0;
+    let startRect = null;
+    let latest = null;
+    let frame = null;
+    let dragInset = 0;
+    let lastDockedWidth = null;
+
+    const maxHeight = () => Math.max(
+      CHAT_PANEL_HEIGHT_MIN,
+      window.innerHeight - panel.getBoundingClientRect().top - CHAT_PANEL_RESIZE_MARGIN,
+    );
+    const maxWidth = () => Math.max(
+      CHAT_WIDTH_MIN,
+      window.innerWidth - panel.getBoundingClientRect().left - CHAT_PANEL_RESIZE_MARGIN,
+    );
+
+    const applyResize = () => {
+      frame = null;
+      if (!dir || !latest || !startRect) {
+        return;
+      }
+      const dx = latest.x - startX;
+      const dy = latest.y - startY;
+      const floating = panel.classList.contains("chat-panel-floating");
+      if (dir.includes("s")) {
+        panel.style.height = `${clamp(startRect.height + dy, CHAT_PANEL_HEIGHT_MIN, maxHeight())}px`;
+      }
+      if (dir.includes("e")) {
+        panel.style.width = `${clamp(startRect.width + dx, CHAT_WIDTH_MIN, maxWidth())}px`;
+      }
+      if (dir.includes("w")) {
+        if (floating) {
+          // Floating: keep the right edge fixed, resize from the left edge.
+          const maxW = Math.max(CHAT_WIDTH_MIN, startRect.left + startRect.width - CHAT_PANEL_RESIZE_MARGIN);
+          const newWidth = clamp(startRect.width - dx, CHAT_WIDTH_MIN, maxW);
+          panel.style.width = `${newWidth}px`;
+          panel.style.left = `${startRect.left + (startRect.width - newWidth)}px`;
+        } else {
+          // Docked: drive the shared docked-width variable from the pointer, just
+          // like the left-edge resizer, so the panel stays glued to the right.
+          const width = proposedChatWidthFromPointer(latest.x, window.innerWidth, dragInset);
+          lastDockedWidth = width;
+          setPanelWidthLive(width);
+        }
+      }
+    };
+
+    const persistSize = () => {
+      try {
+        if (panel.style.height) {
+          localStorage.setItem(CHAT_PANEL_HEIGHT_KEY, String(Number.parseFloat(panel.style.height)));
+        }
+        if (panel.classList.contains("chat-panel-floating")) {
+          const pos = JSON.parse(localStorage.getItem(CHAT_PANEL_POSITION_KEY) || "null") || {};
+          const left = Number.parseFloat(panel.style.left);
+          const top = Number.parseFloat(panel.style.top);
+          if (Number.isFinite(left)) pos.left = left;
+          if (Number.isFinite(top)) pos.top = top;
+          const width = Number.parseFloat(panel.style.width);
+          if (Number.isFinite(width)) pos.width = width;
+          if (Number.isFinite(pos.left) && Number.isFinite(pos.top)) {
+            localStorage.setItem(CHAT_PANEL_POSITION_KEY, JSON.stringify(pos));
+          }
+        }
+      } catch {
+        // Persisting the size is best-effort.
+      }
+    };
+
+    const onPointerMove = (event) => {
+      if (!dir) {
+        return;
+      }
+      latest = { x: event.clientX, y: event.clientY };
+      if (!frame) {
+        frame = window.requestAnimationFrame(applyResize);
+      }
+    };
+
+    const endResize = (event) => {
+      if (!dir) {
+        return;
+      }
+      document.removeEventListener("pointermove", onPointerMove);
+      document.removeEventListener("pointerup", endResize);
+      document.removeEventListener("pointercancel", endResize);
+      window.removeEventListener("blur", endResize);
+      if (frame) {
+        window.cancelAnimationFrame(frame);
+        frame = null;
+      }
+      applyResize();
+      persistSize();
+      if (dir.includes("w") && !panel.classList.contains("chat-panel-floating") && lastDockedWidth != null) {
+        persistPanelWidth(lastDockedWidth, { persist: true });
+      }
+      document.body.classList.remove("is-resizing-chat-panel");
+      if (axisClass) {
+        document.body.classList.remove(axisClass);
+      }
+      dir = null;
+      axisClass = null;
+      startRect = null;
+      latest = null;
+    };
+
+    const makePointerDown = (handle) => (event) => {
+      if (event.button !== 0) {
+        return;
+      }
+      dir = handle.dataset.resizeDir || "";
+      const rect = panel.getBoundingClientRect();
+      startX = event.clientX;
+      startY = event.clientY;
+      startRect = { left: rect.left, top: rect.top, width: rect.width, height: rect.height };
+      latest = { x: event.clientX, y: event.clientY };
+      dragInset = readAppShellPaddingRight();
+      lastDockedWidth = null;
+      if (dir.includes("w")) {
+        window.catalogToolLayoutCouple?.releaseWorkflowMainPin?.();
+      }
+      axisClass = dir === "sw"
+        ? "is-resizing-nesw"
+        : dir === "se"
+          ? "is-resizing-nwse"
+          : dir === "s"
+            ? "is-resizing-ns"
+            : "is-resizing-ew";
+      document.body.classList.add("is-resizing-chat-panel", axisClass);
+      document.addEventListener("pointermove", onPointerMove);
+      document.addEventListener("pointerup", endResize);
+      document.addEventListener("pointercancel", endResize);
+      window.addEventListener("blur", endResize);
+      try {
+        handle.setPointerCapture(event.pointerId);
+      } catch {
+        // pointer capture is optional; document listeners handle cleanup
+      }
+      event.preventDefault();
+      event.stopPropagation();
+    };
+
+    const registered = handles.map((handle) => {
+      const fn = makePointerDown(handle);
+      handle.addEventListener("pointerdown", fn);
+      return [handle, fn];
+    });
+
+    const savedHeight = Number.parseFloat(localStorage.getItem(CHAT_PANEL_HEIGHT_KEY));
+    if (Number.isFinite(savedHeight) && savedHeight > 0) {
+      panel.style.height = `${clamp(savedHeight, CHAT_PANEL_HEIGHT_MIN, maxHeight())}px`;
+    }
+
+    const onWindowResize = () => {
+      if (panel.style.height) {
+        panel.style.height = `${clamp(Number.parseFloat(panel.style.height) || 0, CHAT_PANEL_HEIGHT_MIN, maxHeight())}px`;
+      }
+      if (panel.classList.contains("chat-panel-floating") && panel.style.width) {
+        panel.style.width = `${clamp(Number.parseFloat(panel.style.width) || 0, CHAT_WIDTH_MIN, maxWidth())}px`;
+      }
+    };
+    window.addEventListener("resize", onWindowResize);
+
+    return () => {
+      registered.forEach(([handle, fn]) => handle.removeEventListener("pointerdown", fn));
+      window.removeEventListener("resize", onWindowResize);
+      endResize();
+    };
+  }, [isPopup, open, visuallyHidden, setPanelWidthLive, persistPanelWidth]);
+
   useEffect(() => {
     const panel = panelRef.current;
     if (!panel || !open || visuallyHidden) {
@@ -635,22 +996,47 @@ function ChatPanel({
       onDrop={handleDrop}
     >
       {!isPopup ? (
-        <div
-          ref={resizerRef}
-          className="chat-panel-resizer"
-          role="separator"
-          aria-orientation="vertical"
-          aria-label="Resize chat panel width"
-          tabIndex={0}
-          title="Drag to resize width"
-        />
+        <>
+          <div
+            ref={resizerRef}
+            className="chat-panel-resizer"
+            role="separator"
+            aria-orientation="vertical"
+            aria-label="Resize chat panel width"
+            tabIndex={0}
+            title="Drag to resize width"
+          />
+          <div
+            className="chat-resize-handle chat-resize-e"
+            data-resize-dir="e"
+            aria-hidden="true"
+            title="Drag to resize width"
+          />
+          <div
+            className="chat-resize-handle chat-resize-s"
+            data-resize-dir="s"
+            aria-hidden="true"
+            title="Drag to resize height"
+          />
+          <div
+            className="chat-resize-handle chat-resize-grip chat-resize-sw"
+            data-resize-dir="sw"
+            aria-hidden="true"
+            title="Drag to resize"
+          />
+          <div
+            className="chat-resize-handle chat-resize-grip chat-resize-se"
+            data-resize-dir="se"
+            aria-hidden="true"
+            title="Drag to resize"
+          />
+        </>
       ) : null}
 
       <ChatHeader
         isPopup={isPopup}
         popupActive={popupActive}
         onAttach={onAttach}
-        onPopOut={onPopOut}
         onClose={onClose}
       />
 
@@ -986,47 +1372,8 @@ function ChatApp() {
     toggleBtn.setAttribute("aria-pressed", open || popupActive ? "true" : "false");
   }, [open, popupActive]);
 
-  useEffect(() => {
-    if (!open || popupActive) {
-      return undefined;
-    }
-
-    const onPointerDown = (event) => {
-      const panel = document.querySelector("aside.chat-panel:not(.chat-panel-popup):not(.chat-panel-hidden)");
-      if (!panel) {
-        return;
-      }
-
-      const target = event.target;
-      if (!(target instanceof Node)) {
-        return;
-      }
-
-      if (panel.contains(target)) {
-        return;
-      }
-
-      const toggleBtn = document.getElementById("chatToggleBtn");
-      if (toggleBtn?.contains(target)) {
-        return;
-      }
-
-      const attachBtn = document.getElementById("chatAttachBtn");
-      if (attachBtn?.contains(target)) {
-        return;
-      }
-
-      const openDialog = document.querySelector("dialog[open]");
-      if (openDialog?.contains(target)) {
-        return;
-      }
-
-      setOpen(false);
-    };
-
-    document.addEventListener("pointerdown", onPointerDown);
-    return () => document.removeEventListener("pointerdown", onPointerDown);
-  }, [open, popupActive]);
+  // The chat stays open until the user clicks its close button. Clicking
+  // outside the panel intentionally does not dismiss it.
 
   const showDockedPanel = open || (popupActive && keepAliveBusy);
   const chatDockedVisible = open && !popupActive;

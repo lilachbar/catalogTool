@@ -307,8 +307,8 @@ def register(app: Flask) -> None:
             return jsonify(
                 {
                     "error": (
-                        "No entities to compare — validate the zip in Step 1 first, "
-                        "then create the business request and import again."
+                        "No entities to compare — upload the zip in Step 1 first, "
+                        "then run the compare with the business request ID."
                     ),
                 }
             ), 400

@@ -92,8 +92,15 @@
       tip.style.top = `${top}px`;
     }
 
+    const INFO_ICON =
+      window.__catalogTooltipInfoIcon ||
+      '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>';
+
     function showMcpFloatTip(text, clientX, clientY) {
-      tip.innerHTML = `<p class="sidebar-float-tip-desc">${escapeHtml(text)}</p>`;
+      tip.className = "sidebar-float-tip mcp-float-tip app-tooltip app-tooltip--info";
+      tip.innerHTML =
+        `<div class="action-float-tip-row"><span class="action-float-tip-icon" aria-hidden="true">${INFO_ICON}</span>` +
+        `<div><p class="sidebar-float-tip-desc">${escapeHtml(text)}</p></div></div>`;
       tipActive = true;
       positionMcpFloatTipAtPointer(clientX, clientY);
     }

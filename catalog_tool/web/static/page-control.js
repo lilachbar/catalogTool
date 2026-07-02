@@ -9,11 +9,9 @@
   };
 
   const BUTTON_SPECS = [
-    { id: "analyzeZipBtn", label: "Validate", aliases: ["validation", "validate zip"] },
     { id: "createBrBtn", label: "Create BR and Import", aliases: ["create br", "import"] },
     { id: "publishBtn", label: "Publish business request", aliases: ["publish"] },
     { id: "clearBrBtn", label: "Clear business request", aliases: ["clear br"] },
-    { id: "analyzeExcelBtn", label: "Analyze workbook", aliases: ["analyze excel"] },
     { id: "dgCreateBrBtn", label: "Create business request (DG)", aliases: [] },
     { id: "dgImportEntriesBtn", label: "Import entries to catalog", aliases: ["import entries"] },
     { id: "dgPublishBtn", label: "Publish business request (DG)", aliases: [] },
@@ -110,7 +108,6 @@
           businessRequestName: document.getElementById("businessRequestName")?.value?.trim() || "",
           businessRequestId: document.getElementById("businessRequestId")?.value?.trim() || "",
           zipFileName: document.getElementById("catalogZipInput")?.files?.[0]?.name || "",
-          validateEnabled: !document.getElementById("analyzeZipBtn")?.disabled,
           createBrEnabled: !document.getElementById("createBrBtn")?.disabled,
         },
         dgImport: {
@@ -139,9 +136,6 @@
       }
     }
 
-    if (token.includes("valid")) {
-      return document.getElementById("analyzeZipBtn");
-    }
     if (token.includes("compare")) {
       return document.getElementById("brCompareProductionBtn");
     }

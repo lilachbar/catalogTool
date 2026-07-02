@@ -678,6 +678,118 @@ body.is-resizing-sidebar * {
   color: var(--app-muted);
 }
 
+/* Cursor-following "connect first" popup shown when an action is blocked
+   because no CatalogOne environment is connected. */
+.action-float-tip {
+  max-width: 17.5rem;
+  border-color: color-mix(in srgb, #f59e0b 55%, var(--border));
+  box-shadow: 0 14px 34px rgba(180, 83, 9, 0.22);
+  animation: action-float-tip-in 130ms ease-out;
+}
+
+.app-page-body .action-float-tip {
+  border-color: color-mix(in srgb, #f59e0b 55%, var(--app-border));
+}
+
+.action-float-tip-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+}
+
+.action-float-tip-icon {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: 9px;
+  background: color-mix(in srgb, #f59e0b 20%, transparent);
+  color: #b45309;
+}
+
+@keyframes action-float-tip-in {
+  from { opacity: 0; transform: translateY(5px) scale(0.97); }
+  to { opacity: 1; transform: none; }
+}
+
+/* Unified cursor-following tooltip that replaces the plain gray native
+   `title` tooltips across the whole app. Shares the floating-card look of the
+   "connect first" popup, with a relevant icon and a subtle intro animation. */
+.app-tooltip {
+  max-width: 18rem;
+  animation: action-float-tip-in 130ms ease-out;
+}
+
+.app-tooltip .action-float-tip-row > div > :first-child {
+  margin-top: 0;
+}
+
+.app-tooltip--info {
+  border-color: color-mix(in srgb, #3b82f6 42%, var(--border));
+  box-shadow: 0 14px 34px rgba(37, 99, 235, 0.18);
+}
+
+.app-tooltip--info .action-float-tip-icon {
+  background: color-mix(in srgb, #3b82f6 18%, transparent);
+  color: #2563eb;
+}
+
+.app-tooltip--warn {
+  border-color: color-mix(in srgb, #f59e0b 55%, var(--border));
+  box-shadow: 0 14px 34px rgba(180, 83, 9, 0.22);
+}
+
+.app-tooltip--warn .action-float-tip-icon {
+  background: color-mix(in srgb, #f59e0b 20%, transparent);
+  color: #b45309;
+}
+
+.app-tooltip--danger {
+  border-color: color-mix(in srgb, #ef4444 50%, var(--border));
+  box-shadow: 0 14px 34px rgba(185, 28, 28, 0.22);
+}
+
+.app-tooltip--danger .action-float-tip-icon {
+  background: color-mix(in srgb, #ef4444 18%, transparent);
+  color: #dc2626;
+}
+
+.app-page-body .app-tooltip--info {
+  border-color: color-mix(in srgb, #3b82f6 42%, var(--app-border));
+}
+
+.app-page-body .app-tooltip--warn {
+  border-color: color-mix(in srgb, #f59e0b 55%, var(--app-border));
+}
+
+.app-page-body .app-tooltip--danger {
+  border-color: color-mix(in srgb, #ef4444 50%, var(--app-border));
+}
+
+/* Buttons kept interactive while the only blocker is "not connected": they
+   look inactive but still receive hover/click so we can show the popup. */
+.btn.needs-connect {
+  opacity: 0.6;
+  cursor: help;
+}
+
+.btn.needs-connect:hover {
+  opacity: 0.78;
+}
+
+/* Brief attention pulse on the Environments menu when the user tries a
+   connection-gated action. */
+.topbar-menu-trigger.connect-attention {
+  animation: connect-attention-pulse 0.65s ease-in-out 0s 2;
+}
+
+@keyframes connect-attention-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(37, 99, 235, 0); }
+  50% { box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.38); }
+}
+
 .app-view[hidden] {
   display: none !important;
 }
@@ -1830,6 +1942,10 @@ select:focus {
   transition: background var(--transition), border-color var(--transition), transform 0.1s ease, opacity var(--transition);
 }
 
+.btn[hidden] {
+  display: none !important;
+}
+
 .btn:active:not(:disabled) {
   transform: scale(0.98);
 }
@@ -2661,6 +2777,140 @@ body.is-resizing-chat-panel * {
 
 body.is-resizing-chat-panel.is-moving-chat-panel * {
   cursor: grabbing !important;
+}
+
+body.is-resizing-chat-panel.is-resizing-ns,
+body.is-resizing-chat-panel.is-resizing-ns * {
+  cursor: ns-resize !important;
+}
+
+body.is-resizing-chat-panel.is-resizing-ew,
+body.is-resizing-chat-panel.is-resizing-ew * {
+  cursor: ew-resize !important;
+}
+
+body.is-resizing-chat-panel.is-resizing-nwse,
+body.is-resizing-chat-panel.is-resizing-nwse * {
+  cursor: nwse-resize !important;
+}
+
+body.is-resizing-chat-panel.is-resizing-nesw,
+body.is-resizing-chat-panel.is-resizing-nesw * {
+  cursor: nesw-resize !important;
+}
+
+.chat-resize-handle {
+  position: absolute;
+  z-index: 12;
+  touch-action: none;
+  background: transparent;
+}
+
+.chat-resize-handle::after {
+  content: "";
+  position: absolute;
+  background: transparent;
+  transition: background var(--transition);
+}
+
+.chat-resize-s {
+  left: 14px;
+  right: 14px;
+  bottom: 0;
+  height: 10px;
+  cursor: ns-resize;
+}
+
+.chat-resize-s::after {
+  left: 0;
+  right: 0;
+  bottom: 3px;
+  height: 2px;
+  border-radius: 2px;
+}
+
+.chat-resize-e {
+  top: 14px;
+  bottom: 14px;
+  right: 0;
+  width: 10px;
+  cursor: ew-resize;
+  display: none;
+}
+
+.chat-resize-e::after {
+  top: 0;
+  bottom: 0;
+  right: 3px;
+  width: 2px;
+  border-radius: 2px;
+}
+
+.chat-panel-floating .chat-resize-e {
+  display: block;
+}
+
+.chat-resize-handle:not(.chat-resize-grip):hover::after {
+  background: var(--accent);
+}
+
+/* Corner grips give an obvious "drag to resize" affordance for changing width
+   and height together. The bottom-left grip is used while docked (the panel is
+   anchored top-right, so it grows toward the interior); the bottom-right grip is
+   used while floating. */
+.chat-resize-grip {
+  width: 22px;
+  height: 22px;
+}
+
+.chat-resize-grip::after {
+  width: 13px;
+  height: 13px;
+  color: var(--text-tertiary);
+  opacity: 0.6;
+  transition: color var(--transition), opacity var(--transition);
+}
+
+.chat-resize-grip:hover::after {
+  color: var(--accent);
+  opacity: 1;
+}
+
+.chat-resize-sw {
+  left: 0;
+  bottom: 0;
+  cursor: nesw-resize;
+}
+
+.chat-resize-sw::after {
+  left: 9px;
+  bottom: 9px;
+  background: repeating-linear-gradient(-45deg, currentColor 0 1.5px, transparent 1.5px 4px);
+  -webkit-mask: linear-gradient(45deg, #000 0 44%, transparent 54%);
+  mask: linear-gradient(45deg, #000 0 44%, transparent 54%);
+}
+
+.chat-resize-se {
+  right: 0;
+  bottom: 0;
+  cursor: nwse-resize;
+  display: none;
+}
+
+.chat-resize-se::after {
+  right: 9px;
+  bottom: 9px;
+  background: repeating-linear-gradient(45deg, currentColor 0 1.5px, transparent 1.5px 4px);
+  -webkit-mask: linear-gradient(315deg, #000 0 44%, transparent 54%);
+  mask: linear-gradient(315deg, #000 0 44%, transparent 54%);
+}
+
+.chat-panel-floating .chat-resize-sw {
+  display: none;
+}
+
+.chat-panel-floating .chat-resize-se {
+  display: block;
 }
 
 .chat-panel-head {
@@ -3599,10 +3849,24 @@ body.is-resizing-chat-panel.is-moving-chat-panel * {
   color: var(--text);
   font: inherit;
   font-size: 0.875rem;
+  appearance: none;
+  -webkit-appearance: none;
+  text-overflow: ellipsis;
 }
 
 .mcp-pill-input::placeholder {
   color: var(--text-tertiary);
+}
+
+/* Drop the native type="search" magnifier/clear glyphs so the field matches
+   the app's custom pill styling. */
+.mcp-pill-input::-webkit-search-decoration,
+.mcp-pill-input::-webkit-search-cancel-button,
+.mcp-pill-input::-webkit-search-results-button,
+.mcp-pill-input::-webkit-search-results-decoration {
+  -webkit-appearance: none;
+  appearance: none;
+  display: none;
 }
 
 .mcp-pill-input:hover,
@@ -5570,6 +5834,7 @@ body.is-resizing-workflow-sidebar * {
   border: 2px dashed var(--border-strong);
   border-radius: var(--radius-lg);
   background: var(--surface-inset);
+  cursor: pointer;
   transition: border-color var(--transition), background var(--transition), box-shadow var(--transition);
 }
 
@@ -5607,6 +5872,9 @@ body.is-resizing-workflow-sidebar * {
   height: 100%;
   opacity: 0;
   cursor: pointer;
+  /* The dropzone forwards clicks to this input; keeping it out of the pointer
+     path stops the browser's built-in "No file chosen" tooltip from showing. */
+  pointer-events: none;
 }
 
 .zip-dropzone-body {
@@ -5693,6 +5961,16 @@ body.is-resizing-workflow-sidebar * {
 .btn-analyze svg {
   flex-shrink: 0;
   opacity: 0.95;
+}
+
+/* Keep the action-button shadow on-brand for each variant so unifying their
+   size doesn't leave a blue-tinted shadow under the red publish button. */
+.btn-danger.btn-analyze {
+  box-shadow: 0 1px 2px rgba(239, 68, 68, 0.18);
+}
+
+.btn-secondary.btn-analyze {
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.1);
 }
 
 /* ── Analyze report (zip + DG) ─────────────────────────────────── */
@@ -7070,7 +7348,7 @@ body.is-resizing-workflow-sidebar * {
 
 /* Agentic panel — match action sidebar card */
 .app-page-body .chat-panel:not(.chat-panel-popup) {
-  top: calc(var(--app-shell-padding) + 0.25rem);
+  top: var(--app-shell-padding);
   right: var(--app-shell-padding);
   height: calc(100vh - (2 * var(--app-shell-padding)));
   width: min(var(--chat-panel-width, 20vw), calc(100vw - (2 * var(--app-shell-padding)) - var(--app-column-gap)));
@@ -7096,6 +7374,23 @@ body.is-resizing-workflow-sidebar * {
 .app-page-body .chat-panel-head {
   padding: 1.25rem 1rem 1rem;
   border-bottom-color: var(--app-border);
+  cursor: grab;
+  touch-action: none;
+}
+
+.app-page-body .chat-panel-head:active {
+  cursor: grabbing;
+}
+
+.app-page-body .chat-panel-head .chat-panel-actions,
+.app-page-body .chat-panel-head .chat-panel-actions * {
+  cursor: default;
+}
+
+/* While the panel floats at a custom position, hide the left-edge width
+   resizer (its drag math assumes the panel is docked to the right edge). */
+.app-page-body .chat-panel-floating .chat-panel-resizer {
+  display: none;
 }
 
 .app-page-body .chat-panel-eyebrow {
@@ -7594,6 +7889,20 @@ body.is-resizing-workflow-sidebar * {
 .app-page-body #pushView .workflow-shell:not(.has-compare-open) .workflow-workbench,
 .app-page-body #dgImportView .workflow-shell:not(.has-compare-open) .workflow-workbench {
   align-content: start;
+}
+
+/* Expand the active step card to fill the grey frame so the empty space below
+   it matches the space above it (symmetric top/bottom gap). Applies to every
+   Action tab and every workflow step. */
+.app-page-body #pushView .workflow-shell:not(.has-compare-open) .workflow-main-scroll > .workflow-step-panel.is-active,
+.app-page-body #dgImportView .workflow-shell:not(.has-compare-open) .workflow-main-scroll > .workflow-step-panel.is-active {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.app-page-body #pushView .workflow-shell:not(.has-compare-open) .workflow-main-scroll > .workflow-step-panel.is-active > .mcp-tool-form-card,
+.app-page-body #dgImportView .workflow-shell:not(.has-compare-open) .workflow-main-scroll > .workflow-step-panel.is-active > .mcp-tool-form-card {
+  flex: 1 1 auto;
 }
 
 .app-page-body .mcp-tools-empty-detail {

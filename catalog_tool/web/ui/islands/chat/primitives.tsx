@@ -947,21 +947,18 @@ export function ChatComposer({
 }
 
 export interface ChatHeaderProps {
-  /** Popup window vs. docked panel — switches branding + attach/detach control. */
+  /** Popup window vs. docked panel — switches branding + attach control. */
   isPopup: boolean;
-  /** Detached popup already open (disables the detach button). */
-  popupActive: boolean;
+  /** Detached popup already open (kept for popup-mode wiring compatibility). */
+  popupActive?: boolean;
   onAttach: () => void;
-  onPopOut: () => void;
   onClose: () => void;
 }
 
-/** Chat panel header: brand/title + attach-or-detach + close controls. */
+/** Chat panel header: brand/title + attach (popup only) + close controls. */
 export function ChatHeader({
   isPopup,
-  popupActive,
   onAttach,
-  onPopOut,
   onClose,
 }: ChatHeaderProps) {
   return (
@@ -991,16 +988,7 @@ export function ChatHeader({
           <ChatIconButton label="Attach chat" title="Attach to main window" onClick={onAttach}>
             <AttachIcon />
           </ChatIconButton>
-        ) : (
-          <ChatIconButton
-            label="Detach chat"
-            title="Open in separate window (other monitor)"
-            onClick={onPopOut}
-            disabled={popupActive}
-          >
-            <DetachIcon />
-          </ChatIconButton>
-        )}
+        ) : null}
         <ChatIconButton
           label={isPopup ? "Close window" : "Close chat"}
           title={isPopup ? "Close window" : "Close chat"}

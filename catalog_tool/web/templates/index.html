@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/static/styles.css?v=20260702worktop1">
+  <link rel="stylesheet" href="/static/styles.css?v=20260702unify4">
   <script>
     (function () {
       var theme = localStorage.getItem("catalogTool.theme");
@@ -184,6 +184,11 @@
               <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
             </svg>
           </button>
+          <button type="button" id="userGuideBtn" class="icon-btn" aria-label="User guide" title="Open the user guide — learn what the tool can do">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
+            </svg>
+          </button>
           <button type="button" id="themeToggleBtn" class="icon-btn theme-toggle" aria-label="Toggle theme" title="Toggle theme">
             <svg class="theme-icon theme-icon-sun" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
               <circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/>
@@ -204,6 +209,7 @@
     </header>
 
     <div id="sidebarFloatTip" class="sidebar-float-tip" role="tooltip" hidden></div>
+    <div id="actionFloatTip" class="sidebar-float-tip action-float-tip" role="tooltip" hidden></div>
 
     <div class="app-main">
       <div class="page" id="appPage">
@@ -235,7 +241,7 @@
                       <span class="workflow-step-num">1</span>
                       <span class="workflow-step-copy">
                         <span class="workflow-step-label">Upload zip</span>
-                        <span class="workflow-step-desc">Parse and validate export</span>
+                        <span class="workflow-step-desc">Load export and continue</span>
                       </span>
                     </button>
                     <button type="button" class="workflow-step-btn" data-workflow-step="review" aria-selected="false">
@@ -274,9 +280,9 @@
                             <span class="mcp-tool-category-badge">Step 1</span>
                           </div>
                         </div>
-                        <p class="workflow-panel-lead">Choose a CatalogOne export zip. Validation checks structure before you create a business request.</p>
+                        <p class="workflow-panel-lead">Choose a CatalogOne export zip. As soon as a file is selected you move on to the business request step.</p>
                         <div class="zip-upload-row">
-                          <div class="zip-dropzone zip-dropzone-inline" id="zipDropzone">
+                          <div class="zip-dropzone zip-dropzone-inline" id="zipDropzone" data-tooltip="Click to browse, or drag a CatalogOne export .zip here">
                             <input type="file" id="catalogZipInput" class="zip-dropzone-input" accept=".zip,application/zip">
                             <div class="zip-dropzone-body">
                               <span class="zip-dropzone-icon zip-dropzone-icon-empty" aria-hidden="true">
@@ -298,14 +304,6 @@
                               </div>
                             </div>
                           </div>
-                        </div>
-                        <div class="workflow-step-actions">
-                          <button type="button" id="analyzeZipBtn" class="btn btn-primary btn-analyze" disabled title="Choose a zip file first">
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
-                              <circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>
-                            </svg>
-                            <span id="analyzeZipBtnLabel">Analyze &amp; preview</span>
-                          </button>
                         </div>
                       </div>
                       <div id="zipAnalyzeReport" class="mcp-tool-result-card analyze-report analyze-report-validation is-collapsible" hidden>
@@ -329,6 +327,7 @@
                             <span class="mcp-tool-category-badge">Step 2</span>
                           </div>
                         </div>
+                        <p class="workflow-panel-lead merge-br-id-hint">Enter a Name to create a new BR and import the zip, or paste an existing Business request ID to run a compare on its own.</p>
                         <div id="mergeBrFormSection" class="merge-section-body">
                           <div class="form-row merge-br-fields">
                             <label class="field field-grow">
@@ -338,14 +337,14 @@
                             <label class="field merge-br-id-field">
                               <span class="field-label">Business request ID</span>
                               <div class="input-with-action">
-                                <input type="text" id="businessRequestId" placeholder="Auto-filled after create" autocomplete="off" readonly>
-                                <button type="button" id="clearBrBtn" class="btn btn-ghost btn-sm" hidden title="Clear to create another">Clear</button>
+                                <input type="text" id="businessRequestId" placeholder="Type an existing BR ID to compare, or create one" autocomplete="off">
+                                <button type="button" id="clearBrBtn" class="btn btn-ghost btn-sm" hidden title="Clear the ID">Clear</button>
                               </div>
                             </label>
                           </div>
                           <div class="workflow-step-actions workflow-step-actions--split">
                             <button type="button" id="createBrBtn" class="btn btn-primary btn-analyze">Create BR and Import</button>
-                            <button type="button" id="brCompareProductionBtn" class="btn btn-secondary btn-analyze" hidden disabled title="Complete import before comparing">Run compare</button>
+                            <button type="button" id="brCompareProductionBtn" class="btn btn-secondary btn-analyze" hidden disabled title="Enter a business request ID to compare">Run compare</button>
                           </div>
                           <p id="brCompareHint" class="br-compare-hint" hidden></p>
                         </div>
@@ -370,13 +369,13 @@
                             <span class="mcp-tool-category-badge">Step 3</span>
                           </div>
                         </div>
+                        <p class="workflow-panel-lead" id="publishBusinessRequestIdHint">Paste an existing BR UUID or create one in Step 2.</p>
                         <label class="field merge-publish-br-field">
                           <span class="field-label">Business request ID to publish</span>
                           <input type="text" id="publishBusinessRequestId" placeholder="Paste BR UUID or use ID from Step 2" autocomplete="off">
-                          <span class="field-hint" id="publishBusinessRequestIdHint">Filled automatically when you create a BR in Step 2.</span>
                         </label>
                         <div class="workflow-step-actions">
-                          <button type="button" id="publishBtn" class="btn btn-danger btn-sm" disabled title="Connect to an environment and create a business request first">Publish business request</button>
+                          <button type="button" id="publishBtn" class="btn btn-danger btn-analyze" disabled title="Connect to an environment and create a business request first">Publish business request</button>
                         </div>
                       </div>
                       <div id="pushResultCard" class="mcp-tool-result-card" hidden>
@@ -447,7 +446,7 @@
                       <span class="workflow-step-num">1</span>
                       <span class="workflow-step-copy">
                         <span class="workflow-step-label">Upload workbook</span>
-                        <span class="workflow-step-desc">Parse tabs and preview JSON</span>
+                        <span class="workflow-step-desc">Load workbook and continue</span>
                       </span>
                     </button>
                     <button type="button" class="workflow-step-btn" data-workflow-step="import" aria-selected="false">
@@ -486,9 +485,9 @@
                             <span class="mcp-tool-category-badge">Step 1</span>
                           </div>
                         </div>
-                        <p class="workflow-panel-lead">Expects tabs such as Add, Cancel, Change, Terminate, Modify_Reasons, and proration policy sheets.</p>
+                        <p class="workflow-panel-lead">Expects tabs such as Add, Cancel, Change, Terminate, Modify_Reasons, and proration policy sheets. As soon as a workbook is selected you move on to the business request step.</p>
                         <div class="zip-upload-row">
-                          <div class="zip-dropzone zip-dropzone-inline" id="excelDropzone">
+                          <div class="zip-dropzone zip-dropzone-inline" id="excelDropzone" data-tooltip="Click to browse, or drag an .xlsx or .xlsm workbook here">
                             <input type="file" id="catalogExcelInput" class="zip-dropzone-input" accept=".xlsx,.xlsm,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet">
                             <div class="zip-dropzone-body">
                               <span class="zip-dropzone-icon zip-dropzone-icon-empty" aria-hidden="true">
@@ -512,14 +511,6 @@
                               </div>
                             </div>
                           </div>
-                        </div>
-                        <div class="workflow-step-actions">
-                          <button type="button" id="analyzeExcelBtn" class="btn btn-primary btn-analyze">
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
-                              <circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>
-                            </svg>
-                            <span>Analyze &amp; preview</span>
-                          </button>
                         </div>
                       </div>
                       <div id="excelAnalyzeReport" class="mcp-tool-result-card analyze-report" hidden>
@@ -547,13 +538,13 @@
                           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
                             <circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/>
                           </svg>
-                          <p id="dgBrConnectHintText">Connect to an environment in the sidebar, analyze your workbook in Step 1, then create a business request below.</p>
+                          <p id="dgBrConnectHintText">Connect to an environment in the sidebar, upload your workbook in Step 1, then create a business request below.</p>
                         </div>
                         <div class="form-row merge-br-fields">
                           <label class="field field-grow">
                             <span class="field-label">Name for new business request</span>
                             <input type="text" id="dgBusinessRequestName" placeholder="e.g. DG import — WLS Actions PI29" autocomplete="off">
-                            <span class="field-hint" id="dgBusinessRequestNameHint">Filled automatically after analyze — edit if needed.</span>
+                            <span class="field-hint" id="dgBusinessRequestNameHint">Filled automatically after upload — edit if needed.</span>
                           </label>
                           <label class="field">
                             <span class="field-label">Business request ID</span>
@@ -577,7 +568,7 @@
                             <h4 class="mcp-tool-form-heading">Import entries</h4>
                           </div>
                         </div>
-                        <p id="dgImportEntriesHint" class="merge-br-btn-hint" aria-live="polite">Analyze the workbook first to load entry payloads.</p>
+                        <p id="dgImportEntriesHint" class="merge-br-btn-hint" aria-live="polite">Upload a workbook in Step 1 to load entry payloads.</p>
                         <div class="workflow-step-actions">
                           <button type="button" id="dgImportEntriesBtn" class="btn btn-primary btn-analyze" disabled title="Analyze workbook, connect, and create a business request first">
                             Import entries to catalog
@@ -600,13 +591,13 @@
                             <span class="mcp-tool-category-badge">Step 3</span>
                           </div>
                         </div>
+                        <p class="workflow-panel-lead" id="dgPublishBusinessRequestIdHint">Paste an existing BR UUID or create one in Step 2.</p>
                         <label class="field merge-publish-br-field">
                           <span class="field-label">Business request ID to publish</span>
                           <input type="text" id="dgPublishBusinessRequestId" placeholder="Paste BR UUID or use ID from Step 2" autocomplete="off">
-                          <span class="field-hint" id="dgPublishBusinessRequestIdHint">Filled automatically when you create a BR in Step 2.</span>
                         </label>
                         <div class="workflow-step-actions">
-                          <button type="button" id="dgPublishBtn" class="btn btn-danger btn-sm" disabled title="Connect to an environment and create a business request first">Publish business request</button>
+                          <button type="button" id="dgPublishBtn" class="btn btn-danger btn-analyze" disabled title="Connect to an environment and create a business request first">Publish business request</button>
                         </div>
                       </div>
                       <div id="dgPublishResultCard" class="mcp-tool-result-card" hidden>
@@ -650,7 +641,7 @@
                 <svg class="mcp-pill-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                   <circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>
                 </svg>
-                <input type="search" id="mcpToolsSearch" class="mcp-pill-input" placeholder="Search by name or description…" autocomplete="off">
+                <input type="search" id="mcpToolsSearch" class="mcp-pill-input" placeholder="Search tools" autocomplete="off">
               </label>
               <div id="mcpToolsList" class="mcp-tools-list" role="listbox" aria-label="CatalogOne MCP tools"></div>
                 </aside>
@@ -920,9 +911,9 @@
   <script id="tablesConfig" type="application/json">{{ defaults.tables | tojson }}</script>
   <script id="defaultsConfig" type="application/json">{{ defaults | tojson }}</script>
   <script src="/static/layout-couple.js?v=20260702chat20gap1"></script>
-  <script src="/static/page-control.js?v=20260702app68"></script>
-  <script src="/static/app.js?v=20260702hideidentical1"></script>
-  <script src="/static/mcp-tools.js?v=20260702mcphuman1"></script>
+  <script src="/static/page-control.js?v=20260702noanalyze1"></script>
+  <script src="/static/app.js?v=20260702guide1"></script>
+  <script src="/static/mcp-tools.js?v=20260702unify3"></script>
   {{ vite_assets('main.tsx') }}
 </body>
 </html>

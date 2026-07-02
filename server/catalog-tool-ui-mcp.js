@@ -64,7 +64,7 @@ const tools = {
     inputSchema: { type: "object", properties: {} },
   },
   catalog_tool_ui_action: {
-    description: "Click a control or navigate the Catalog Tool UI. Use actionId from get_catalog_tool_page (e.g. analyzeZipBtn for Validate, workflow:push:review for Step 2).",
+    description: "Click a control or navigate the Catalog Tool UI. Use actionId from get_catalog_tool_page (e.g. createBrBtn for Create BR and Import, workflow:push:review for Step 2).",
     inputSchema: {
       type: "object",
       properties: {
@@ -73,8 +73,8 @@ const tools = {
           enum: ["click", "set_view", "workflow_step", "set_field"],
           description: "Action type. Default click.",
         },
-        actionId: { type: "string", description: "Control id from page context, e.g. analyzeZipBtn" },
-        label: { type: "string", description: "Fallback label match, e.g. Validate" },
+        actionId: { type: "string", description: "Control id from page context, e.g. createBrBtn" },
+        label: { type: "string", description: "Fallback label match, e.g. Create BR and Import" },
         view: { type: "string", description: "For set_view: push | dg-import | mcp-tools" },
         workflow: { type: "string", enum: ["push", "dg"] },
         step: { type: "string", description: "For workflow_step: upload | review | publish | import" },

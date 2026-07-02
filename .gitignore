@@ -14,3 +14,4 @@ catalog_tool/web/static/dist/
 *.egg-info/
 archive_candidate/*
 !archive_candidate/README.md
+LBAR/

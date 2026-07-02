@@ -2,6 +2,8 @@
 
 A Python + Node toolkit and web app for **CatalogOne authoring** — connect to environments, import catalog exports and design-guide workbooks, create business requests, publish to production, open tables in the CatalogOne UI, run **catalogone MCP tools** from the browser, and chat with an AI assistant that can call those tools.
 
+> **New to the app?** A built-in, plain-language **User Guide** is available from the book icon in the top bar (also at `/guide`). It walks end users through every capability — see [docs/USER_GUIDE.md](docs/USER_GUIDE.md).
+
 ---
 
 ## Features
@@ -11,20 +13,25 @@ A Python + Node toolkit and web app for **CatalogOne authoring** — connect to 
 | **Amdocs LDAP** sign-in (gates access before CatalogOne Connect) | Yes | — |
 | Log in to CatalogOne via Keycloak (APIGW token) | Yes | — |
 | Save & switch environments (per-user disk store, up to 12) | Yes | — |
-| **Merge & Import** — analyze CatalogOne export zip, build PR package, publish BR | Yes | — |
+| **Upload, Review & Publish** — pick a CatalogOne export zip, auto-advance to BR, publish | Yes | — |
 | **DG Import** — parse WLS Actions & Reasons Excel, import entries, publish BR | Yes | — |
-| Create or reuse a business request | Yes | — |
+| **Streamlined uploads** — selecting a file jumps straight to the next step (no analyze click) | Yes | — |
+| Create a new business request by **name**, or compare an existing one by **ID** | Yes | — |
+| Paste a **Business request ID** with no name to compare — real BR name auto-filled | Yes | — |
+| Compare BR entities vs production (field-level diffs) | Yes | — |
 | Push `genericElementEntry` payloads to CatalogOne | Yes | — |
 | Publish business request to production | Yes | — |
 | Open table in CatalogOne UI (scoped to BR) | Yes | — |
 | Auto sign-in to CatalogOne UI (SSO launch) | Yes | — |
-| **MCP Tools** — list & run catalogone MCP tools in browser | Yes | — |
+| **MCP Tools** — list, search & run catalogone MCP tools in browser | Yes | — |
 | **Catalog assistant** — streaming chat with tool use | Yes | — |
-| Detach chat to separate window (macOS app mode) | Yes | — |
-| Dark / light theme, resizable sidebar & chat panel | Yes | — |
+| **Movable, resizable** assistant panel (drag to move; resize from edges/corners) | Yes | — |
+| **Connect-first** pointer popups + Environments-menu pulse when disconnected | Yes | — |
+| **In-app User Guide** — rendered, end-user help opened from the top bar (`/guide`) | Yes | — |
+| Dark / light theme, resizable sidebar | Yes | — |
 | Generate sample entry JSON to disk | — | Yes |
 
-**Safety by default:** zip and Excel analysis never auto-publish. You review structured results first, then explicitly create a BR, import (DG), and publish.
+**Safety by default:** importing and comparing never auto-publish. You explicitly create a BR, import (DG), compare, and publish when you're ready.
 
 ---
 
@@ -196,11 +203,13 @@ The script will:
 ### 5. Typical workflow
 
 1. **Sign in** — Amdocs LDAP at `/login` (only when `USE_LDAP=true`; disabled by default).
-2. **Environments** (sidebar) — Add an environment (+), enter APIGW / Keycloak / credentials, **Connect**. Up to 12 per user; stored in `data/environments/{username}.json` (passwords base64-encoded). Each signed-in user sees only their own environments.
-3. **Merge & Import** — Upload a CatalogOne export zip → **Analyze & preview** → create BR → optional **Compare vs production** → publish when ready.
-4. **DG Import** — Upload WLS Actions & Reasons Excel → **Analyze & preview** → create BR → **Import entries to catalog** → publish when ready.
-5. **MCP Tools** — Browse tools from catalogone MCP (uses connected environment), fill arguments, run and inspect JSON results.
+2. **Environments** (top bar) — Add an environment (+), enter APIGW / Keycloak / credentials, **Connect**. Up to 12 per user; stored in `data/environments/{username}.json` (passwords base64-encoded). Each signed-in user sees only their own environments.
+3. **Upload, Review & Publish** — Choose a CatalogOne export zip → the app auto-advances to the business request step → create a BR (by name) or compare an existing one (by ID) → publish when ready.
+4. **DG Import** — Choose a WLS Actions & Reasons Excel workbook → auto-advance to the business request step → create BR → **Import entries to catalog** → publish when ready.
+5. **MCP Tools** — Browse and search tools from catalogone MCP (uses connected environment), fill arguments, run and inspect JSON results.
 6. **Catalog assistant** (chat icon) — Ask about tables, workflows, or CatalogOne; agent uses the same connected environment for MCP calls.
+
+New users can open the **User Guide** (book icon in the top bar) at any time for a plain-language walkthrough.
 
 ---
 
@@ -210,51 +219,60 @@ The script will:
 
 Three main views (full-width layout, consistent pill buttons):
 
-| View | Purpose |
-|------|---------|
-| **Merge & Import** | CatalogOne export zip → PR package review → BR → publish |
-| **DG Import** | WLS Actions & Reasons Excel → entry import → BR → publish |
-| **MCP Tools** | MCP tool workbench (requires catalogone MCP installed) |
+| Sidebar view | Purpose |
+|--------------|---------|
+| **Upload, Review & Publish** | CatalogOne export zip → business request → compare vs production → publish |
+| **DG Import** | WLS Actions & Reasons Excel → entry import → business request → publish |
+| **CatalogOne MCP tools** | MCP tool workbench (requires catalogone MCP installed) |
 
-**Environments** — cards with Connect / Disconnect / Edit / Delete; resizable sidebar (220–520px).
+**Environments** — top-bar menu with cards for Connect / Disconnect / Edit / Delete; resizable sidebar (220–520px).
 
-Top bar: theme toggle, **Disconnect** (CatalogOne session), **Log out** (LDAP session when enabled).
+Top bar: **User Guide** (book icon), theme toggle, **Disconnect** (CatalogOne session), **Log out** (LDAP session when enabled).
 
-### Merge & Import
+### Upload, Review & Publish (zip)
 
-Three-step workflow:
+Streamlined three-step workflow:
 
-1. **Upload zip** — Drag & drop or browse. Selected files show a green checkmark state (filename, size, “click to replace”). Expects `promotion/<uuid>.json` inside the zip.
-2. **Analyze & preview** — Structured report: new/changed/unchanged counts, findings, PR file list, entity sample table, summary markdown. Toggle **Show raw JSON** for the full API response. Output is written under `data/catalog-pr/catalog-zip/`.
-3. **Business request** — Create a new BR or paste an existing ID.
-4. **Compare vs production** (optional) — After zip import, compare BR entities against production or audit baselines; review field-level diffs in the UI.
-5. **Publish** — Explicit publish only (optional force publish). Zip analysis never publishes automatically.
+1. **Choose a zip** — Drag & drop or browse. **As soon as a file is selected the app advances to the business request step** — there is no separate analyze/preview click and no upfront zip validation. Selected files show a green “ready” state. Expects `promotion/<uuid>.json` inside the zip; entities are read when the BR is created (and cached for compare).
+2. **Business request** — Either type a **BR Name** and select **Create BR and Import** (a fresh BR ID is generated — any ID you also typed is ignored), or paste an existing **Business request ID** and select **Run Compare** (the real BR name is fetched from the environment and filled in for you).
+3. **Compare vs production** — Review field-level entity diffs against production/audit baselines before publishing.
+4. **Publish** — Explicit publish only (optional force publish). Importing/comparing never publishes automatically.
 
 ### DG Import
 
-Three-step workflow for **WLS Actions and Reasons** design-guide workbooks (`.xlsx` / `.xlsm`):
+Streamlined workflow for **WLS Actions and Reasons** design-guide workbooks (`.xlsx` / `.xlsm`):
 
-1. **Upload workbook** — Same drag & drop UX as zip (green selected state when a file is chosen). Tabs parsed include Add, Cancel, Change, Terminate, Modify_Reasons, and proration policy sheets.
-2. **Analyze & preview** — Structured report: modify reason / action / policy counts, findings, MCP plan steps, sample entry table. Toggle **Show raw JSON** for full payloads (`planned_entries[].generic_element_entry`).
-3. **Business request & import** — BR name auto-suggested from workbook (`DG import — …`). Create BR, then **Import entries to catalog** posts all Modify Reason and Action `genericElementEntry` payloads via `/api/push`.
-4. **Publish** — Same publish flow as Merge & Import.
+1. **Choose a workbook** — Same drag & drop UX as zip; **selecting a file advances automatically** to the business request step. Tabs parsed include Add, Cancel, Change, Terminate, Modify_Reasons, and proration policy sheets.
+2. **Business request** — BR name auto-suggested from the workbook (`DG import — …`). Create a BR (or paste an existing ID to compare, as in the zip flow).
+3. **Import entries to catalog** — Posts all Modify Reason and Action `genericElementEntry` payloads via `/api/push`; review the result.
+4. **Publish** — Same publish flow as the zip workflow.
 
 Policy directive rows are parsed for review; map them to price policies separately (not auto-imported).
 
-### MCP Tools
+### CatalogOne MCP tools
 
-- Tool list, search, argument forms, raw JSON mode, result viewer.
-- Uses **connected sidebar environment** — same APIGW/credentials as Merge & Import.
-- Disabled in nav when catalogone MCP is not installed (tooltip explains).
+- Tool list, **search box** (filter by name/description), argument forms, raw JSON mode, result viewer.
+- Uses the **connected environment** — same APIGW/credentials as the import flows.
+- Disabled in the sidebar when catalogone MCP is not installed (tooltip explains).
 
 ### Catalog assistant (chat)
 
-- Docked panel on the right; width is resizable (320–900px).
-- **Detach** — opens chat in a separate window (macOS: Chrome app mode, no address bar). Window size matches the docked panel.
-- **Attach** — topbar button (visible while detached) or icon in detached window; docks chat back to the main page.
-- Closing the **main tab/window** closes the detached chat automatically.
-- Agent messages render **Markdown** (GFM).
+- Docked panel; **stays open until you close it** — clicking elsewhere on the page won't dismiss it.
+- **Movable** — drag the panel header to reposition it anywhere inside the browser window.
+- **Resizable** — drag any edge, or grab a corner grip, to resize width and height together.
+- Agent messages render **Markdown** (GFM), including tables and lists.
 - MCP calls use the **active Connect session** (fetched from Flask per message).
+
+### In-app User Guide
+
+- The **book icon** in the top bar opens a rendered, end-user User Guide (route `/guide`, source `docs/USER_GUIDE.md`).
+- It focuses on **what the tool does and how to use it** — not project internals — and follows the app's light/dark theme.
+- Rendered server-side by a small dependency-free Markdown converter (`catalog_tool/web/markdown_lite.py`), with an on-page table of contents and a Print action.
+
+### Consistent tooltips & connect-first guidance
+
+- Buttons and fields share a unified, icon-led tooltip style.
+- Attempting **Create BR and Import** or **Run Compare** while disconnected shows a popup next to the pointer and pulses the **Environments** menu to guide you to connect first.
 
 ### Supported catalog tables (push / DG import)
 
@@ -273,7 +291,8 @@ DG Import maps Excel reason codes to these tables. For Action-specific fields be
 catalogTool/
 ├── README.md
 ├── docs/
-│   └── ARCHITECTURE.md       # Maintainer architecture overview
+│   ├── ARCHITECTURE.md       # Maintainer architecture overview
+│   └── USER_GUIDE.md         # End-user guide (rendered at /guide)
 ├── pyproject.toml
 ├── package.json              # Node deps; build:chat script
 ├── .env.example
@@ -318,6 +337,7 @@ catalogTool/
         ├── import_context.py # Upload + compare entity session cache
         ├── push_service.py
         ├── mcp_catalog.py    # Catalog writes via MCP
+        ├── markdown_lite.py    # Tiny Markdown→HTML renderer for /guide
         ├── helpers.py          # Session → MCP env mapping
         ├── routes/
         │   ├── auth.py         # CatalogOne login/logout
@@ -331,6 +351,7 @@ catalogTool/
         ├── templates/
         │   ├── index.html
         │   ├── login.html
+        │   ├── guide.html      # Rendered user guide page
         │   ├── chat_popup.html
         │   └── catalog_ui_launch.html
         └── static/
@@ -417,6 +438,7 @@ The web app normalizes APIGW URLs to `…-authoring` and can derive Keycloak fro
 | Method | Path | Description |
 |--------|------|-------------|
 | `GET` | `/` | Main web UI |
+| `GET` | `/guide` | Rendered end-user User Guide (`?theme=light|dark`) |
 | `GET` | `/login` | LDAP login page |
 | `POST` | `/api/user/login` | LDAP authenticate |
 | `POST` | `/api/user/logout` | End LDAP session |
@@ -497,11 +519,12 @@ If MCP is installed but the server process fails to start, the **MCP Tools** sid
 3. Set in project `.env`: `CURSOR_API_KEY=crsr_…`
 4. Restart `./run_web.sh`
 
-### Detached chat (macOS)
+### Assistant panel behavior
 
-- Opens via Chrome **app mode** (no address bar) when Chrome is installed.
-- Window title: **Catalog Tool · Chat** (distinct from the main tab).
-- macOS may prompt for **Accessibility** permission (Terminal / Python) so the app can resize the detached window to match the docked panel width.
+- The assistant is a **docked, in-window panel** — no separate OS window to manage.
+- **Stays open** until dismissed with its close button (outside clicks don't close it).
+- **Movable** by dragging its header and **resizable** from its edges or corner grips.
+- Panel size/position preferences persist in the browser (`localStorage`).
 
 ---
 
