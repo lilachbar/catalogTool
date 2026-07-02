@@ -437,20 +437,47 @@ function setActiveView(view) {
     button.classList.toggle("is-active", button.dataset.view === nextView);
   });
 
-  if (els.actionsMenuLabel) {
-    els.actionsMenuLabel.textContent = VIEW_META[nextView]?.title || "Actions";
+  updateMainConnectionHint();
+}
+
+function getConnectedEnvironmentDetail() {
+  const env = state.connectedEnvironmentId ? getEnvironmentById(state.connectedEnvironmentId) : null;
+  const name = (env ? getEnvironmentDisplayName(env) : state.currentEnvironmentLabel) || "Unknown";
+  const cluster = env ? friendlyEnvironmentLabel(environmentTechnicalLabel(env)) : "";
+  const username = env?.username?.trim() || "";
+  const realm = env?.keycloak_realm?.trim() || "";
+
+  const parts = [name];
+  for (const part of [username, cluster]) {
+    if (part && !parts.includes(part)) {
+      parts.push(part);
+    }
   }
 
-  updateMainConnectionHint();
+  const titleLines = [`Connected to ${name}`];
+  if (username) {
+    titleLines.push(`User: ${username}`);
+  }
+  if (realm) {
+    titleLines.push(`Realm: ${realm}`);
+  }
+  if (cluster) {
+    titleLines.push(`Cluster: ${cluster}`);
+  }
+  if (env?.apigw_url) {
+    titleLines.push(env.apigw_url);
+  }
+
+  return { summary: parts.join(" · "), title: titleLines.join("\n") };
 }
 
 function connectionHintForView() {
   if (state.loggedIn) {
-    const rawLabel = state.currentEnvironmentLabel || "Unknown";
+    const detail = getConnectedEnvironmentDetail();
     return {
       connected: true,
-      html: `Connected · ${escapeHtml(rawLabel)}`,
-      title: `Connected to environment: ${rawLabel}`,
+      html: `Connected · ${escapeHtml(detail.summary)}`,
+      title: detail.title,
     };
   }
   return {
@@ -476,15 +503,6 @@ function setMainConnectionHintState(connected, html, title) {
   }
 }
 
-function updateTopbarMenuLabels() {
-  if (els.envMenuLabel) {
-    els.envMenuLabel.textContent = getConnectedEnvironmentLabel() || "Environments";
-  }
-  if (els.actionsMenuLabel) {
-    els.actionsMenuLabel.textContent = VIEW_META[state.activeView]?.title || "Actions";
-  }
-}
-
 function updateMainConnectionHint() {
   if (!els.mainConnectionHint) {
     return;
@@ -492,7 +510,6 @@ function updateMainConnectionHint() {
 
   const hint = connectionHintForView();
   setMainConnectionHintState(hint.connected, hint.html, hint.title);
-  updateTopbarMenuLabels();
   updateWorkflowStatusLines();
 }
 

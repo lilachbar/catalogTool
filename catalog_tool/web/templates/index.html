@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/static/styles.css?v=20260702topbar3">
+  <link rel="stylesheet" href="/static/styles.css?v=20260702topbar5">
   <script>
     (function () {
       var theme = localStorage.getItem("catalogTool.theme");
@@ -102,7 +102,7 @@
           </button>
           <div class="topbar-menu-panel topbar-menu-panel--env" role="menu" hidden>
             <div class="env-sidebar-head">
-              <h2 class="env-sidebar-title">Environments</h2>
+              <h2 class="env-sidebar-title">Select Environment</h2>
               <div class="env-sidebar-actions">
                 <button type="button" id="refreshEnvironmentsBtn" class="btn btn-ghost env-toolbar-btn env-refresh-btn" title="Reload environments from disk (data/environments/*.json)" aria-label="Refresh environments">
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -127,10 +127,13 @@
             <svg class="topbar-menu-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
               <rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>
             </svg>
-            <span class="topbar-menu-label" id="actionsMenuLabel">Upload, Review &amp; Publish</span>
+            <span class="topbar-menu-label" id="actionsMenuLabel">Actions</span>
             <svg class="topbar-menu-caret" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
           </button>
           <div class="topbar-menu-panel topbar-menu-panel--actions" role="menu" hidden>
+            <div class="env-sidebar-head">
+              <h2 class="env-sidebar-title">Select Action</h2>
+            </div>
             <nav class="app-nav env-list" aria-label="Main">
               <button type="button" class="app-nav-item is-active" data-view="push" id="navPushView">
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -960,7 +963,7 @@
   <script id="defaultsConfig" type="application/json">{{ defaults | tojson }}</script>
   <script src="/static/layout-couple.js?v=20260702chat20gap1"></script>
   <script src="/static/page-control.js?v=20260702app68"></script>
-  <script src="/static/app.js?v=20260702topbar1"></script>
+  <script src="/static/app.js?v=20260702topbar4"></script>
   <script src="/static/mcp-tools.js?v=20260702app57"></script>
   {{ vite_assets('main.tsx') }}
 </body>
