@@ -1981,7 +1981,13 @@ function getBrCompareEntityTypes(entities) {
 }
 
 function entityMatchesCompareFilter(entity, ui) {
-  if (ui.status !== "all" && entity.status !== ui.status) {
+  if (ui.status === "all") {
+    // Identical entities are noise in the default view — hide them. They stay
+    // counted in the stat grid and reappear when "Identical" is selected.
+    if (entity.status === "identical") {
+      return false;
+    }
+  } else if (entity.status !== ui.status) {
     return false;
   }
   if (ui.entityType !== "all" && entity.entity_type !== ui.entityType) {
@@ -2203,7 +2209,7 @@ function buildBrCompareEntitiesSection(body, ui = state.brCompareTableUi) {
   const entityTypes = getBrCompareEntityTypes(entities);
   const filtered = filterAndSortCompareEntities(entities, ui);
   const statusOptions = [
-    ["all", "All statuses"],
+    ["all", "All (except identical)"],
     ["identical", "Identical"],
     ["changed", "Changed"],
     ["new_in_br", "New in BR"],
@@ -2246,7 +2252,11 @@ function buildBrCompareEntitiesSection(body, ui = state.brCompareTableUi) {
       <div class="br-compare-diff-groups" id="brCompareEntitiesTbody">
         ${filtered.length
     ? buildBrCompareDiffGroupsHtml(filtered)
-    : `<div class="br-compare-diff-empty">No entities match the current filters.</div>`}
+    : `<div class="br-compare-diff-empty">${escapeHtml(
+      ui.status === "all" && entities.every((entity) => entity.status === "identical")
+        ? "All compared entities are identical to production."
+        : "No entities match the current filters.",
+    )}</div>`}
       </div>
     </div>
   </section>`;
